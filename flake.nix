@@ -1,4 +1,5 @@
 {
+
   description = "my zig project";
 
   inputs = {
@@ -16,7 +17,7 @@
     }:
     let
 
-      zig-version = "master";
+      zig-version = "0.13.0";
       overlays = [
         (_: prev: {
           zigpkgs = zig.packages.${prev.system};
