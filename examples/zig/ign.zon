@@ -1,0 +1,13 @@
+.{
+    .name = "zig ign example",
+    // default: true
+    .contain_current_all = true,
+    .files = .{
+        // shared files
+        .@".gitignore" = "http://",
+    },
+    //.inherit ="some_path/ign.zon"
+    .variables = .{
+        .@"zig-version": "0.13.0"
+    },
+}

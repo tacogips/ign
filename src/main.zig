@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const cli = @import("cli.zig");
+const cli = @import("zig-cli");
 
 pub fn main() !void {
     // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
