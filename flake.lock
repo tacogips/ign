@@ -88,7 +88,7 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "zig-overlay": "zig-overlay"
+        "zig": "zig"
       }
     },
     "systems": {
@@ -121,18 +121,18 @@
         "type": "github"
       }
     },
-    "zig-overlay": {
+    "zig": {
       "inputs": {
         "flake-compat": "flake-compat",
         "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1731025738,
-        "narHash": "sha256-OdC2W2FJDpUT1T8Il8siU/suENnA8s3ph07NFxnxf8I=",
+        "lastModified": 1731154207,
+        "narHash": "sha256-hWLW7Bt/6614gxX0tbnSW9aJMahOAIQW+LC5HZix+XA=",
         "owner": "mitchellh",
         "repo": "zig-overlay",
-        "rev": "7a840d9b8ca8901978ada5f2a934fd8aad56009f",
+        "rev": "9f756b991d0fe79f322432dcd6e97e4ffccceb61",
         "type": "github"
       },
       "original": {

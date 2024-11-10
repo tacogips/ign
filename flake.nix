@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-23.11";
     flake-utils.url = "github:numtide/flake-utils";
-    zig-overlay.url = "github:mitchellh/zig-overlay";
+    zig.url = "github:mitchellh/zig-overlay";
   };
 
   outputs =
@@ -12,25 +12,31 @@
       self,
       nixpkgs,
       flake-utils,
-      zig-overlay,
+      zig,
     }:
+    let
+
+      zig-version = "master";
+      overlays = [
+        (_: prev: {
+          zigpkgs = zig.packages.${prev.system};
+        })
+      ];
+    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        zig-version = "master";
         pkgs = import nixpkgs {
-          inherit system;
+          inherit system overlays;
         };
-        zig = zig-overlay.packages.${system}.${zig-version};
       in
-
       {
         devShells.default = pkgs.mkShell {
-          buildInputs = (
+          nativeBuildInputs = (
             with pkgs;
             [
               just
-              zig
+              zigpkgs.${zig-version}
             ]
           );
 
