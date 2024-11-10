@@ -42,9 +42,7 @@
             ]
           );
 
-          shellHook = ''
-            zig init
-          '';
+          shellHook = '''';
         };
       }
     );
