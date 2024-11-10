@@ -38,6 +38,7 @@
             [
               just
               zigpkgs.${zig-version}
+              zls
             ]
           );
 
