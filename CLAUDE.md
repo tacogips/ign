@@ -150,6 +150,23 @@ This is a Golang project with Nix flake development environment support.
 - Keep functions focused and single-purpose
 - Avoid over-engineering - implement only what's requested
 
+## Go Code Development
+**IMPORTANT**: When writing Go code, you (the LLM model) MUST use the specialized go-coding sub agent located at `/g/gits/tacogips/ign/.claude/agents/go-coding.md`.
+
+Use the Task tool with the go-coding agent for:
+- Writing new Go code
+- Refactoring existing Go code
+- Implementing Go packages and modules
+- Following Standard Go Project Layout
+- Implementing layered architecture (Clean Architecture, Hexagonal Architecture, etc.)
+
+The go-coding agent has comprehensive knowledge of:
+- Standard Go Project Layout conventions
+- Go best practices and idioms
+- Layered architecture patterns
+- CLI/TUI application structures
+- Package management with go modules
+
 ## Task Management
 - Use `task` command for build automation
 - Define tasks in `Taskfile.yml` (to be created as needed)

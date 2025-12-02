@@ -735,6 +735,131 @@ Real-world examples following these patterns:
 
 The Clean Architecture layers remain completely hidden in `/internal/`, while external users get a simple, stable client interface.
 
+## Go Package Management and Dependencies
+
+### Module Initialization and Management
+
+**Initialize a new module**:
+```bash
+go mod init <module-path>
+# Example: go mod init github.com/username/projectname
+```
+
+**Essential package management commands**:
+- `go mod tidy` - Add missing dependencies and remove unused ones (run this frequently)
+- `go mod download` - Download dependencies to local cache
+- `go mod verify` - Verify dependencies have expected content
+- `go mod vendor` - Make vendored copy of dependencies (optional)
+- `go get <package>@<version>` - Add or update specific dependency
+- `go list -m all` - View all dependencies and their versions
+
+### Dependency Management Workflow
+
+**After making code changes**:
+1. Run `go mod tidy` to sync dependencies with your imports
+2. Check `go.sum` for cryptographic checksums (should be committed to git)
+3. Review added/removed dependencies before committing
+
+**Adding a new dependency**:
+```bash
+# Method 1: Just import in code and run go mod tidy
+import "github.com/some/package"
+# Then run: go mod tidy
+
+# Method 2: Explicitly add with go get
+go get github.com/some/package
+go get github.com/some/package@v1.2.3  # Specific version
+go get github.com/some/package@latest   # Latest version
+```
+
+**Updating dependencies**:
+```bash
+go get -u ./...                    # Update all dependencies (minor and patch)
+go get -u=patch ./...              # Update patch versions only
+go get github.com/some/package@latest  # Update specific package
+```
+
+**Removing unused dependencies**:
+```bash
+go mod tidy  # Automatically removes unused dependencies
+```
+
+### Best Practices for Package Management
+
+1. **Always run `go mod tidy` before committing**:
+   - Ensures go.mod and go.sum are in sync with actual imports
+   - Removes unused dependencies
+   - Adds missing dependencies
+
+2. **Commit both go.mod and go.sum**:
+   - `go.mod` defines direct dependencies
+   - `go.sum` contains checksums for reproducible builds
+   - Both files must be committed to version control
+
+3. **Use specific versions for stability**:
+   ```bash
+   go get github.com/pkg/errors@v0.9.1  # Specific version
+   go get github.com/gin-gonic/gin@v1.9.0
+   ```
+
+4. **Review dependencies regularly**:
+   ```bash
+   go list -m -u all  # Check for available updates
+   ```
+
+5. **Avoid indirect dependencies when possible**:
+   - Import packages directly rather than relying on transitive dependencies
+   - Makes dependency tree clearer and more maintainable
+
+### Working with Private Repositories
+
+For private Go modules:
+```bash
+# Configure git to use SSH instead of HTTPS
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+
+# Or set GOPRIVATE environment variable
+export GOPRIVATE=github.com/yourorg/*
+```
+
+### Vendoring (Optional)
+
+For production applications that need dependency reproducibility:
+```bash
+go mod vendor  # Create vendor/ directory with all dependencies
+go build -mod=vendor  # Build using vendored dependencies
+```
+
+Note: Vendoring is optional with Go modules. Module proxies (proxy.golang.org) provide similar guarantees.
+
+### Common Package Management Issues
+
+**Issue**: "package not found" error
+- **Solution**: Run `go mod tidy` to download missing dependencies
+
+**Issue**: Version conflicts
+- **Solution**: Use `go mod tidy` and check `go list -m all` for conflicts
+- May need to update conflicting dependencies or use `replace` directives
+
+**Issue**: Checksum mismatch
+- **Solution**: Run `go clean -modcache` and `go mod download` to refresh cache
+
+### Integration with Development Workflow
+
+**Standard development cycle**:
+1. Write code with new imports
+2. Run `go mod tidy` to add dependencies
+3. Run `go build` or `go test` to verify
+4. Commit `go.mod` and `go.sum` changes
+
+**Before committing code**:
+```bash
+go mod tidy      # Clean up dependencies
+go mod verify    # Verify dependency integrity
+go test ./...    # Run all tests
+go build         # Verify build succeeds
+```
+
 ## Your Role
 
 When writing Go code:
@@ -747,5 +872,7 @@ When writing Go code:
 7. Keep dependencies minimal
 8. Use standard library when possible
 9. When implementing layered architecture, place layers in `/internal/` following the structure above
+10. **Always run `go mod tidy` after adding or removing imports**
+11. **Ensure go.mod and go.sum are kept in sync with code changes**
 
 Always prioritize clarity, simplicity, and maintainability over clever solutions.
