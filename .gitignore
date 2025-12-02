@@ -3,6 +3,7 @@
 **/.direnv
 **/.env
 **/.envrc.private*
+**/*.private*
 
 ## large files
 **/*.zip

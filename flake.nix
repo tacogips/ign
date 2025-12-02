@@ -1,11 +1,10 @@
 {
 
-  description = "my zig project";
+  description = "my golang project";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-23.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    zig.url = "github:mitchellh/zig-overlay";
   };
 
   outputs =
@@ -13,36 +12,30 @@
       self,
       nixpkgs,
       flake-utils,
-      zig,
     }:
-    let
-
-      zig-version = "0.13.0";
-      overlays = [
-        (_: prev: {
-          zigpkgs = zig.packages.${prev.system};
-        })
-      ];
-    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = import nixpkgs {
-          inherit system overlays;
+          inherit system;
         };
       in
       {
         devShells.default = pkgs.mkShell {
-          nativeBuildInputs = (
-            with pkgs;
-            [
-              just
-              zigpkgs.${zig-version}
-              zls
-            ]
-          );
+          nativeBuildInputs = with pkgs; [
+            go
+            gopls
+            gotools
+            golangci-lint
+            go-task
+          ];
 
-          shellHook = '''';
+          shellHook = ''
+            echo "Go development environment ready"
+            echo "Go version: $(go version)"
+            echo "Task version: $(task --version)"
+            echo "golangci-lint version: $(golangci-lint --version)"
+          '';
         };
       }
     );
