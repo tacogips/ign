@@ -365,7 +365,7 @@ git checkout -b "$REVIEW_BRANCH"
 - REVIEW_BRANCH: Branch where fixes will be committed
 - ORIGINAL_BRANCH: Base branch for PR
 
-### Step 7: Group Issues and Delegate to Modify-Chunk Agents
+### Step 7: Group Issues and Delegate to apply-pr-review-chunk Agents
 
 1. **Determine repository URL** from git remote
 
@@ -377,33 +377,38 @@ git checkout -b "$REVIEW_BRANCH"
    - Extract package name from file path (e.g., `internal/{package_name}/`)
    - Group comment URLs by package
 
-4. **For each package with issues**, launch `apply-pr-review-chunk` agent:
+4. **For each package with issues**, launch `apply-pr-review-chunk` subagent using Task tool:
 
-```
-Implement fixes for issues identified in package: {package_name}
+   **Task tool invocation:**
+   - subagent_type: 'apply-pr-review-chunk'
+   - prompt: (see below)
 
-Context:
-- PR: #{pr_number} - {title}
-- Repository: {repository_url}
-- Package: {package_name}
-- Number of issues: {issue_count}
+   **Prompt template:**
+   ```
+   Implement fixes for issues identified in package: {package_name}
 
-GitHub PR Comment URLs with detailed fix instructions:
-{list of comment URLs for this package}
+   Context:
+   - PR: #{pr_number} - {title}
+   - Repository: {repository_url}
+   - Package: {package_name}
+   - Number of issues: {issue_count}
 
-Task:
-1. Fetch and process each PR comment URL to extract modification instructions
-2. Implement fixes for all issues in this package
-3. Run `make check` or verification commands after changes
-4. Run `make test` to verify all tests pass
-5. Report completion status and any blockers
+   GitHub PR Comment URLs with detailed fix instructions:
+   {list of comment URLs for this package}
 
-Remember:
-- Focus only on files within the assigned package
-- Follow CLAUDE.md guidelines
-- Do not fix issues in other packages
-- Stop if unrelated errors block progress
-```
+   Task:
+   1. Fetch and process each PR comment URL to extract modification instructions
+   2. Implement fixes for all issues in this package
+   3. Run `make check` or verification commands after changes
+   4. Run `make test` to verify all tests pass
+   5. Report completion status and any blockers
+
+   Remember:
+   - Focus only on files within the assigned package
+   - Follow CLAUDE.md guidelines
+   - Do not fix issues in other packages
+   - Stop if unrelated errors block progress
+   ```
 
 5. **Collect agent responses:**
    - Fixes applied, files modified, compilation/test status, blockers

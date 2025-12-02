@@ -1,5 +1,4 @@
 ---
-allowed-tools: Bash(gh:*), Bash(git:*), Read, Grep, Task, Edit, Write, TodoWrite
 description: Fix GitHub Actions errors from the current PR (user)
 ---
 
@@ -110,25 +109,29 @@ For each failed check identified in Step 2:
    **Failed Checks**: {count}
 
    ### Failed Checks:
+
    1. {check_name_1} - {failure_reason}
    2. {check_name_2} - {failure_reason}
-   ...
+      ...
 
    ### Error Details:
 
    #### Compilation Errors ({count}):
+
    1. **{file_path}:{line}** - {error_message}
    2. **{file_path}:{line}** - {error_message}
-   ...
+      ...
 
    #### Test Failures ({count}):
+
    1. **{test_name}** in {file_path} - {failure_reason}
    2. **{test_name}** in {file_path} - {failure_reason}
-   ...
+      ...
 
    #### Lint Errors ({count}):
+
    1. **{file_path}:{line}** - {lint_message}
-   ...
+      ...
    ```
 
 ### Step 5: Display error summary and plan fixes
@@ -246,26 +249,31 @@ After all fixes have been applied:
    **URL**: {pr_url}
 
    ✅ Successfully Fixed:
+
    - [{count}] Compilation errors
    - [{count}] Test failures
    - [{count}] Lint errors
 
    📝 Changes Made:
+
    1. {file_path} - {description_of_fix}
    2. {file_path} - {description_of_fix}
-   ...
+      ...
 
    ⚠️ Needs Manual Intervention:
+
    - [{count}] Errors that could not be automatically fixed
    - [List of remaining issues if any]
 
    📊 Verification Results:
+
    - Compilation: ✅ Pass / ❌ Fail
    - Clippy: ✅ Pass / ❌ Fail
    - Format: ✅ Pass / ❌ Fail
    - Tests: ✅ Pass / ❌ Fail
 
    Next Steps:
+
    1. Review the changes made
    2. Commit and push the fixes to update the PR
    3. Wait for GitHub Actions to re-run checks
