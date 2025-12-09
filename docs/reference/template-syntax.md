@@ -17,9 +17,22 @@ Ign uses a custom template syntax with the `@ign-` prefix to avoid conflicts wit
 
 ## 1. Variable Substitution
 
-### 1.1 Basic Variable: `@ign-var:NAME@`
+### 1.1 Variable Syntax Overview
 
-Simple variable substitution.
+Ign supports four syntax variants for variable substitution:
+
+| Syntax | Description | Required/Optional |
+|--------|-------------|-------------------|
+| `@ign-var:NAME@` | Basic variable | Required |
+| `@ign-var:NAME:TYPE@` | Variable with explicit type | Required |
+| `@ign-var:NAME=DEFAULT@` | Variable with default value | Optional |
+| `@ign-var:NAME:TYPE=DEFAULT@` | Variable with type and default | Optional |
+
+**Key Rule:** Variables WITHOUT a default value are **required** (must be defined in ign-var.json). Variables WITH a default value are **optional** (use default if not defined).
+
+### 1.2 Basic Variable: `@ign-var:NAME@`
+
+Simple variable substitution. The variable must be defined in ign-var.json.
 
 **Syntax:**
 ```
@@ -55,7 +68,101 @@ const Version = "1.0.0"
 const Port = 8080
 ```
 
-### 1.2 Variable Types
+### 1.3 Variable with Type: `@ign-var:NAME:TYPE@`
+
+Variable with explicit type validation. The variable must be defined and must match the specified type.
+
+**Syntax:**
+```
+@ign-var:VARIABLE_NAME:TYPE@
+```
+
+**Supported Types:** `string`, `int`, `bool`
+
+**Example Template:**
+```go
+const Port = @ign-var:port:int@
+const Debug = @ign-var:debug:bool@
+const Name = "@ign-var:name:string@"
+```
+
+**With ign-var.json:**
+```json
+{
+  "variables": {
+    "port": 8080,
+    "debug": true,
+    "name": "my-service"
+  }
+}
+```
+
+**Type Mismatch Error:**
+```
+Error: variable port: type mismatch, expected int but got string
+```
+
+### 1.4 Variable with Default: `@ign-var:NAME=DEFAULT@`
+
+Variable with a default value. If not defined in ign-var.json, the default value is used.
+
+**Syntax:**
+```
+@ign-var:VARIABLE_NAME=DEFAULT_VALUE@
+```
+
+**Default Value Type Inference:**
+- `true` or `false` -> bool
+- Numeric string (e.g., `8080`) -> int
+- Anything else -> string
+
+**Example Template:**
+```go
+const Host = "@ign-var:host=localhost@"
+const Port = @ign-var:port=8080@
+const Debug = @ign-var:debug=false@
+const Version = "@ign-var:version=1.0.0@"
+```
+
+**With ign-var.json (partial):**
+```json
+{
+  "variables": {
+    "port": 3000
+  }
+}
+```
+
+**Generated Output:**
+```go
+const Host = "localhost"      // default used (not in ign-var.json)
+const Port = 3000             // from ign-var.json (overrides default)
+const Debug = false           // default used
+const Version = "1.0.0"       // default used
+```
+
+### 1.5 Variable with Type and Default: `@ign-var:NAME:TYPE=DEFAULT@`
+
+Variable with both explicit type validation and a default value.
+
+**Syntax:**
+```
+@ign-var:VARIABLE_NAME:TYPE=DEFAULT_VALUE@
+```
+
+**Example Template:**
+```go
+const Port = @ign-var:port:int=8080@
+const Debug = @ign-var:debug:bool=false@
+const Author = "@ign-var:author:string=anonymous@"
+```
+
+**Behavior:**
+1. If variable exists in ign-var.json, use that value and validate type
+2. If variable does not exist, use default value
+3. Type validation applies to both provided and default values
+
+### 1.6 Variable Types
 
 Ign supports three primitive types:
 
@@ -93,7 +200,7 @@ port: 3000
 debug: true
 ```
 
-### 1.3 File-based Variables: `@file:PATH`
+### 1.7 File-based Variables: `@file:PATH`
 
 Load variable value from a file (useful for large content like license headers, code snippets).
 
@@ -808,8 +915,6 @@ ign validate
 ### 11.2 Under Consideration
 
 - **Remote includes**: `@ign-include:github:owner/repo/path@ref@`
-- **Default values**: `@ign-var:name:default_value@`
-- **Required variables**: Explicit marking in ign.json
 - **Custom delimiters**: Override `@ign-*@` markers per template
 
 ---
@@ -818,7 +923,10 @@ ign validate
 
 | Directive | Syntax | Description |
 |-----------|--------|-------------|
-| `@ign-var:` | `@ign-var:NAME@` | Variable substitution |
+| `@ign-var:` | `@ign-var:NAME@` | Variable substitution (required) |
+| `@ign-var:` | `@ign-var:NAME:TYPE@` | Variable with type validation (required) |
+| `@ign-var:` | `@ign-var:NAME=DEFAULT@` | Variable with default (optional) |
+| `@ign-var:` | `@ign-var:NAME:TYPE=DEFAULT@` | Variable with type and default (optional) |
 | `@ign-comment:` | `@ign-comment:TEXT@` | Template comment (line removed from output) |
 | `@ign-raw:` | `@ign-raw:CONTENT@` | Literal output (escape) |
 | `@ign-if:` | `@ign-if:VAR@...\@ign-endif@` | Conditional block |
@@ -833,3 +941,12 @@ ign validate
 | `string` | `string` | `"hello"` | Any text, preserved as-is |
 | `int` | `number` | `8080` | Integer values only |
 | `bool` | `boolean` | `true`, `false` | Used in conditionals |
+
+## Appendix C: Variable Syntax Quick Reference
+
+| Syntax | Required | Type | Default | Example |
+|--------|----------|------|---------|---------|
+| `@ign-var:name@` | Yes | inferred | - | `@ign-var:project_name@` |
+| `@ign-var:name:type@` | Yes | explicit | - | `@ign-var:port:int@` |
+| `@ign-var:name=value@` | No | inferred | value | `@ign-var:host=localhost@` |
+| `@ign-var:name:type=value@` | No | explicit | value | `@ign-var:port:int=8080@` |

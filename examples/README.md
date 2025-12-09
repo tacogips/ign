@@ -49,9 +49,22 @@ Go project template with shared reusable content.
 
 ## Directive Reference
 
+### Variable Syntax
+
+| Syntax | Required | Example |
+|--------|----------|---------|
+| `@ign-var:NAME@` | Yes | `@ign-var:app_name@` |
+| `@ign-var:NAME:TYPE@` | Yes | `@ign-var:port:int@` |
+| `@ign-var:NAME=DEFAULT@` | No | `@ign-var:host=localhost@` |
+| `@ign-var:NAME:TYPE=DEFAULT@` | No | `@ign-var:port:int=8080@` |
+
+Variables WITHOUT default are **required** (must be in ign-var.json).
+Variables WITH default are **optional** (use default if not provided).
+
+### Other Directives
+
 | Directive | Purpose | Example |
 |-----------|---------|---------|
-| `@ign-var:NAME@` | Variable substitution | `const Port = @ign-var:port@` |
 | `@ign-comment:TEXT@` | Template comment (removed) | `@ign-comment:TODO: fix this@` |
 | `@ign-if:VAR@` | Conditional start | `@ign-if:enable_auth@` |
 | `@ign-else@` | Conditional else | `@ign-else@` |

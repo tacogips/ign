@@ -168,11 +168,18 @@ See [CLI Reference](reference/cli-commands.md) for complete command documentatio
 
 | Directive | Syntax | Description |
 |-----------|--------|-------------|
-| Variable | `@ign-var:NAME@` | Simple variable substitution |
+| Variable | `@ign-var:NAME@` | Variable substitution (required) |
+| Variable | `@ign-var:NAME:TYPE@` | Variable with type validation (required) |
+| Variable | `@ign-var:NAME=DEFAULT@` | Variable with default value (optional) |
+| Variable | `@ign-var:NAME:TYPE=DEFAULT@` | Variable with type and default (optional) |
 | Template Comment | `@ign-comment:TEXT@` | Template-only comment (line removed from output) |
 | Raw/Escape | `@ign-raw:CONTENT@` | Output literally without processing |
 | Conditional | `@ign-if:VAR@...@ign-endif@` | Conditional block |
 | Include | `@ign-include:PATH@` | Include another file |
+
+**Variable Types:** `string`, `int`, `bool`
+
+**Required vs Optional:** Variables without default value are required (must be in ign-var.json). Variables with default value are optional (use default if not provided).
 
 See [Template Syntax Reference](reference/template-syntax.md) for detailed syntax documentation.
 

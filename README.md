@@ -28,6 +28,8 @@ ign init --output ./my-project
 package main
 
 const AppName = "@ign-var:app_name@"
+const Port = @ign-var:port:int=8080@       // optional, default 8080
+const Debug = @ign-var:debug:bool=false@   // optional, default false
 
 func main() {
     @ign-if:enable_logging@
@@ -36,9 +38,21 @@ func main() {
 }
 ```
 
+### Variable Syntax
+
+| Syntax | Required | Description |
+|--------|----------|-------------|
+| `@ign-var:NAME@` | Yes | Basic variable |
+| `@ign-var:NAME:TYPE@` | Yes | With type validation |
+| `@ign-var:NAME=DEFAULT@` | No | With default value |
+| `@ign-var:NAME:TYPE=DEFAULT@` | No | With type and default |
+
+**Types:** `string`, `int`, `bool`
+
+### Other Directives
+
 | Directive | Usage |
 |-----------|-------|
-| `@ign-var:NAME@` | Variable substitution |
 | `@ign-if:VAR@...@ign-endif@` | Conditional block (bool) |
 | `@ign-include:PATH@` | Include another file |
 | `@ign-raw:CONTENT@` | Output literally (escape) |
