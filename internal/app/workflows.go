@@ -12,6 +12,11 @@ import (
 func NormalizeTemplateURL(url string) string {
 	url = strings.TrimSpace(url)
 
+	// Check for local paths first (before modifying URL)
+	if strings.HasPrefix(url, "./") || strings.HasPrefix(url, "../") {
+		return url
+	}
+
 	// If it's already a full URL or git@ format, return as-is
 	if strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "git@") {
 		return url

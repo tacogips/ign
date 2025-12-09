@@ -83,7 +83,7 @@ func TestVarDirective(t *testing.T) {
 	}
 }
 
-// TestCommentDirective tests @ign-comment:NAME@ with comment removal
+// TestCommentDirective tests @ign-comment:XXX@ as template comment (line removal)
 func TestCommentDirective(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -93,45 +93,66 @@ func TestCommentDirective(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name:     "single-line comment //",
-			input:    "// @ign-comment:code@",
-			vars:     map[string]interface{}{"code": "fmt.Println(\"hello\")"},
-			expected: "fmt.Println(\"hello\")",
+			name:     "simple comment line removed",
+			input:    "@ign-comment:this is a template comment@",
+			vars:     map[string]interface{}{},
+			expected: "",
 			wantErr:  false,
 		},
 		{
-			name:     "single-line comment #",
-			input:    "# @ign-comment:code@",
-			vars:     map[string]interface{}{"code": "print('hello')"},
-			expected: "print('hello')",
+			name:     "comment with whitespace before",
+			input:    "    @ign-comment:indented comment@",
+			vars:     map[string]interface{}{},
+			expected: "",
 			wantErr:  false,
 		},
 		{
-			name:     "single-line comment --",
-			input:    "-- @ign-comment:code@",
-			vars:     map[string]interface{}{"code": "SELECT * FROM users"},
-			expected: "SELECT * FROM users",
+			name:     "comment with whitespace after",
+			input:    "@ign-comment:comment@    ",
+			vars:     map[string]interface{}{},
+			expected: "",
 			wantErr:  false,
 		},
 		{
-			name:     "block comment /* */",
-			input:    "/* @ign-comment:code@ */",
-			vars:     map[string]interface{}{"code": "const x = 1;"},
-			expected: "const x = 1;",
+			name:     "multiline with comment in middle",
+			input:    "line1\n@ign-comment:this line is removed@\nline3",
+			vars:     map[string]interface{}{},
+			expected: "line1\nline3",
 			wantErr:  false,
 		},
 		{
-			name:     "HTML comment",
-			input:    "<!-- @ign-comment:tag@ -->",
-			vars:     map[string]interface{}{"tag": "<div>content</div>"},
-			expected: "<div>content</div>",
+			name:     "empty comment content",
+			input:    "@ign-comment:@",
+			vars:     map[string]interface{}{},
+			expected: "",
 			wantErr:  false,
 		},
 		{
-			name:     "with indentation",
-			input:    "    // @ign-comment:code@",
-			vars:     map[string]interface{}{"code": "return true"},
-			expected: "    return true",
+			name:     "comment with special characters",
+			input:    "@ign-comment:TODO: fix this later!!!@",
+			vars:     map[string]interface{}{},
+			expected: "",
+			wantErr:  false,
+		},
+		{
+			name:     "error: non-whitespace before directive",
+			input:    "code @ign-comment:comment@",
+			vars:     map[string]interface{}{},
+			expected: "",
+			wantErr:  true,
+		},
+		{
+			name:     "error: non-whitespace after directive",
+			input:    "@ign-comment:comment@ more code",
+			vars:     map[string]interface{}{},
+			expected: "",
+			wantErr:  true,
+		},
+		{
+			name:     "multiple comment lines",
+			input:    "@ign-comment:first@\n@ign-comment:second@\n@ign-comment:third@",
+			vars:     map[string]interface{}{},
+			expected: "",
 			wantErr:  false,
 		},
 	}
@@ -434,9 +455,9 @@ func TestExtractVariables(t *testing.T) {
 			expected: []string{"debug", "level"},
 		},
 		{
-			name:     "comment variables",
-			input:    "// @ign-comment:code@",
-			expected: []string{"code"},
+			name:     "comment directive not treated as variable",
+			input:    "@ign-comment:this is just a comment@\n@ign-var:name@",
+			expected: []string{"name"},
 		},
 	}
 

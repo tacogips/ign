@@ -151,100 +151,86 @@ package main
 
 ---
 
-## 2. Comment-Style Variables
+## 2. Template Comments
 
-### 2.1 Comment Variable: `@ign-comment:NAME@`
+### 2.1 Template Comment: `@ign-comment:TEXT@`
 
-Substitutes a variable and removes comment markers on the same line.
+A template-only comment that is removed from the output when `ign init` is executed.
 
 **Purpose:**
-- Generate code that becomes valid after variable substitution
-- Avoid commented-out code in final output
-- Handle language-specific comment syntax automatically
+- Add notes, TODOs, or explanations visible only in the template source
+- Document template logic without affecting generated output
+- Leave instructions for template maintainers
 
 **Syntax:**
 ```
-@ign-comment:VARIABLE_NAME@
+@ign-comment:any text here@
 ```
 
 **Behavior:**
-1. Substitute the variable value
-2. Remove comment markers from the beginning of the line
-3. Preserve indentation
+1. The entire line containing `@ign-comment:TEXT@` is removed from output
+2. The text after the colon is free-form content (not a variable reference)
+3. Only whitespace is allowed before and after the directive on the same line
 
-**Supported Comment Markers:**
-- `//` (Go, C, C++, JavaScript, TypeScript, Rust)
-- `#` (Python, Ruby, Shell, YAML, TOML)
-- `--` (SQL, Haskell, Lua)
-- `<!-- -->` (HTML, XML, Markdown)
-- `/* */` (C-style block comments)
+**Validation Rules:**
+- The directive must be on its own line (only whitespace before/after)
+- Non-whitespace characters before or after the directive cause an error
 
-**Example 1: Feature Flag**
+**Example 1: Basic Template Comment**
 
 Template:
 ```go
-func setupDatabase() {
-    // db := NewDatabase()
-    @ign-comment:database_type@
+package main
+@ign-comment:TODO: Add error handling later@
+
+func main() {
+    @ign-comment:This function will be customized per project@
+    fmt.Println("Hello, @ign-var:project_name@!")
 }
 ```
 
-With `database_type: "db := NewPostgresDB()"`:
+Output (with `project_name: "myapp"`):
 ```go
-func setupDatabase() {
-    // db := NewDatabase()
-    db := NewPostgresDB()
+package main
+
+func main() {
+    fmt.Println("Hello, myapp!")
 }
 ```
 
-**Example 2: Configuration Line**
+**Example 2: Documentation for Template Maintainers**
 
 Template:
-```python
-# config.CACHE_ENABLED = @ign-comment:cache_setting@
+```yaml
+@ign-comment:Database configuration section@
+@ign-comment:Supported values: postgres, mysql, sqlite@
+database:
+  type: @ign-var:db_type@
+  host: @ign-var:db_host@
 ```
 
-With `cache_setting: "True"`:
-```python
-config.CACHE_ENABLED = True
+Output (with `db_type: "postgres"`, `db_host: "localhost"`):
+```yaml
+database:
+  type: postgres
+  host: localhost
 ```
 
-**Example 3: Conditional Middleware**
+**Example 3: Invalid Usage (Error)**
 
-Template:
-```go
-func setupMiddleware(app *App) {
-    app.Use(Logger())
-    // app.Use(@ign-comment:auth_middleware@)
-    app.Use(ErrorHandler())
-}
 ```
-
-With `auth_middleware: "JWTAuth()"`:
-```go
-func setupMiddleware(app *App) {
-    app.Use(Logger())
-    app.Use(JWTAuth())
-    app.Use(ErrorHandler())
-}
+code @ign-comment:this will error@
 ```
+Error: `@ign-comment directive must be on its own line (non-whitespace found before directive)`
 
-### 2.2 Comment Detection Rules
+```
+@ign-comment:comment@ more code
+```
+Error: `@ign-comment directive must be on its own line (non-whitespace found after directive)`
 
-**Single-line comments:**
-- Detects `//`, `#`, `--` at the start of content (after whitespace)
-- Removes marker and following space (if present)
-- Preserves line indentation
+### 2.2 Note on Variable Extraction
 
-**Block comments:**
-- `/* CONTENT */` - removes both markers
-- `<!-- CONTENT -->` - removes both markers
-- Only removes markers on the same line as the directive
-
-**Edge Cases:**
-- If no comment marker detected, substitutes variable without modification
-- Multiple comment markers: only removes the first one
-- Inline comments: comment marker must be at the beginning of the trimmed line
+`@ign-comment:` directives are NOT treated as variable references. They do not appear in the list of variables extracted by `ign info` or similar commands.
 
 ---
 
@@ -576,12 +562,13 @@ features:
   @ign-endif@
 ```
 
-### 6.3 Comment Variables in Conditionals
+### 6.3 Template Comments in Conditionals
 
 ```go
 func init() {
+    @ign-comment:Setup logger based on configuration@
     @ign-if:use_custom_logger@
-    // logger = @ign-comment:custom_logger_init@
+    logger = NewCustomLogger()
     @ign-else@
     logger = log.Default()
     @ign-endif@
@@ -758,25 +745,26 @@ cache := NewCache()
 - Content that varies per file
 - Over-abstraction
 
-### 9.4 Comment Variables
+### 9.4 Template Comments
 
 **Use `@ign-comment:` when:**
-- Generated code should uncomment a line
-- Syntax would be invalid before substitution
-- Creating optional/conditional code
+- Adding notes or TODOs visible only in template source
+- Documenting template logic for maintainers
+- Leaving instructions about variable usage
 
 **Example:**
 ```go
-// @ign-comment:optional_import@
-```
-vs
-```go
-@ign-if:need_import@
-import "example"
-@ign-endif@
+@ign-comment:This template generates a basic Go service@
+@ign-comment:Required variables: project_name, author@
+package main
+
+func main() {
+    @ign-comment:TODO: Add proper error handling@
+    fmt.Println("Hello, @ign-var:project_name@!")
+}
 ```
 
-Choose the approach that makes the template more readable.
+The comment lines are completely removed from the generated output.
 
 ---
 
@@ -831,7 +819,7 @@ ign validate
 | Directive | Syntax | Description |
 |-----------|--------|-------------|
 | `@ign-var:` | `@ign-var:NAME@` | Variable substitution |
-| `@ign-comment:` | `@ign-comment:NAME@` | Variable with comment removal |
+| `@ign-comment:` | `@ign-comment:TEXT@` | Template comment (line removed from output) |
 | `@ign-raw:` | `@ign-raw:CONTENT@` | Literal output (escape) |
 | `@ign-if:` | `@ign-if:VAR@...\@ign-endif@` | Conditional block |
 | `@ign-else@` | `@ign-else@` | Alternative block for if |
@@ -845,13 +833,3 @@ ign validate
 | `string` | `string` | `"hello"` | Any text, preserved as-is |
 | `int` | `number` | `8080` | Integer values only |
 | `bool` | `boolean` | `true`, `false` | Used in conditionals |
-
-## Appendix C: Supported Comment Markers
-
-| Language | Marker | Example |
-|----------|--------|---------|
-| Go, C, JavaScript, Rust | `//` | `// @ign-comment:var@` |
-| Python, Shell, YAML | `#` | `# @ign-comment:var@` |
-| SQL, Haskell | `--` | `-- @ign-comment:var@` |
-| HTML, XML | `<!-- -->` | `<!-- @ign-comment:var@ -->` |
-| C, CSS | `/* */` | `/* @ign-comment:var@ */` |

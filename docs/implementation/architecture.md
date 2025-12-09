@@ -255,7 +255,7 @@ type Variables interface {
 
 **Directive Implementations:**
 - `VarDirective` - `@ign-var:NAME@`
-- `CommentDirective` - `@ign-comment:NAME@`
+- `CommentDirective` - `@ign-comment:TEXT@` (template comment, line removed from output)
 - `RawDirective` - `@ign-raw:CONTENT@`
 - `IfDirective` - `@ign-if:VAR@...@ign-endif@`
 - `IncludeDirective` - `@ign-include:PATH@`
@@ -447,7 +447,7 @@ User: ign init --output ./my-project
    │  ├─ @ign-raw: (skip processing)
    │  ├─ @ign-include: (recursive parse)
    │  ├─ @ign-if: (evaluate condition)
-   │  ├─ @ign-comment: (remove markers)
+   │  ├─ @ign-comment: (remove entire line)
    │  └─ @ign-var: (substitute value)
    └─ Return processed content
 

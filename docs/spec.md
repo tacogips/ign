@@ -169,7 +169,7 @@ See [CLI Reference](reference/cli-commands.md) for complete command documentatio
 | Directive | Syntax | Description |
 |-----------|--------|-------------|
 | Variable | `@ign-var:NAME@` | Simple variable substitution |
-| Comment-style | `@ign-comment:NAME@` | Variable with comment markers removed |
+| Template Comment | `@ign-comment:TEXT@` | Template-only comment (line removed from output) |
 | Raw/Escape | `@ign-raw:CONTENT@` | Output literally without processing |
 | Conditional | `@ign-if:VAR@...@ign-endif@` | Conditional block |
 | Include | `@ign-include:PATH@` | Include another file |
@@ -229,7 +229,6 @@ See [Architecture Documentation](implementation/architecture.md) for:
 ### Medium Priority
 
 - [ ] **config.json full schema** - Define complete configuration options
-- [ ] **@ign-comment: behavior details** - Exact rules for comment marker detection and removal
 - [ ] **@ign-include: GitHub URL format** - Exact URL format for including from remote repositories
 - [ ] **Interactive mode** - `ign init` with prompts when ign-var.json has empty values
 

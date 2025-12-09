@@ -172,59 +172,30 @@ func processVarDirectivesInText(input []byte, vars Variables) ([]byte, error) {
 	return []byte(text), nil
 }
 
-// processCommentDirectivesInText processes all @ign-comment:NAME@ directives.
-// This must be line-by-line to correctly detect and remove comment markers.
+// processCommentDirectivesInText removes all lines containing @ign-comment:XXX@ directives.
+// Lines with this directive are template comments and should not appear in output.
+// Returns an error if a line has non-whitespace characters before or after the directive.
 func processCommentDirectivesInText(input []byte, vars Variables) ([]byte, error) {
 	lines := bytes.Split(input, []byte("\n"))
 	var result [][]byte
 
 	for _, line := range lines {
 		lineStr := string(line)
-		matches := findDirectives(line)
 
-		// Check if this line has @ign-comment: directives
-		hasComment := false
-		for _, match := range matches {
-			if match.Type == DirectiveComment {
-				hasComment = true
-				break
-			}
-		}
-
-		if hasComment {
-			// Process comment directives in this line
-			processed, err := processCommentDirectivesInLine(lineStr, vars, matches)
-			if err != nil {
+		// Check if this line contains @ign-comment: directive
+		if lineContainsCommentDirective(lineStr) {
+			// Validate that the directive is on its own line
+			if err := validateCommentDirectiveLine(lineStr); err != nil {
 				return nil, err
 			}
-			result = append(result, []byte(processed))
-		} else {
-			result = append(result, line)
-		}
-	}
-
-	return bytes.Join(result, []byte("\n")), nil
-}
-
-// processCommentDirectivesInLine processes @ign-comment: directives in a single line.
-func processCommentDirectivesInLine(line string, vars Variables, matches []DirectiveMatch) (string, error) {
-	// Process directives from last to first to maintain positions
-	for i := len(matches) - 1; i >= 0; i-- {
-		match := matches[i]
-		if match.Type != DirectiveComment {
+			// Skip this line (remove from output)
 			continue
 		}
 
-		// Process the comment directive with the entire line for context
-		processed, err := processCommentDirective(match.Args, vars, line)
-		if err != nil {
-			return "", err
-		}
-
-		return processed, nil
+		result = append(result, line)
 	}
 
-	return line, nil
+	return bytes.Join(result, []byte("\n")), nil
 }
 
 // Validate validates template syntax without processing.
@@ -242,12 +213,15 @@ func (p *DefaultParser) Validate(ctx context.Context, input []byte) error {
 
 		// Validate directive arguments
 		switch match.Type {
-		case DirectiveVar, DirectiveComment:
+		case DirectiveVar:
 			if strings.TrimSpace(match.Args) == "" {
 				return newParseErrorWithDirective(InvalidDirectiveSyntax,
 					"variable name is empty",
 					match.RawText)
 			}
+		case DirectiveComment:
+			// @ign-comment: can have any content (including empty) - it's a template comment
+			// Validation of line positioning is done during processing
 		case DirectiveInclude:
 			if strings.TrimSpace(match.Args) == "" {
 				return newParseErrorWithDirective(InvalidDirectiveSyntax,
@@ -273,17 +247,19 @@ func (p *DefaultParser) Validate(ctx context.Context, input []byte) error {
 }
 
 // ExtractVariables finds all variable references in a template.
+// Note: @ign-comment: is NOT included as it's a template comment, not a variable reference.
 func (p *DefaultParser) ExtractVariables(input []byte) ([]string, error) {
 	matches := findDirectives(input)
 	varNames := make(map[string]struct{})
 
 	for _, match := range matches {
 		switch match.Type {
-		case DirectiveVar, DirectiveComment, DirectiveIf:
+		case DirectiveVar, DirectiveIf:
 			name := strings.TrimSpace(match.Args)
 			if name != "" {
 				varNames[name] = struct{}{}
 			}
+			// DirectiveComment is intentionally excluded - it's a template comment, not a variable
 		}
 	}
 

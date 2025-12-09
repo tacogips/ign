@@ -1,0 +1,8 @@
+@ign-if:use_docker@
+version: "3.8"
+services:
+  app:
+    image: @ign-var:project_name@:latest
+    ports:
+      - "8080:8080"
+@ign-endif@

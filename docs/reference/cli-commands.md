@@ -206,7 +206,7 @@ ign init --dry-run
    │  ├─ Skip if exists and --overwrite not set
    │  ├─ Process template directives:
    │  │  ├─ @ign-var: substitution
-   │  │  ├─ @ign-comment: comment removal
+   │  │  ├─ @ign-comment: line removal (template comments)
    │  │  ├─ @ign-if: conditional blocks
    │  │  ├─ @ign-include: file inclusion
    │  │  └─ @ign-raw: literal output
