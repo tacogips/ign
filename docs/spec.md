@@ -78,14 +78,22 @@ User-created directory containing build configuration:
     +-- license-header.txt     # Files for @file: references (optional)
 ```
 
-### 2.3 Template Source Abstraction
+### 2.3 Template Sources
 
-While initially supporting only GitHub, the implementation must use an abstraction layer (interface) to allow future support for:
+Templates can be sourced from:
 
+**Currently Supported:**
+- GitHub repositories: `github.com/owner/repo`
+- Local filesystem: Relative paths only (e.g., `./template`, `templates/go-basic`)
+  - `..` is NOT allowed in paths (security restriction)
+  - Absolute paths are NOT allowed (portability)
+
+**Future Support:**
 - GitLab
 - Bitbucket
-- Local filesystem
 - Other Git hosting services
+
+The implementation uses an abstraction layer (interface) via the TemplateProvider pattern
 
 ```
 +---------------------------------------------+
@@ -129,11 +137,15 @@ $ ign init --output ./my-project
 
 ### 3.2 Basic Commands
 
-| Command | Purpose |
-|---------|---------|
-| `ign build init <url>` | Create `.ign-build/` with `ign-var.json` |
-| `ign init` | Generate project from `.ign-build/ign-var.json` |
-| `ign init --overwrite` | Regenerate, overwriting existing files |
+| Command | Purpose | Example |
+|---------|---------|---------|
+| `ign build init <source>` | Create `.ign-build/` with `ign-var.json` | `ign build init github.com/owner/repo`<br>`ign build init ./my-template` |
+| `ign init` | Generate project from `.ign-build/ign-var.json` | `ign init --output ./my-project` |
+| `ign init --overwrite` | Regenerate, overwriting existing files | `ign init --overwrite` |
+
+**Template sources:**
+- GitHub: `github.com/owner/repo` or `github.com/owner/repo/path/to/template`
+- Local: `./relative/path` only (no `..`, no absolute paths)
 
 See [CLI Reference](reference/cli-commands.md) for complete command documentation.
 
@@ -175,6 +187,7 @@ See [Configuration Reference](reference/configuration.md) for complete file form
 | Question | Decision |
 |----------|----------|
 | Template syntax | `@ign-var:VAR@` with custom directives |
+| Template sources | GitHub URLs, local relative paths (no `..`, no absolute) |
 | Variable types | `string`, `int`, `bool` only |
 | File-based variables | `@file:` prefix, paths relative to `.ign-build/` |
 | Lock file | **Not used** (one-shot generation) |
@@ -209,7 +222,7 @@ See [Architecture Documentation](implementation/architecture.md) for:
 
 ### Low Priority (Future)
 
-- [ ] **Additional providers** - GitLab, Bitbucket, local filesystem support
+- [ ] **Additional providers** - GitLab, Bitbucket support
 - [ ] **Template versioning** - Support for template versions/tags
 - [ ] **Template inheritance** - Extend/override existing templates
 - [ ] **Post-init hooks** - Run scripts after project generation
@@ -225,4 +238,4 @@ See [Architecture Documentation](implementation/architecture.md) for:
 | 0.1 | 2025-12-09 | Initial draft |
 | 0.2 | 2025-12-09 | Added template directives, resolved core syntax questions |
 | 0.3 | 2025-12-09 | Simplified design: removed lock file, added build workflow |
-| 0.4 | 2025-12-09 | Split documentation into multiple focused files, removed "Removed Features" section |
+| 0.4 | 2025-12-09 | Split documentation into multiple focused files, removed "Removed Features" section, added local filesystem support as current feature |
