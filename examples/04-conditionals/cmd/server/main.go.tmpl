@@ -1,0 +1,85 @@
+// Service entry point with conditional features
+package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+@ign-if:enable_database@
+
+	"@ign-var:module_path@/internal/database"
+@ign-endif@
+@ign-if:enable_metrics@
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+@ign-endif@
+@ign-if:enable_auth@
+
+	"@ign-var:module_path@/internal/auth"
+@ign-endif@
+)
+
+const (
+	ServiceName = "@ign-var:service_name@"
+	Port        = @ign-var:port@
+)
+
+func main() {
+	log.Printf("Starting %s...", ServiceName)
+
+@ign-if:enable_database@
+	// Initialize database connection
+	db, err := database.Connect()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	defer db.Close()
+	log.Println("Database connected")
+@ign-endif@
+
+@ign-if:enable_auth@
+	// Initialize auth middleware
+	authMiddleware := auth.NewMiddleware()
+	log.Println("Auth middleware initialized")
+@ign-endif@
+
+	// Setup routes
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", handleRoot)
+	mux.HandleFunc("/health", handleHealth)
+
+@ign-if:enable_metrics@
+	// Prometheus metrics endpoint
+	mux.Handle("/metrics", promhttp.Handler())
+	log.Println("Metrics endpoint enabled at /metrics")
+@ign-endif@
+
+@ign-if:enable_auth@
+	// Protected routes
+	mux.Handle("/api/", authMiddleware.Wrap(http.HandlerFunc(handleAPI)))
+@ign-else@
+	// Unprotected API routes
+	mux.HandleFunc("/api/", handleAPI)
+@ign-endif@
+
+	addr := fmt.Sprintf(":%d", Port)
+	log.Printf("%s listening on %s", ServiceName, addr)
+
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("Server failed: %v", err)
+	}
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Service: %s", ServiceName)
+}
+
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, `{"status":"healthy"}`)
+}
+
+func handleAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprint(w, `{"message":"API endpoint"}`)
+}

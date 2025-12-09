@@ -1,0 +1,24 @@
+{
+  "name": "go-project-with-includes",
+  "version": "1.0.0",
+  "description": "Go project template demonstrating @ign-include directive for shared content",
+  "author": "ign-examples",
+  "repository": "https://github.com/example/ign-templates",
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "description": "Name of the project",
+      "required": true
+    },
+    "author_name": {
+      "type": "string",
+      "description": "Author name for license",
+      "required": true
+    },
+    "year": {
+      "type": "int",
+      "description": "Year for copyright",
+      "default": 2024
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "description": "Microservices project with multiple services from templates",
+  "templates": [
+    {
+      "name": "api-gateway",
+      "output_path": "services/api-gateway",
+      "template": {
+        "provider": "github",
+        "owner": "example",
+        "repo": "ign-templates",
+        "path": "go-service",
+        "ref": "main"
+      },
+      "variables": {
+        "service_name": "api-gateway",
+        "module_path": "github.com/myorg/myproject/services/api-gateway",
+        "port": 8080,
+        "enable_metrics": true,
+        "enable_tracing": true
+      }
+    },
+    {
+      "name": "user-service",
+      "output_path": "services/user-service",
+      "template": {
+        "provider": "github",
+        "owner": "example",
+        "repo": "ign-templates",
+        "path": "go-service",
+        "ref": "main"
+      },
+      "variables": {
+        "service_name": "user-service",
+        "module_path": "github.com/myorg/myproject/services/user-service",
+        "port": 8081,
+        "enable_metrics": true,
+        "enable_tracing": false,
+        "database_type": "postgres"
+      }
+    },
+    {
+      "name": "order-service",
+      "output_path": "services/order-service",
+      "template": {
+        "provider": "github",
+        "owner": "example",
+        "repo": "ign-templates",
+        "path": "go-service",
+        "ref": "main"
+      },
+      "variables": {
+        "service_name": "order-service",
+        "module_path": "github.com/myorg/myproject/services/order-service",
+        "port": 8082,
+        "enable_metrics": true,
+        "enable_tracing": true,
+        "database_type": "postgres"
+      }
+    },
+    {
+      "name": "shared-common",
+      "output_path": "shared/common",
+      "template": {
+        "provider": "local",
+        "path": "../templates/shared-lib"
+      },
+      "variables": {
+        "module_path": "github.com/myorg/myproject/shared/common"
+      }
+    }
+  ]
+}

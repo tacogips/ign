@@ -1,0 +1,39 @@
+{
+  "name": "go-service-with-features",
+  "version": "1.0.0",
+  "description": "Go service template with feature flags using conditionals",
+  "author": "ign-examples",
+  "repository": "https://github.com/example/ign-templates",
+  "variables": {
+    "service_name": {
+      "type": "string",
+      "description": "Name of the service",
+      "required": true
+    },
+    "module_path": {
+      "type": "string",
+      "description": "Go module path",
+      "required": true
+    },
+    "enable_database": {
+      "type": "bool",
+      "description": "Include database support",
+      "default": false
+    },
+    "enable_metrics": {
+      "type": "bool",
+      "description": "Include Prometheus metrics",
+      "default": false
+    },
+    "enable_auth": {
+      "type": "bool",
+      "description": "Include JWT authentication",
+      "default": false
+    },
+    "port": {
+      "type": "int",
+      "description": "HTTP server port",
+      "default": 8080
+    }
+  }
+}

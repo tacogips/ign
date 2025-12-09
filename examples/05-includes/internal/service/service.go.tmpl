@@ -1,0 +1,27 @@
+// Copyright (c) @ign-var:year@ @ign-var:author_name@
+// Licensed under the MIT License.
+
+package service
+
+import (
+	"context"
+	"fmt"
+	"log"
+)
+
+// Service demonstrates include reuse across files
+type Service struct {
+	name string
+}
+
+func New() *Service {
+	return &Service{
+		name: "@ign-var:project_name@",
+	}
+}
+
+func (s *Service) Run(ctx context.Context) error {
+	log.Printf("Service %s running", s.name)
+	fmt.Println("Service operational")
+	return nil
+}

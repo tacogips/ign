@@ -1,0 +1,15 @@
+module @ign-var:module_path@
+
+go 1.21
+
+require (
+@ign-if:enable_database@
+	github.com/jackc/pgx/v5 v5.5.0
+@ign-endif@
+@ign-if:enable_metrics@
+	github.com/prometheus/client_golang v1.17.0
+@ign-endif@
+@ign-if:enable_auth@
+	github.com/golang-jwt/jwt/v5 v5.2.0
+@ign-endif@
+)
