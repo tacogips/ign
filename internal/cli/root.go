@@ -53,6 +53,7 @@ func init() {
 	// Add subcommands
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(templateCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 
