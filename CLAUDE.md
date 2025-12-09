@@ -174,6 +174,65 @@ The go-coding agent has comprehensive knowledge of:
 - CLI/TUI application structures
 - Package management with go modules
 
+### What go-coding Subagent Does
+
+The go-coding subagent **actually implements the code**, not just provides guidance. It will:
+
+1. Read the reference document to understand requirements
+2. Analyze existing codebase structure
+3. Create/modify Go files using Edit/Write tools
+4. Run `go mod tidy` to sync dependencies
+5. Run `go build` and `go test` to verify implementation
+6. Return results as **diff format**
+
+### Required Prompt Format
+
+When invoking the go-coding subagent via Task tool, the `prompt` parameter MUST include the following information. The subagent will return an error and refuse to proceed if any required field is missing.
+
+**Required Fields:**
+
+1. **Purpose**: What goal or problem does this implementation solve?
+2. **Reference Document**: Which specification, design document, or requirements to follow?
+3. **Implementation Target**: What specific feature, function, or component to implement?
+4. **Completion Criteria**: What conditions define "implementation complete"?
+
+**Example Task Tool Invocation:**
+
+```
+Task tool parameters:
+  subagent_type: go-coding
+  prompt: |
+    Purpose: Implement the template variable parser for ign
+    Reference Document: /docs/spec.md (Section: Template Syntax)
+    Implementation Target: Create internal/parser/variable.go with ParseVariables function
+    Completion Criteria:
+      - ParseVariables extracts all {{variable}} patterns from input
+      - Returns []Variable with name, default value, and source location
+      - Unit tests cover edge cases (nested braces, escaped sequences)
+      - go mod tidy runs without errors
+```
+
+**Do NOT invoke go-coding without all required fields.** The subagent will reject incomplete requests.
+
+### Response Format from go-coding
+
+The subagent returns a structured response including:
+
+**On Success:**
+- Summary of what was implemented
+- Completion criteria status (checklist)
+- Files changed with **file path and line numbers** (final code, not diff)
+- Test results (`go test ./... -v`)
+- Notes and follow-up items
+
+**On Failure:**
+- Reason for failure
+- Partial progress made
+- Partial files changed (same file:line format)
+- Recommended next steps
+
+**Note**: The subagent will iterate on build/test failures until they pass. It runs `go build`, `go test`, and `go vet` in sequence, fixing any issues before returning.
+
 ## Task Management
 - Use `task` command for build automation
 - Define tasks in `Taskfile.yml` (to be created as needed)
