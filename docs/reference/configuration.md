@@ -736,8 +736,9 @@ Configuration is resolved in this order (highest to lowest priority):
 
 1. **Command-line flags** (e.g., `--verbose`, `--no-color`)
 2. **Environment variables** (e.g., `IGN_CACHE_DIR`, `GITHUB_TOKEN`)
-3. **Global config file** (`~/.config/ign/config.json`)
-4. **Built-in defaults**
+3. **gh CLI authentication** (`gh auth token`)
+4. **Global config file** (`~/.config/ign/config.json`)
+5. **Built-in defaults**
 
 **Example:**
 ```bash
@@ -755,9 +756,19 @@ ign init --verbose --no-color
 | `IGN_CONFIG` | (file path) | Path to config.json |
 | `IGN_CACHE_DIR` | `cache.directory` | Cache directory |
 | `GITHUB_TOKEN` | `github.token` | GitHub access token |
+| `GH_TOKEN` | `github.token` | GitHub access token (alternative) |
 | `IGN_NO_COLOR` | `output.color` | Disable colors (set to "1") |
 | `IGN_VERBOSE` | `output.verbose` | Enable verbose (set to "1") |
 | `IGN_BUILD_DIR` | `defaults.build_dir` | Build directory name |
+
+**GitHub Token Resolution:**
+
+The GitHub token for private repository access is resolved in this order:
+1. `GITHUB_TOKEN` environment variable
+2. `GH_TOKEN` environment variable
+3. `gh auth token` command (gh CLI's secure credential storage)
+
+If you have `gh` CLI installed and authenticated, no additional token configuration is needed.
 
 **Example:**
 ```bash

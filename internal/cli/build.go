@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
@@ -83,6 +85,7 @@ func runBuildInit(cmd *cobra.Command, args []string) error {
 		Force:       buildInitForce,
 		Config:      buildInitConfig,
 		GitHubToken: githubToken,
+		IgnVersion:  Version,
 	})
 
 	if err != nil {
@@ -99,9 +102,10 @@ func runBuildInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// getGitHubToken retrieves GitHub token from environment or config file.
+// getGitHubToken retrieves GitHub token from environment or gh CLI.
+// Priority: GITHUB_TOKEN env > GH_TOKEN env > gh auth token command
 func getGitHubToken(configPath string) string {
-	// Try environment variables first
+	// Try environment variables first (highest priority)
 	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
 		return token
 	}
@@ -109,7 +113,15 @@ func getGitHubToken(configPath string) string {
 		return token
 	}
 
-	// TODO: Load from config file if configPath is provided
+	// Try gh CLI auth token (uses gh's secure credential storage)
+	cmd := exec.Command("gh", "auth", "token")
+	output, err := cmd.Output()
+	if err == nil {
+		token := strings.TrimSpace(string(output))
+		if token != "" {
+			return token
+		}
+	}
 
 	return ""
 }

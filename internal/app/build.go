@@ -26,6 +26,8 @@ type BuildInitOptions struct {
 	Config string
 	// GitHubToken is the GitHub personal access token (optional).
 	GitHubToken string
+	// IgnVersion is the version of ign CLI (for metadata).
+	IgnVersion string
 }
 
 // BuildInit initializes a build configuration from a template.
@@ -101,7 +103,7 @@ func BuildInit(ctx context.Context, opts BuildInitOptions) error {
 			GeneratedBy:     "ign build init",
 			TemplateName:    template.Config.Name,
 			TemplateVersion: template.Config.Version,
-			IgnVersion:      "", // TODO: Get from version package
+			IgnVersion:      opts.IgnVersion,
 		},
 	}
 

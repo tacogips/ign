@@ -23,7 +23,7 @@
 - Clean Architecture: CLI -> App -> Domain layer separation
 - Validation at app layer for better testability
 - @file: paths resolved relative to .ign-build/
-- GitHub token from GITHUB_TOKEN or GH_TOKEN env vars
+- GitHub token resolution: GITHUB_TOKEN env > GH_TOKEN env > gh auth token
 - Non-fatal errors accumulated for partial generation
 
 ## Notes

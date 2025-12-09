@@ -512,12 +512,13 @@ Some settings can be configured via environment variables:
 | `IGN_CONFIG` | Path to global config | `export IGN_CONFIG=~/my-config.json` |
 | `IGN_CACHE_DIR` | Cache directory | `export IGN_CACHE_DIR=/tmp/ign-cache` |
 | `GITHUB_TOKEN` | GitHub access token | `export GITHUB_TOKEN=ghp_xxx` |
+| `GH_TOKEN` | GitHub access token (alternative) | `export GH_TOKEN=ghp_xxx` |
 | `IGN_NO_COLOR` | Disable colors | `export IGN_NO_COLOR=1` |
 
 **Priority Order:**
 1. Command-line flags (highest priority)
-2. Environment variables
-3. Global config file
+2. Environment variables (`GITHUB_TOKEN`, `GH_TOKEN`)
+3. gh CLI authentication (`gh auth token`)
 4. Built-in defaults (lowest priority)
 
 ---
@@ -635,19 +636,30 @@ jobs:
 
 ### 7.4 Private Repository Access
 
-**Using GitHub Token:**
+**Using gh CLI (Recommended):**
+```bash
+# If you have gh CLI installed and authenticated, ign will use it automatically
+gh auth login
+
+# Then use private repo - no additional setup required
+ign build init github.com/private-owner/private-repo
+```
+
+**Using Environment Variable:**
 ```bash
 # Set token in environment
 export GITHUB_TOKEN=ghp_your_token_here
-
-# Or in config.json
-{
-  "github_token": "ghp_your_token_here"
-}
+# or
+export GH_TOKEN=ghp_your_token_here
 
 # Then use private repo
 ign build init github.com/private-owner/private-repo
 ```
+
+**Token Priority Order:**
+1. `GITHUB_TOKEN` environment variable
+2. `GH_TOKEN` environment variable
+3. `gh auth token` (gh CLI's secure credential storage)
 
 **SSH Key Authentication:**
 ```bash

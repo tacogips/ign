@@ -1,6 +1,6 @@
 {
 
-  description = "my golang project";
+  description = "ign - A template-based code generation CLI tool";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -21,6 +21,43 @@
         };
       in
       {
+        packages = {
+          ign = pkgs.buildGoModule {
+            pname = "ign";
+            version = "0.1.0";
+
+            src = ./.;
+
+            vendorHash = "sha256-LBNiQxZlz/hC0RO8fQHGP2WZZ8UKrWiARo5MuChQUtc=";
+
+            subPackages = [ "cmd/ign" ];
+
+            ldflags = [
+              "-s"
+              "-w"
+              "-X main.version=${self.rev or "dev"}"
+            ];
+
+            meta = with pkgs.lib; {
+              description = "A template-based code generation CLI tool";
+              homepage = "https://github.com/tacogips/ign";
+              license = licenses.mit;
+              maintainers = [ ];
+            };
+          };
+
+          default = self.packages.${system}.ign;
+        };
+
+        apps = {
+          ign = {
+            type = "app";
+            program = "${self.packages.${system}.ign}/bin/ign";
+          };
+
+          default = self.apps.${system}.ign;
+        };
+
         devShells.default = pkgs.mkShell {
           nativeBuildInputs = with pkgs; [
             go
