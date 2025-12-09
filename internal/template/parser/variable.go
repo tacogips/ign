@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // Variables holds template variable values and provides type-safe access.
@@ -132,7 +134,9 @@ func processVarDirective(args string, vars Variables) (string, error) {
 	}
 
 	// Convert value to string
-	return valueToString(val), nil
+	result := valueToString(val)
+	debug.Debug("[parser] processVarDirective: variable=%s, value=%v, resolved=%s", args, val, result)
+	return result, nil
 }
 
 // valueToString converts a variable value to its string representation.

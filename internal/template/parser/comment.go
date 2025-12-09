@@ -3,6 +3,8 @@ package parser
 import (
 	"regexp"
 	"strings"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // commentDirectivePattern matches @ign-comment:XXX@ directive
@@ -33,6 +35,7 @@ func validateCommentDirectiveLine(line string) error {
 			line)
 	}
 
+	debug.Debug("[parser] processCommentDirectivesInText: removing comment line=%s", strings.TrimSpace(line))
 	return nil
 }
 

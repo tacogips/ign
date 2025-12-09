@@ -3,6 +3,8 @@ package generator
 import (
 	"path/filepath"
 	"strings"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // IsSpecialFile checks if a file is a special file that should be excluded from generation.
@@ -33,12 +35,14 @@ func IsSpecialFile(path string) bool {
 func ShouldIgnoreFile(path string, ignorePatterns []string) bool {
 	// First check if it's a special file
 	if IsSpecialFile(path) {
+		debug.Debug("[generator] Ignoring special file: %s", path)
 		return true
 	}
 
 	// Check against ignore patterns
 	for _, pattern := range ignorePatterns {
 		if MatchesPattern(path, pattern) {
+			debug.Debug("[generator] Ignoring file: %s (matched pattern: %s)", path, pattern)
 			return true
 		}
 	}

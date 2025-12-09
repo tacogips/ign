@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/tacogips/ign/internal/debug"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 var (
 	globalNoColor bool
 	globalQuiet   bool
+	globalDebug   bool
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -34,6 +36,11 @@ Templates are fetched from GitHub repositories and can include variables,
 conditionals, and file inclusions for flexible project generation.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Set debug mode
+		debug.SetDebug(globalDebug)
+		debug.SetNoColor(globalNoColor)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -49,6 +56,7 @@ func init() {
 	// Global flags
 	rootCmd.PersistentFlags().BoolVar(&globalNoColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().BoolVarP(&globalQuiet, "quiet", "q", false, "Suppress non-error output")
+	rootCmd.PersistentFlags().BoolVar(&globalDebug, FlagDebug, false, DescDebug)
 
 	// Add subcommands
 	rootCmd.AddCommand(buildCmd)

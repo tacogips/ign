@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 )
@@ -103,8 +104,12 @@ func isBinaryContent(content []byte) bool {
 func (p *FileProcessor) Process(ctx context.Context, file model.TemplateFile, vars parser.Variables, templateRoot string) ([]byte, error) {
 	// If file should not be processed, return unchanged
 	if !p.ShouldProcess(file) {
+		debug.Debug("[generator] Skipping template processing for binary/special file: %s (size: %d bytes)",
+			file.Path, len(file.Content))
 		return file.Content, nil
 	}
+
+	debug.Debug("[generator] Processing template content: %s (size: %d bytes)", file.Path, len(file.Content))
 
 	// Create parse context with template root and current file
 	pctx := &parser.ParseContext{
@@ -118,11 +123,15 @@ func (p *FileProcessor) Process(ctx context.Context, file model.TemplateFile, va
 	// Process template directives
 	processed, err := p.parser.ParseWithContext(ctx, file.Content, pctx)
 	if err != nil {
+		debug.Debug("[generator] Failed to process template: %s, error: %v", file.Path, err)
 		return nil, newGeneratorError(GeneratorProcessFailed,
 			"failed to process template",
 			file.Path,
 			err)
 	}
+
+	debug.Debug("[generator] Template processing complete: %s (input: %d bytes, output: %d bytes)",
+		file.Path, len(file.Content), len(processed))
 
 	return processed, nil
 }

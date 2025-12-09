@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -36,31 +37,41 @@ func (p *LocalProvider) Name() string {
 
 // Resolve converts a local path to a TemplateRef.
 func (p *LocalProvider) Resolve(path string) (model.TemplateRef, error) {
+	debug.Debug("[local] Resolving path: %s", path)
+
 	// Validate local path
 	if err := ValidateLocalPath(path); err != nil {
+		debug.Debug("[local] Path validation failed: %v", err)
 		return model.TemplateRef{}, NewInvalidURLError(p.Name(), path, err)
 	}
 
 	// Normalize path
 	normalized, err := NormalizeLocalPath(path)
 	if err != nil {
+		debug.Debug("[local] Path normalization failed: %v", err)
 		return model.TemplateRef{}, NewInvalidURLError(p.Name(), path, err)
 	}
+	debug.Debug("[local] Normalized path: %s", normalized)
 
 	// Resolve absolute path
 	absPath, err := p.resolvePath(normalized)
 	if err != nil {
+		debug.Debug("[local] Path resolution failed: %v", err)
 		return model.TemplateRef{}, NewInvalidURLError(p.Name(), path, err)
 	}
+	debug.Debug("[local] Absolute path: %s", absPath)
 
 	// Check if path exists
 	if _, err := os.Stat(absPath); err != nil {
 		if os.IsNotExist(err) {
+			debug.Debug("[local] Path does not exist: %s", absPath)
 			return model.TemplateRef{}, NewNotFoundError(p.Name(), path)
 		}
+		debug.Debug("[local] Failed to stat path: %v", err)
 		return model.TemplateRef{}, NewFetchError(p.Name(), path, err)
 	}
 
+	debug.Debug("[local] Path resolved successfully")
 	return model.TemplateRef{
 		Provider: "local",
 		Owner:    "",
@@ -72,96 +83,130 @@ func (p *LocalProvider) Resolve(path string) (model.TemplateRef, error) {
 
 // Validate checks if a local path is valid and accessible.
 func (p *LocalProvider) Validate(ctx context.Context, ref model.TemplateRef) error {
+	debug.Debug("[local] Validating template reference: %s", ref.Path)
+
 	if ref.Provider != "local" {
+		debug.Debug("[local] Invalid provider: %s", ref.Provider)
 		return NewInvalidURLError(p.Name(), ref.Path,
 			fmt.Errorf("invalid provider: expected 'local', got '%s'", ref.Provider))
 	}
 
 	// Validate path security
+	debug.Debug("[local] Validating path security...")
 	if err := ValidateLocalPath(ref.Path); err != nil {
+		debug.Debug("[local] Path security validation failed: %v", err)
 		return NewInvalidURLError(p.Name(), ref.Path, err)
 	}
 
 	// Resolve to absolute path
+	debug.Debug("[local] Resolving to absolute path...")
 	absPath, err := p.resolvePath(ref.Path)
 	if err != nil {
+		debug.Debug("[local] Failed to resolve path: %v", err)
 		return NewFetchError(p.Name(), ref.Path, err)
 	}
+	debug.Debug("[local] Absolute path: %s", absPath)
 
 	// Check if path exists
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			debug.Debug("[local] Path does not exist: %s", absPath)
 			return NewNotFoundError(p.Name(), ref.Path)
 		}
+		debug.Debug("[local] Failed to stat path: %v", err)
 		return NewFetchError(p.Name(), ref.Path, err)
 	}
 
 	// Must be a directory
 	if !info.IsDir() {
+		debug.Debug("[local] Path is not a directory")
 		return NewInvalidTemplateError(p.Name(), ref.Path,
 			"path must be a directory", nil)
 	}
+	debug.Debug("[local] Path is a directory")
 
 	// Check if ign.json exists
 	ignPath := filepath.Join(absPath, "ign.json")
+	debug.Debug("[local] Checking for ign.json at: %s", ignPath)
 	if _, err := os.Stat(ignPath); err != nil {
 		if os.IsNotExist(err) {
+			debug.Debug("[local] ign.json not found")
 			return NewInvalidTemplateError(p.Name(), ref.Path,
 				"ign.json not found in template directory", nil)
 		}
+		debug.Debug("[local] Failed to check ign.json: %v", err)
 		return NewFetchError(p.Name(), ref.Path, err)
 	}
 
+	debug.Debug("[local] Validation successful")
 	return nil
 }
 
 // Fetch loads a template from the local filesystem.
 func (p *LocalProvider) Fetch(ctx context.Context, ref model.TemplateRef) (*model.Template, error) {
+	debug.Debug("[local] Starting fetch for: %s", ref.Path)
+
 	if ref.Provider != "local" {
+		debug.Debug("[local] Invalid provider: %s", ref.Provider)
 		return nil, NewInvalidURLError(p.Name(), ref.Path,
 			fmt.Errorf("invalid provider: expected 'local', got '%s'", ref.Provider))
 	}
 
 	// Validate path
+	debug.Debug("[local] Validating path security...")
 	if err := ValidateLocalPath(ref.Path); err != nil {
+		debug.Debug("[local] Path validation failed: %v", err)
 		return nil, NewInvalidURLError(p.Name(), ref.Path, err)
 	}
 
 	// Resolve to absolute path
+	debug.Debug("[local] Resolving to absolute path...")
 	absPath, err := p.resolvePath(ref.Path)
 	if err != nil {
+		debug.Debug("[local] Path resolution failed: %v", err)
 		return nil, NewFetchError(p.Name(), ref.Path, err)
 	}
+	debug.Debug("[local] Template root: %s", absPath)
 
 	// Check if directory exists
 	info, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
+			debug.Debug("[local] Path does not exist: %s", absPath)
 			return nil, NewNotFoundError(p.Name(), ref.Path)
 		}
+		debug.Debug("[local] Failed to stat path: %v", err)
 		return nil, NewFetchError(p.Name(), ref.Path, err)
 	}
 
 	if !info.IsDir() {
+		debug.Debug("[local] Path is not a directory")
 		return nil, NewInvalidTemplateError(p.Name(), ref.Path,
 			"path must be a directory", nil)
 	}
 
 	// Read and parse ign.json
+	debug.Debug("[local] Reading ign.json...")
 	ignConfig, err := p.readIgnConfig(absPath)
 	if err != nil {
+		debug.Debug("[local] Failed to read ign.json: %v", err)
 		return nil, NewInvalidTemplateError(p.Name(), ref.Path,
 			"failed to read ign.json", err)
 	}
+	debug.Debug("[local] Template name: %s, version: %s", ignConfig.Name, ignConfig.Version)
 
 	// Collect all template files
+	debug.Debug("[local] Collecting template files...")
 	files, err := p.collectFiles(absPath)
 	if err != nil {
+		debug.Debug("[local] Failed to collect files: %v", err)
 		return nil, NewFetchError(p.Name(), ref.Path,
 			fmt.Errorf("failed to collect template files: %w", err))
 	}
+	debug.Debug("[local] Collected %d template files", len(files))
 
+	debug.Debug("[local] Fetch completed successfully")
 	return &model.Template{
 		Ref:      ref,
 		Config:   *ignConfig,
@@ -252,6 +297,7 @@ func (p *LocalProvider) readIgnConfig(templateRoot string) (*model.IgnJson, erro
 // Excludes ign.json as it's not part of the template output.
 func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile, error) {
 	var files []model.TemplateFile
+	var totalBytes int64
 
 	err := filepath.Walk(templateRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -290,6 +336,8 @@ func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile,
 			IsBinary: isBinary,
 		})
 
+		totalBytes += int64(len(content))
+
 		return nil
 	})
 
@@ -297,6 +345,7 @@ func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile,
 		return nil, err
 	}
 
+	debug.Debug("[local] Collected %d files, total size: %d bytes", len(files), totalBytes)
 	return files, nil
 }
 

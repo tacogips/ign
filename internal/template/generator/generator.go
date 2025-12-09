@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 )
@@ -92,6 +93,14 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		return nil, err
 	}
 
+	// Log generation start
+	templateName := fmt.Sprintf("%s/%s", opts.Template.Ref.Owner, opts.Template.Ref.Repo)
+	if opts.Template.Ref.Path != "" {
+		templateName = fmt.Sprintf("%s/%s", templateName, opts.Template.Ref.Path)
+	}
+	debug.Debug("[generator] Starting generation: template=%s, outputDir=%s, dryRun=%v, overwrite=%v",
+		templateName, opts.OutputDir, dryRun, opts.Overwrite)
+
 	// Initialize result
 	result := &GenerateResult{
 		Errors: []error{},
@@ -100,6 +109,8 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Get template settings
 	settings := getTemplateSettings(opts.Template)
+	debug.Debug("[generator] Template settings: preserveExecutable=%v, ignorePatterns=%v, binaryExtensions=%d",
+		settings.PreserveExecutable, settings.IgnorePatterns, len(settings.BinaryExtensions))
 
 	// Create processor and writer based on template settings
 	processor := NewFileProcessor(g.parser, settings.BinaryExtensions)
@@ -107,12 +118,14 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Create output directory if it doesn't exist (unless dry run)
 	if !dryRun && !writer.Exists(opts.OutputDir) {
+		debug.Debug("[generator] Creating output directory: %s", opts.OutputDir)
 		if err := writer.CreateDir(opts.OutputDir); err != nil {
 			return nil, err
 		}
 	}
 
 	// Process each file in the template
+	debug.Debug("[generator] Processing %d files from template", len(opts.Template.Files))
 	for _, file := range opts.Template.Files {
 		if err := ctx.Err(); err != nil {
 			// Context cancelled
@@ -121,11 +134,13 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 		// Check if file should be ignored
 		if ShouldIgnoreFile(file.Path, settings.IgnorePatterns) {
+			debug.Debug("[generator] Ignoring file: %s", file.Path)
 			continue
 		}
 
 		// Construct output path
 		outputPath := filepath.Join(opts.OutputDir, file.Path)
+		debug.Debug("[generator] Processing file: %s -> %s (size: %d bytes)", file.Path, outputPath, len(file.Content))
 
 		// Add to processed files list
 		result.Files = append(result.Files, outputPath)
@@ -136,11 +151,13 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		// Determine action
 		if fileExists && !opts.Overwrite {
 			// Skip existing file
+			debug.Debug("[generator] Skipping existing file: %s", outputPath)
 			result.FilesSkipped++
 			continue
 		}
 
 		// Process file content
+		debug.Debug("[generator] Processing content for: %s", file.Path)
 		processed, err := processor.Process(ctx, file, opts.Variables, opts.Template.RootPath)
 		if err != nil {
 			// Record error but continue processing
@@ -150,11 +167,18 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 		// Write file (unless dry run)
 		if !dryRun {
+			if fileExists {
+				debug.Debug("[generator] Overwriting file: %s (size: %d bytes)", outputPath, len(processed))
+			} else {
+				debug.Debug("[generator] Creating new file: %s (size: %d bytes)", outputPath, len(processed))
+			}
 			if err := writer.WriteFile(outputPath, processed, file.Mode); err != nil {
 				// Record error but continue processing
 				result.Errors = append(result.Errors, fmt.Errorf("failed to write %s: %w", file.Path, err))
 				continue
 			}
+		} else {
+			debug.Debug("[generator] Dry run: would write %s (size: %d bytes)", outputPath, len(processed))
 		}
 
 		// Update statistics
@@ -163,6 +187,13 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		} else {
 			result.FilesCreated++
 		}
+	}
+
+	// Log final statistics
+	debug.Debug("[generator] Generation complete: created=%d, overwritten=%d, skipped=%d, errors=%d",
+		result.FilesCreated, result.FilesOverwritten, result.FilesSkipped, len(result.Errors))
+	if dryRun {
+		debug.Debug("[generator] Dry run mode: no files were actually written")
 	}
 
 	return result, nil

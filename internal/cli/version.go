@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // versionCmd represents the version command
@@ -44,6 +45,10 @@ type VersionInfo struct {
 }
 
 func runVersion(cmd *cobra.Command, args []string) error {
+	debug.DebugSection("Version Command")
+	debug.DebugValue("versionShort", versionShort)
+	debug.DebugValue("versionJSON", versionJSON)
+
 	info := VersionInfo{
 		Version:   Version,
 		GoVersion: runtime.Version(),
@@ -52,6 +57,8 @@ func runVersion(cmd *cobra.Command, args []string) error {
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
 	}
+
+	debug.DebugJSON("VersionInfo", info)
 
 	if versionShort {
 		fmt.Println(info.Version)

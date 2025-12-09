@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // Writer writes files to the filesystem.
@@ -37,6 +39,8 @@ func NewFileWriter(preserveExecutable bool) Writer {
 // Creates parent directories if they don't exist.
 // Writes atomically using a temporary file and rename.
 func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) error {
+	debug.Debug("[generator] Writing file: %s (size: %d bytes, mode: %o)", path, len(content), mode)
+
 	// Create parent directories if needed
 	dir := filepath.Dir(path)
 	if dir != "" && dir != "." {
@@ -63,6 +67,7 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 
 	// Write atomically using temporary file
 	tempFile := path + ".tmp"
+	debug.Debug("[generator] Creating temporary file: %s", tempFile)
 	f, err := os.OpenFile(tempFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMode)
 	if err != nil {
 		return newGeneratorError(GeneratorWriteFailed,
@@ -92,6 +97,7 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 	}
 
 	// Atomic rename
+	debug.Debug("[generator] Renaming temporary file: %s -> %s", tempFile, path)
 	if err := os.Rename(tempFile, path); err != nil {
 		os.Remove(tempFile) // Clean up temp file
 		return newGeneratorError(GeneratorWriteFailed,
@@ -100,18 +106,21 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 			err)
 	}
 
+	debug.Debug("[generator] File written successfully: %s", path)
 	return nil
 }
 
 // CreateDir creates a directory and any necessary parent directories.
 // Uses 0755 permissions for created directories.
 func (w *FileWriter) CreateDir(path string) error {
+	debug.Debug("[generator] Creating directory: %s", path)
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return newGeneratorError(GeneratorWriteFailed,
 			"failed to create directory",
 			path,
 			err)
 	}
+	debug.Debug("[generator] Directory created: %s", path)
 	return nil
 }
 

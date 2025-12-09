@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -50,10 +51,14 @@ func (p *GitHubProvider) Name() string {
 
 // Resolve converts a URL string to a TemplateRef.
 func (p *GitHubProvider) Resolve(url string) (model.TemplateRef, error) {
+	debug.Debug("[github] Resolving URL: %s", url)
 	ref, err := ParseGitHubURL(url)
 	if err != nil {
+		debug.Debug("[github] Failed to parse URL: %v", err)
 		return model.TemplateRef{}, NewInvalidURLError(p.Name(), url, err)
 	}
+	debug.Debug("[github] Resolved to: owner=%s, repo=%s, path=%s, ref=%s",
+		ref.Owner, ref.Repo, ref.Path, ref.Ref)
 	return *ref, nil
 }
 
@@ -61,32 +66,42 @@ func (p *GitHubProvider) Resolve(url string) (model.TemplateRef, error) {
 func (p *GitHubProvider) Validate(ctx context.Context, ref model.TemplateRef) error {
 	// Construct API URL to check repository existence
 	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s", ref.Owner, ref.Repo)
+	debug.Debug("[github] Validating repository: %s", apiURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
+		debug.Debug("[github] Failed to create request: %v", err)
 		return NewFetchError(p.Name(), p.formatURL(ref), err)
 	}
 
 	// Add authentication if token is provided
 	if p.Token != "" {
 		req.Header.Set("Authorization", "token "+p.Token)
+		debug.Debug("[github] Using authenticated request")
 	}
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
 	resp, err := p.HTTPClient.Do(req)
 	if err != nil {
+		debug.Debug("[github] Validation request failed: %v", err)
 		return NewFetchError(p.Name(), p.formatURL(ref), err)
 	}
 	defer resp.Body.Close()
 
+	debug.Debug("[github] Validation response status: %d", resp.StatusCode)
+
 	switch resp.StatusCode {
 	case http.StatusOK:
+		debug.Debug("[github] Repository validated successfully")
 		return nil
 	case http.StatusNotFound:
+		debug.Debug("[github] Repository not found")
 		return NewNotFoundError(p.Name(), p.formatURL(ref))
 	case http.StatusUnauthorized, http.StatusForbidden:
+		debug.Debug("[github] Authentication required or forbidden")
 		return NewAuthError(p.Name(), p.formatURL(ref))
 	default:
+		debug.Debug("[github] Unexpected status code: %d", resp.StatusCode)
 		return NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("unexpected status code: %d", resp.StatusCode))
 	}
@@ -94,44 +109,62 @@ func (p *GitHubProvider) Validate(ctx context.Context, ref model.TemplateRef) er
 
 // Fetch downloads a template from GitHub.
 func (p *GitHubProvider) Fetch(ctx context.Context, ref model.TemplateRef) (*model.Template, error) {
+	debug.Debug("[github] Starting fetch for %s", p.formatURL(ref))
+
 	// Download repository archive (tarball)
+	debug.Debug("[github] Downloading archive...")
 	archivePath, err := p.downloadArchive(ctx, ref)
 	if err != nil {
+		debug.Debug("[github] Archive download failed: %v", err)
 		return nil, err
 	}
 	defer os.Remove(archivePath) // Clean up archive after extraction
+	debug.Debug("[github] Archive downloaded to: %s", archivePath)
 
 	// Extract archive to temporary directory
+	debug.Debug("[github] Extracting archive...")
 	extractDir, err := p.extractArchive(archivePath)
 	if err != nil {
+		debug.Debug("[github] Archive extraction failed: %v", err)
 		return nil, NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("failed to extract archive: %w", err))
 	}
+	debug.Debug("[github] Archive extracted to: %s", extractDir)
 
 	// Find template root (handle subdirectory path if specified)
 	templateRoot := extractDir
 	if ref.Path != "" {
 		templateRoot = filepath.Join(extractDir, ref.Path)
+		debug.Debug("[github] Looking for subdirectory: %s", ref.Path)
 		if _, err := os.Stat(templateRoot); err != nil {
+			debug.Debug("[github] Subdirectory not found: %v", err)
 			return nil, NewInvalidTemplateError(p.Name(), p.formatURL(ref),
 				fmt.Sprintf("subdirectory '%s' not found in template", ref.Path), err)
 		}
 	}
+	debug.Debug("[github] Template root: %s", templateRoot)
 
 	// Read and parse ign.json
+	debug.Debug("[github] Reading ign.json...")
 	ignConfig, err := p.readIgnConfig(templateRoot)
 	if err != nil {
+		debug.Debug("[github] Failed to read ign.json: %v", err)
 		return nil, NewInvalidTemplateError(p.Name(), p.formatURL(ref),
 			"failed to read ign.json", err)
 	}
+	debug.Debug("[github] Template name: %s, version: %s", ignConfig.Name, ignConfig.Version)
 
 	// Collect all template files
+	debug.Debug("[github] Collecting template files...")
 	files, err := p.collectFiles(templateRoot)
 	if err != nil {
+		debug.Debug("[github] Failed to collect files: %v", err)
 		return nil, NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("failed to collect template files: %w", err))
 	}
+	debug.Debug("[github] Collected %d template files", len(files))
 
+	debug.Debug("[github] Fetch completed successfully")
 	return &model.Template{
 		Ref:      ref,
 		Config:   *ignConfig,
@@ -146,9 +179,11 @@ func (p *GitHubProvider) downloadArchive(ctx context.Context, ref model.Template
 	// Or for tags: https://github.com/owner/repo/archive/refs/tags/v1.0.0.tar.gz
 	archiveURL := fmt.Sprintf("https://github.com/%s/%s/archive/%s.tar.gz",
 		ref.Owner, ref.Repo, ref.Ref)
+	debug.Debug("[github] Archive URL: %s", archiveURL)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", archiveURL, nil)
 	if err != nil {
+		debug.Debug("[github] Failed to create download request: %v", err)
 		return "", NewFetchError(p.Name(), p.formatURL(ref), err)
 	}
 
@@ -157,20 +192,27 @@ func (p *GitHubProvider) downloadArchive(ctx context.Context, ref model.Template
 		req.Header.Set("Authorization", "token "+p.Token)
 	}
 
+	downloadStart := time.Now()
 	resp, err := p.HTTPClient.Do(req)
 	if err != nil {
+		debug.Debug("[github] Download request failed: %v", err)
 		return "", NewFetchError(p.Name(), p.formatURL(ref), err)
 	}
 	defer resp.Body.Close()
+
+	debug.Debug("[github] Download response status: %d", resp.StatusCode)
 
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Continue to download
 	case http.StatusNotFound:
+		debug.Debug("[github] Archive not found")
 		return "", NewNotFoundError(p.Name(), p.formatURL(ref))
 	case http.StatusUnauthorized, http.StatusForbidden:
+		debug.Debug("[github] Authentication required for download")
 		return "", NewAuthError(p.Name(), p.formatURL(ref))
 	default:
+		debug.Debug("[github] Unexpected download status: %d", resp.StatusCode)
 		return "", NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("unexpected status code: %d", resp.StatusCode))
 	}
@@ -178,33 +220,44 @@ func (p *GitHubProvider) downloadArchive(ctx context.Context, ref model.Template
 	// Create temporary file for archive
 	tmpFile, err := os.CreateTemp("", "ign-github-*.tar.gz")
 	if err != nil {
+		debug.Debug("[github] Failed to create temp file: %v", err)
 		return "", NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("failed to create temp file: %w", err))
 	}
 	defer tmpFile.Close()
 
 	// Download to temp file
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	bytesWritten, err := io.Copy(tmpFile, resp.Body)
+	if err != nil {
 		os.Remove(tmpFile.Name())
+		debug.Debug("[github] Failed to write archive: %v", err)
 		return "", NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("failed to download archive: %w", err))
 	}
+
+	downloadDuration := time.Since(downloadStart)
+	debug.Debug("[github] Downloaded %d bytes in %v", bytesWritten, downloadDuration)
 
 	return tmpFile.Name(), nil
 }
 
 // extractArchive extracts a .tar.gz archive to a temporary directory.
 func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
+	debug.Debug("[github] Extracting archive: %s", archivePath)
+
 	// Create temporary directory for extraction
 	extractDir, err := os.MkdirTemp("", "ign-template-*")
 	if err != nil {
+		debug.Debug("[github] Failed to create extraction directory: %v", err)
 		return "", fmt.Errorf("failed to create temp directory: %w", err)
 	}
+	debug.Debug("[github] Extraction directory: %s", extractDir)
 
 	// Open archive file
 	file, err := os.Open(archivePath)
 	if err != nil {
 		os.RemoveAll(extractDir)
+		debug.Debug("[github] Failed to open archive: %v", err)
 		return "", fmt.Errorf("failed to open archive: %w", err)
 	}
 	defer file.Close()
@@ -213,6 +266,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
 		os.RemoveAll(extractDir)
+		debug.Debug("[github] Failed to create gzip reader: %v", err)
 		return "", fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 	defer gzr.Close()
@@ -222,6 +276,8 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 
 	// Extract files
 	var rootDir string
+	fileCount := 0
+	dirCount := 0
 	for {
 		header, err := tr.Next()
 		if err == io.EOF {
@@ -229,6 +285,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 		}
 		if err != nil {
 			os.RemoveAll(extractDir)
+			debug.Debug("[github] Failed to read tar entry: %v", err)
 			return "", fmt.Errorf("failed to read tar entry: %w", err)
 		}
 
@@ -241,6 +298,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 		}
 		if rootDir == "" {
 			rootDir = parts[0]
+			debug.Debug("[github] Archive root directory: %s", rootDir)
 		}
 		relPath := parts[1]
 
@@ -252,12 +310,15 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			// Create directory
 			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
 				os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to create directory %s: %v", target, err)
 				return "", fmt.Errorf("failed to create directory %s: %w", target, err)
 			}
+			dirCount++
 		case tar.TypeReg:
 			// Create parent directory if needed
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to create parent directory: %v", err)
 				return "", fmt.Errorf("failed to create parent directory: %w", err)
 			}
 
@@ -265,6 +326,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
 				os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to create file %s: %v", target, err)
 				return "", fmt.Errorf("failed to create file %s: %w", target, err)
 			}
 
@@ -272,12 +334,15 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			if _, err := io.Copy(outFile, tr); err != nil {
 				outFile.Close()
 				os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to write file %s: %v", target, err)
 				return "", fmt.Errorf("failed to write file %s: %w", target, err)
 			}
 			outFile.Close()
+			fileCount++
 		}
 	}
 
+	debug.Debug("[github] Extracted %d files and %d directories", fileCount, dirCount)
 	return extractDir, nil
 }
 
@@ -310,6 +375,7 @@ func (p *GitHubProvider) readIgnConfig(templateRoot string) (*model.IgnJson, err
 // Excludes ign.json as it's not part of the template output.
 func (p *GitHubProvider) collectFiles(templateRoot string) ([]model.TemplateFile, error) {
 	var files []model.TemplateFile
+	var totalBytes int64
 
 	err := filepath.Walk(templateRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -348,6 +414,8 @@ func (p *GitHubProvider) collectFiles(templateRoot string) ([]model.TemplateFile
 			IsBinary: isBinary,
 		})
 
+		totalBytes += int64(len(content))
+
 		return nil
 	})
 
@@ -355,6 +423,7 @@ func (p *GitHubProvider) collectFiles(templateRoot string) ([]model.TemplateFile
 		return nil, err
 	}
 
+	debug.Debug("[github] Collected %d files, total size: %d bytes", len(files), totalBytes)
 	return files, nil
 }
 

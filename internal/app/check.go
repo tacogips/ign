@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/parser"
 )
 
@@ -56,6 +57,11 @@ var binaryFileExtensions = map[string]bool{
 
 // CheckTemplate validates template files for syntax errors.
 func CheckTemplate(ctx context.Context, opts CheckTemplateOptions) (*CheckResult, error) {
+	debug.DebugSection("[app] CheckTemplate workflow start")
+	debug.DebugValue("[app] Path to check", opts.Path)
+	debug.DebugValue("[app] Recursive", opts.Recursive)
+	debug.DebugValue("[app] Verbose", opts.Verbose)
+
 	result := &CheckResult{
 		FilesChecked:    0,
 		FilesWithErrors: 0,
@@ -65,27 +71,40 @@ func CheckTemplate(ctx context.Context, opts CheckTemplateOptions) (*CheckResult
 	p := parser.NewParser()
 
 	// Get absolute path
+	debug.Debug("[app] Resolving absolute path")
 	absPath, err := filepath.Abs(opts.Path)
 	if err != nil {
+		debug.Debug("[app] Failed to get absolute path: %v", err)
 		return nil, NewValidationError("failed to get absolute path", err)
 	}
+	debug.DebugValue("[app] Absolute path", absPath)
 
 	// Check if path exists
+	debug.Debug("[app] Checking if path exists")
 	info, err := os.Stat(absPath)
 	if err != nil {
+		debug.Debug("[app] Path not found: %v", err)
 		return nil, NewValidationError(fmt.Sprintf("path not found: %s", absPath), err)
 	}
 
 	// Process based on file or directory
 	if info.IsDir() {
+		debug.Debug("[app] Path is a directory, checking directory")
 		err = checkDirectory(ctx, p, absPath, opts.Recursive, result)
 	} else {
+		debug.Debug("[app] Path is a file, checking file")
 		err = checkFile(ctx, p, absPath, result)
 	}
 
 	if err != nil {
+		debug.Debug("[app] Check failed: %v", err)
 		return nil, err
 	}
+
+	debug.Debug("[app] CheckTemplate workflow completed")
+	debug.DebugValue("[app] Files checked", result.FilesChecked)
+	debug.DebugValue("[app] Files with errors", result.FilesWithErrors)
+	debug.DebugValue("[app] Total errors", len(result.Errors))
 
 	return result, nil
 }
@@ -129,6 +148,7 @@ func checkDirectory(ctx context.Context, p parser.Parser, dirPath string, recurs
 func checkFile(ctx context.Context, p parser.Parser, filePath string, result *CheckResult) error {
 	// Skip binary files
 	if isBinaryFile(filePath) {
+		debug.Debug("[app] Skipping binary file: %s", filePath)
 		return nil
 	}
 
@@ -136,19 +156,23 @@ func checkFile(ctx context.Context, p parser.Parser, filePath string, result *Ch
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		// Skip files that cannot be read (permissions, etc.)
+		debug.Debug("[app] Cannot read file (skipping): %s - %v", filePath, err)
 		return nil
 	}
 
 	// Check if file contains any @ign- directives
 	if !containsIgnDirective(content) {
+		debug.Debug("[app] No directives found in file: %s", filePath)
 		return nil
 	}
 
 	// File contains directives, so validate it
+	debug.Debug("[app] Checking file with directives: %s", filePath)
 	result.FilesChecked++
 
 	// Validate template syntax
 	if err := p.Validate(ctx, content); err != nil {
+		debug.Debug("[app] Validation error in file %s: %v", filePath, err)
 		result.FilesWithErrors++
 
 		// Extract error details
@@ -171,6 +195,8 @@ func checkFile(ctx context.Context, p parser.Parser, filePath string, result *Ch
 		}
 
 		result.Errors = append(result.Errors, checkErr)
+	} else {
+		debug.Debug("[app] File validated successfully: %s", filePath)
 	}
 
 	return nil

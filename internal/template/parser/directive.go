@@ -2,6 +2,8 @@ package parser
 
 import (
 	"regexp"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // DirectiveType identifies the type of template directive.
@@ -147,6 +149,22 @@ func findDirectives(input []byte) []DirectiveMatch {
 
 	// Sort matches by start position to maintain order
 	sortDirectiveMatches(matches)
+
+	// Count directives by type for debug logging
+	typeCounts := make(map[DirectiveType]int)
+	for _, m := range matches {
+		typeCounts[m.Type]++
+	}
+
+	debug.Debug("[parser] findDirectives: found %d total directive(s) - var:%d, comment:%d, raw:%d, if:%d, else:%d, endif:%d, include:%d",
+		len(matches),
+		typeCounts[DirectiveVar],
+		typeCounts[DirectiveComment],
+		typeCounts[DirectiveRaw],
+		typeCounts[DirectiveIf],
+		typeCounts[DirectiveElse],
+		typeCounts[DirectiveEndif],
+		typeCounts[DirectiveInclude])
 
 	return matches
 }

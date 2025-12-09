@@ -17,6 +17,7 @@ const (
 	FlagVerbose   = "verbose"
 	FlagNoColor   = "no-color"
 	FlagQuiet     = "quiet"
+	FlagDebug     = "debug"
 
 	// Flag descriptions
 	DescOutput    = "Output directory"
@@ -28,6 +29,7 @@ const (
 	DescVerbose   = "Verbose output"
 	DescNoColor   = "Disable colored output"
 	DescQuiet     = "Suppress output"
+	DescDebug     = "Enable debug logging"
 )
 
 // URL validation patterns

@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // Parser processes template files and substitutes variables.
@@ -46,6 +48,7 @@ func NewParser() Parser {
 
 // Parse processes a template file with variable substitution.
 func (p *DefaultParser) Parse(ctx context.Context, input []byte, vars Variables) ([]byte, error) {
+	debug.Debug("[parser] Parse: starting with input size=%d bytes", len(input))
 	pctx := &ParseContext{
 		Variables:    vars,
 		IncludeDepth: 0,
@@ -58,6 +61,8 @@ func (p *DefaultParser) Parse(ctx context.Context, input []byte, vars Variables)
 
 // ParseWithContext processes a template with full parse context.
 func (p *DefaultParser) ParseWithContext(ctx context.Context, input []byte, pctx *ParseContext) ([]byte, error) {
+	debug.Debug("[parser] ParseWithContext: depth=%d, file=%s, root=%s",
+		pctx.IncludeDepth, pctx.CurrentFile, pctx.TemplateRoot)
 	return parseInternal(ctx, input, pctx)
 }
 
@@ -74,38 +79,46 @@ func parseInternal(ctx context.Context, input []byte, pctx *ParseContext) ([]byt
 	result := input
 
 	// Step 1: Process @ign-raw: directives first (replace with placeholders to prevent further processing)
+	debug.Debug("[parser] Step 1: Extracting raw directives")
 	result, rawContent, err := extractRawDirectives(result)
 	if err != nil {
 		return nil, err
 	}
+	debug.Debug("[parser] Step 1: Extracted %d raw directive(s)", len(rawContent))
 
 	// Step 2: Process @ign-include: directives (recursive)
+	debug.Debug("[parser] Step 2: Processing includes")
 	result, err = processIncludes(ctx, result, pctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// Step 3: Process @ign-if:/@ign-else@/@ign-endif@ blocks
+	debug.Debug("[parser] Step 3: Processing conditionals")
 	result, err = processConditionals(result, pctx.Variables)
 	if err != nil {
 		return nil, err
 	}
 
 	// Step 4: Process @ign-comment: directives (line-by-line to preserve context)
+	debug.Debug("[parser] Step 4: Processing comments")
 	result, err = processCommentDirectivesInText(result, pctx.Variables)
 	if err != nil {
 		return nil, err
 	}
 
 	// Step 5: Process @ign-var: directives
+	debug.Debug("[parser] Step 5: Processing variables")
 	result, err = processVarDirectivesInText(result, pctx.Variables)
 	if err != nil {
 		return nil, err
 	}
 
 	// Step 6: Restore raw content from placeholders
+	debug.Debug("[parser] Step 6: Restoring raw content")
 	result = restoreRawContent(result, rawContent)
 
+	debug.Debug("[parser] Parsing complete, output size=%d bytes", len(result))
 	return result, nil
 }
 
@@ -269,5 +282,6 @@ func (p *DefaultParser) ExtractVariables(input []byte) ([]string, error) {
 		result = append(result, name)
 	}
 
+	debug.Debug("[parser] ExtractVariables: found %d unique variable(s): %v", len(result), result)
 	return result, nil
 }

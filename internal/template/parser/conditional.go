@@ -3,6 +3,8 @@ package parser
 import (
 	"fmt"
 	"strings"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 // conditionalBlock represents an if/else/endif block structure.
@@ -45,12 +47,16 @@ func processConditionals(input []byte, vars Variables) ([]byte, error) {
 				"@ign-if:"+block.condition+"@")
 		}
 
+		debug.Debug("[parser] processConditionals: variable=%s, evaluated=%t", block.condition, conditionValue)
+
 		// Choose content based on condition
 		var replacement string
 		if conditionValue {
 			replacement = block.ifContent
+			debug.Debug("[parser] processConditionals: choosing IF branch (length=%d bytes)", len(replacement))
 		} else {
 			replacement = block.elseContent
+			debug.Debug("[parser] processConditionals: choosing ELSE branch (length=%d bytes)", len(replacement))
 		}
 
 		// Replace the entire block with the chosen content

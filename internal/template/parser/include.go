@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/tacogips/ign/internal/debug"
 )
 
 const (
@@ -65,6 +67,8 @@ func processIncludes(ctx context.Context, input []byte, pctx *ParseContext) ([]b
 				match.RawText)
 		}
 
+		debug.Debug("[parser] processIncludes: including file=%s, size=%d bytes", resolvedPath, len(content))
+
 		// Create new parse context for included file
 		includeCtx := &ParseContext{
 			Variables:    pctx.Variables,
@@ -79,6 +83,8 @@ func processIncludes(ctx context.Context, input []byte, pctx *ParseContext) ([]b
 		if err != nil {
 			return nil, err
 		}
+
+		debug.Debug("[parser] processIncludes: included file=%s, processed size=%d bytes", resolvedPath, len(processed))
 
 		// Replace the include directive with processed content
 		text = text[:match.Start] + string(processed) + text[match.End:]
