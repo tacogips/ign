@@ -1,5 +1,6 @@
 ---
 description: Create or update a pull request (user)
+argument-hint: [options: State:Open|Draft, base-branch, Desc:text, issue-url]
 ---
 
 Use the Task tool to spawn the `generate-pr` subagent to create or update a pull request.

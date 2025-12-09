@@ -1,5 +1,6 @@
 ---
 description: Review the current directory's PR and fix identified issues (user)
+argument-hint: [instruction]
 ---
 
 ## Context

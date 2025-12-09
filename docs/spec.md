@@ -11,9 +11,22 @@ docs/
 │   ├── template-syntax.md           # Template directive reference
 │   ├── cli-commands.md              # CLI command reference
 │   └── configuration.md             # Configuration file formats
-└── implementation/
-    └── architecture.md              # Package structure, interfaces, error handling
+├── implementation/
+│   └── architecture.md              # Package structure, interfaces, error handling
+└── progress/                         # Implementation progress tracking
+    ├── template-provider.md          # TemplateProvider implementation status
+    ├── cli-commands.md               # CLI commands implementation status
+    ├── template-syntax.md            # Template syntax parser implementation status
+    └── ...                           # One file per major spec item/feature
 ```
+
+### Progress Directory (`docs/progress/`)
+
+The `progress/` directory tracks implementation status per specification item. Each file documents:
+- Current status (not started / in progress / completed)
+- What has been implemented (with file paths)
+- What remains to be done
+- Design decisions and notes
 
 ---
 

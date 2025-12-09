@@ -242,6 +242,55 @@ The subagent returns a structured response including:
 - Keep commits focused and atomic
 - Follow conventional commit format when appropriate
 
+## Implementation Progress Tracking
+
+Implementation progress is tracked per specification item in `docs/progress/`:
+
+### Directory Structure
+```
+docs/progress/
+├── template-provider.md         # TemplateProvider implementation status
+├── cli-commands.md              # CLI commands implementation status
+├── template-syntax.md           # Template syntax parser implementation status
+└── <feature-name>.md            # One file per major spec item
+```
+
+### Progress File Structure
+
+Each feature progress file should include:
+
+1. **Status**: `Not Started` | `In Progress` | `Completed`
+2. **Spec Reference**: Link to relevant section in spec.md or reference docs
+3. **Implemented**: List of completed sub-features with file paths
+4. **Remaining**: List of sub-features not yet implemented
+5. **Design Decisions**: Notable decisions made during implementation
+6. **Notes**: Issues, considerations, or context for future work
+
+Example format:
+```markdown
+# Feature Name
+
+**Status**: In Progress
+
+## Spec Reference
+- docs/spec.md Section X.X
+- docs/reference/xxx.md
+
+## Implemented
+- [x] Sub-feature A (`internal/pkg/file.go`)
+- [x] Sub-feature B (`internal/pkg/other.go`)
+
+## Remaining
+- [ ] Sub-feature C
+- [ ] Sub-feature D
+
+## Design Decisions
+- Decision 1: rationale
+
+## Notes
+- Any relevant notes
+```
+
 ## Notes
 - This project uses Nix flakes for reproducible development environments
 - Use direnv for automatic environment activation
