@@ -6,10 +6,10 @@ import "fmt"
 type AppErrorType int
 
 const (
-	// BuildInitFailed indicates build initialization failed.
-	BuildInitFailed AppErrorType = iota
-	// InitFailed indicates project initialization failed.
-	InitFailed
+	// InitFailed indicates configuration initialization failed.
+	InitFailed AppErrorType = iota
+	// CheckoutFailed indicates project checkout failed.
+	CheckoutFailed
 	// VariableLoadFailed indicates variable loading failed.
 	VariableLoadFailed
 	// TemplateFetchFailed indicates template fetching failed.
@@ -50,14 +50,14 @@ func NewAppError(errType AppErrorType, message string, cause error) *AppError {
 	}
 }
 
-// NewBuildInitError creates a build init error.
-func NewBuildInitError(message string, cause error) *AppError {
-	return NewAppError(BuildInitFailed, message, cause)
-}
-
 // NewInitError creates an init error.
 func NewInitError(message string, cause error) *AppError {
 	return NewAppError(InitFailed, message, cause)
+}
+
+// NewCheckoutError creates a checkout error.
+func NewCheckoutError(message string, cause error) *AppError {
+	return NewAppError(CheckoutFailed, message, cause)
 }
 
 // NewVariableLoadError creates a variable load error.

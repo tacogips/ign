@@ -19,9 +19,9 @@ func TestIsSpecialFile(t *testing.T) {
 	}{
 		{"ign.json root", "ign.json", true},
 		{"ign.json in subdir", "subdir/ign.json", true},
-		{".ign-build exact", ".ign-build", true},
-		{".ign-build with slash", ".ign-build/", true},
-		{".ign-build subpath", ".ign-build/ign-var.json", true},
+		{".ign-config exact", ".ign-config", true},
+		{".ign-config with slash", ".ign-config/", true},
+		{".ign-config subpath", ".ign-config/ign-var.json", true},
 		{"regular file", "main.go", false},
 		{"regular subdir file", "src/main.go", false},
 		{"similar name", "ign.json.bak", false},
@@ -74,7 +74,7 @@ func TestShouldIgnoreFile(t *testing.T) {
 		expected       bool
 	}{
 		{"special file ign.json", "ign.json", []string{}, true},
-		{"special file .ign-build", ".ign-build/ign-var.json", []string{}, true},
+		{"special file .ign-config", ".ign-config/ign-var.json", []string{}, true},
 		{"ignored by pattern", "test.log", []string{"*.log"}, true},
 		{"not ignored", "main.go", []string{"*.txt"}, false},
 		{"multiple patterns match", "temp.tmp", []string{"*.log", "*.tmp"}, true},
@@ -484,7 +484,7 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 				IsBinary: false,
 			},
 			{
-				Path:     ".ign-build/ign-var.json",
+				Path:     ".ign-config/ign-var.json",
 				Content:  []byte("{}"),
 				Mode:     0644,
 				IsBinary: false,
@@ -513,7 +513,7 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
-	// Should only create main.go (not ign.json or .ign-build/ign-var.json)
+	// Should only create main.go (not ign.json or .ign-config/ign-var.json)
 	if result.FilesCreated != 1 {
 		t.Errorf("FilesCreated = %d, want 1 (only main.go)", result.FilesCreated)
 	}
@@ -522,7 +522,7 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(tmpDir, "ign.json")); !os.IsNotExist(err) {
 		t.Error("ign.json was created when it should be filtered")
 	}
-	if _, err := os.Stat(filepath.Join(tmpDir, ".ign-build/ign-var.json")); !os.IsNotExist(err) {
-		t.Error(".ign-build/ign-var.json was created when it should be filtered")
+	if _, err := os.Stat(filepath.Join(tmpDir, ".ign-config/ign-var.json")); !os.IsNotExist(err) {
+		t.Error(".ign-config/ign-var.json was created when it should be filtered")
 	}
 }

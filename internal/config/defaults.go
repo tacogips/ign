@@ -37,8 +37,7 @@ func DefaultConfig() *Config {
 			Quiet:    false,
 		},
 		Defaults: DefaultsConfig{
-			BuildDir:  ".ign-build",
-			ListFile:  "",
+			BuildDir:  ".ign-config",
 			OutputDir: ".",
 		},
 	}

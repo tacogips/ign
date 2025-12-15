@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
@@ -9,65 +10,67 @@ import (
 
 // initCmd represents the init command
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Generate project from build configuration",
-	Long: `Generate project files from template using .ign-build/ign-var.json.
+	Use:   "init <url-or-path>",
+	Short: "Initialize configuration from template",
+	Long: `Create .ign-config/ign-var.json configuration from a template.
 
-This command reads the build configuration created by "ign build init",
-fetches the template, processes template directives, and generates
-the project files in the specified output directory.
+URL Formats:
+  - Full HTTPS: https://github.com/owner/repo
+  - Short form: github.com/owner/repo
+  - Owner/repo: owner/repo
+  - With path: github.com/owner/repo/templates/go-basic
+  - Git SSH: git@github.com:owner/repo.git
+  - Local path: ./my-local-template or /absolute/path
 
 Examples:
-  ign init
-  ign init --output ./my-project
-  ign init --output ./my-project --overwrite
-  ign init --config ./custom-build/ign-var.json --output ./output
-  ign init --dry-run`,
+  ign init github.com/owner/repo
+  ign init github.com/owner/repo/templates/go-basic
+  ign init github.com/owner/repo --ref v1.2.0
+  ign init ./my-local-template
+  ign init github.com/owner/repo --force`,
+	Args: cobra.ExactArgs(1),
 	RunE: runInit,
 }
 
 // Init command flags
 var (
-	initOutput    string
-	initOverwrite bool
-	initConfig    string
-	initDryRun    bool
-	initVerbose   bool
+	initRef   string
+	initForce bool
 )
 
 func init() {
 	// Flags for init
-	initCmd.Flags().StringVarP(&initOutput, "output", "o", ".", "Output directory for generated project")
-	initCmd.Flags().BoolVarP(&initOverwrite, "overwrite", "w", false, "Overwrite existing files")
-	initCmd.Flags().StringVarP(&initConfig, "config", "c", ".ign-build/ign-var.json", "Path to variable config file")
-	initCmd.Flags().BoolVarP(&initDryRun, "dry-run", "d", false, "Show what would be generated without writing files")
-	initCmd.Flags().BoolVarP(&initVerbose, "verbose", "v", false, "Show detailed processing information")
+	initCmd.Flags().StringVarP(&initRef, "ref", "r", "main", "Git branch, tag, or commit SHA")
+	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Backup existing config and reinitialize")
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	if initDryRun {
-		printInfo("[DRY RUN] Would generate project from template")
-	} else {
-		printInfo("Generating project from template...")
+	url := args[0]
+
+	// Check if .ign-config already exists
+	if _, err := os.Stat(".ign-config"); err == nil && !initForce {
+		printInfo("Configuration already exists at .ign-config")
+		printInfo("(use --force to backup and reinitialize)")
+		return nil
 	}
 
-	printInfo(fmt.Sprintf("Config: %s", initConfig))
-	printInfo(fmt.Sprintf("Output: %s", initOutput))
-
-	if initOverwrite {
-		printWarning("Overwrite mode enabled - existing files will be replaced")
+	printInfo(fmt.Sprintf("Initializing configuration from: %s", url))
+	if initRef != "main" {
+		printInfo(fmt.Sprintf("Reference: %s", initRef))
 	}
 
-	// Get GitHub token from environment
+	if initForce {
+		printWarning("Force mode enabled - will backup existing configuration")
+	}
+
+	// Get GitHub token from environment or config
 	githubToken := getGitHubToken("")
 
 	// Call app layer
-	result, err := app.Init(cmd.Context(), app.InitOptions{
-		OutputDir:   initOutput,
-		ConfigPath:  initConfig,
-		Overwrite:   initOverwrite,
-		DryRun:      initDryRun,
-		Verbose:     initVerbose,
+	err := app.Init(cmd.Context(), app.InitOptions{
+		URL:         url,
+		Ref:         initRef,
+		Force:       initForce,
 		GitHubToken: githubToken,
 	})
 
@@ -76,37 +79,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Print results
-	if initDryRun {
-		printInfo("")
-		printInfo("[DRY RUN] Files to create:")
-		for _, file := range result.Files {
-			printInfo(fmt.Sprintf("  - %s", file))
-		}
-		printInfo("")
-		printInfo("No files written (dry run).")
-	} else {
-		printSuccess("Project generated successfully")
-		printInfo("")
-		printInfo("Summary:")
-		printInfo(fmt.Sprintf("  Created: %d files", result.FilesCreated))
-		if result.FilesSkipped > 0 {
-			printInfo(fmt.Sprintf("  Skipped: %d files (already exist)", result.FilesSkipped))
-		}
-		if result.FilesOverwritten > 0 {
-			printInfo(fmt.Sprintf("  Overwritten: %d files", result.FilesOverwritten))
-		}
-
-		// Print any non-fatal errors
-		if len(result.Errors) > 0 {
-			printWarning(fmt.Sprintf("%d errors occurred during generation:", len(result.Errors)))
-			for _, e := range result.Errors {
-				printWarning(fmt.Sprintf("  - %v", e))
-			}
-		}
-
-		printInfo(fmt.Sprintf("\nProject ready at: %s", initOutput))
-	}
+	printSuccess("Created: .ign-config/ign-var.json")
+	printInfo("")
+	printInfo("Next steps:")
+	printInfo("  1. Edit .ign-config/ign-var.json to set variable values")
+	printInfo("  2. Run: ign checkout ./my-project")
 
 	return nil
 }

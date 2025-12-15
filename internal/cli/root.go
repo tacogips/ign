@@ -29,8 +29,8 @@ var rootCmd = &cobra.Command{
 	Long: `ign is a CLI tool for initializing projects from templates.
 
 It provides a two-step workflow:
-  1. "ign build init" - Creates build configuration from a template
-  2. "ign init" - Generates project files using the build configuration
+  1. "ign init <url>" - Creates configuration from a template
+  2. "ign checkout <path>" - Generates project files using the configuration
 
 Templates are fetched from GitHub repositories and can include variables,
 conditionals, and file inclusions for flexible project generation.`,
@@ -59,8 +59,8 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&globalDebug, FlagDebug, false, DescDebug)
 
 	// Add subcommands
-	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(checkoutCmd)
 	rootCmd.AddCommand(templateCmd)
 	rootCmd.AddCommand(versionCmd)
 }

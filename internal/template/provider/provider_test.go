@@ -195,7 +195,17 @@ func TestIsLocalPath(t *testing.T) {
 		{
 			name: "absolute path",
 			path: "/home/user/templates",
-			want: false, // Absolute paths not allowed for portability
+			want: true, // Absolute paths are now allowed
+		},
+		{
+			name: "file:// URL with relative path",
+			path: "file://./templates",
+			want: true, // file:// URLs are local
+		},
+		{
+			name: "file:// URL with absolute path",
+			path: "file:///home/user/templates",
+			want: true, // file:// URLs are local
 		},
 		{
 			name: "empty path",
@@ -237,6 +247,11 @@ func TestValidateLocalPath(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "valid absolute path",
+			path:    "/home/user/templates",
+			wantErr: false, // Absolute paths are now allowed
+		},
+		{
 			name:      "invalid - contains ..",
 			path:      "./templates/../../../etc",
 			wantErr:   true,
@@ -247,12 +262,6 @@ func TestValidateLocalPath(t *testing.T) {
 			path:      "../templates",
 			wantErr:   true,
 			errSubstr: "..",
-		},
-		{
-			name:      "invalid - absolute path",
-			path:      "/home/user/templates",
-			wantErr:   true,
-			errSubstr: "absolute",
 		},
 		{
 			name:      "invalid - empty path",
@@ -279,6 +288,88 @@ func TestValidateLocalPath(t *testing.T) {
 
 			if err != nil {
 				t.Errorf("ValidateLocalPath() unexpected error = %v", err)
+			}
+		})
+	}
+}
+
+func TestParseFileURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		fileURL   string
+		want      string
+		wantErr   bool
+		errSubstr string
+	}{
+		{
+			name:    "file:// with relative path ./",
+			fileURL: "file://./templates",
+			want:    "./templates",
+			wantErr: false,
+		},
+		{
+			name:    "file:// with relative path ../",
+			fileURL: "file://../templates",
+			want:    "../templates",
+			wantErr: false,
+		},
+		{
+			name:    "file:// with absolute path",
+			fileURL: "file:///home/user/templates",
+			want:    "/home/user/templates",
+			wantErr: false,
+		},
+		{
+			name:    "file:// with nested relative path",
+			fileURL: "file://./my-templates/go-basic",
+			want:    "./my-templates/go-basic",
+			wantErr: false,
+		},
+		{
+			name:      "not a file:// URL",
+			fileURL:   "./templates",
+			want:      "",
+			wantErr:   true,
+			errSubstr: "not a file://",
+		},
+		{
+			name:      "https URL",
+			fileURL:   "https://github.com/owner/repo",
+			want:      "",
+			wantErr:   true,
+			errSubstr: "not a file://",
+		},
+		{
+			name:      "file:// with no path",
+			fileURL:   "file://",
+			want:      "",
+			wantErr:   true,
+			errSubstr: "no path",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseFileURL(tt.fileURL)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("ParseFileURL() error = nil, want error containing %q", tt.errSubstr)
+					return
+				}
+				if tt.errSubstr != "" && !contains(err.Error(), tt.errSubstr) {
+					t.Errorf("ParseFileURL() error = %v, want error containing %q", err, tt.errSubstr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("ParseFileURL() unexpected error = %v", err)
+				return
+			}
+
+			if got != tt.want {
+				t.Errorf("ParseFileURL() = %v, want %v", got, tt.want)
 			}
 		})
 	}

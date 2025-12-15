@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
@@ -39,17 +40,29 @@ func (p *LocalProvider) Name() string {
 func (p *LocalProvider) Resolve(path string) (model.TemplateRef, error) {
 	debug.Debug("[local] Resolving path: %s", path)
 
+	// If it's a file:// URL, extract the path
+	originalPath := path
+	if strings.HasPrefix(path, "file://") {
+		var err error
+		path, err = ParseFileURL(path)
+		if err != nil {
+			debug.Debug("[local] Failed to parse file:// URL: %v", err)
+			return model.TemplateRef{}, NewInvalidURLError(p.Name(), originalPath, err)
+		}
+		debug.Debug("[local] Extracted path from file:// URL: %s", path)
+	}
+
 	// Validate local path
 	if err := ValidateLocalPath(path); err != nil {
 		debug.Debug("[local] Path validation failed: %v", err)
-		return model.TemplateRef{}, NewInvalidURLError(p.Name(), path, err)
+		return model.TemplateRef{}, NewInvalidURLError(p.Name(), originalPath, err)
 	}
 
 	// Normalize path
 	normalized, err := NormalizeLocalPath(path)
 	if err != nil {
 		debug.Debug("[local] Path normalization failed: %v", err)
-		return model.TemplateRef{}, NewInvalidURLError(p.Name(), path, err)
+		return model.TemplateRef{}, NewInvalidURLError(p.Name(), originalPath, err)
 	}
 	debug.Debug("[local] Normalized path: %s", normalized)
 
@@ -215,8 +228,16 @@ func (p *LocalProvider) Fetch(ctx context.Context, ref model.TemplateRef) (*mode
 	}, nil
 }
 
-// resolvePath resolves a relative path to an absolute path.
-func (p *LocalProvider) resolvePath(relPath string) (string, error) {
+// resolvePath resolves a path to an absolute path.
+// If the path is already absolute, it returns it directly.
+// If the path is relative, it resolves it relative to BaseDir or current working directory.
+func (p *LocalProvider) resolvePath(path string) (string, error) {
+	// If path is already absolute, use it directly
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path), nil
+	}
+
+	// For relative paths, resolve relative to base directory
 	baseDir := p.BaseDir
 	if baseDir == "" {
 		// Use current working directory
@@ -227,19 +248,19 @@ func (p *LocalProvider) resolvePath(relPath string) (string, error) {
 		baseDir = cwd
 	}
 
-	absPath := filepath.Join(baseDir, relPath)
+	absPath := filepath.Join(baseDir, path)
 
 	// Clean the path
 	absPath = filepath.Clean(absPath)
 
-	// Verify it doesn't escape base directory (security check)
+	// Verify it doesn't escape base directory (security check for relative paths only)
 	if !filepath.IsAbs(absPath) {
 		return "", fmt.Errorf("resolved path is not absolute: %s", absPath)
 	}
 
 	// Ensure it's under base directory (no ".." escaping)
 	if !isSubPath(baseDir, absPath) {
-		return "", fmt.Errorf("path escapes base directory: %s", relPath)
+		return "", fmt.Errorf("path escapes base directory: %s", path)
 	}
 
 	return absPath, nil

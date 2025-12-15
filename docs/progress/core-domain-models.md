@@ -16,8 +16,6 @@
 - [x] IgnVarJson struct (`internal/template/model/ignvar.go:6-13`)
 - [x] TemplateSource struct (`internal/template/model/ignvar.go:16-23`)
 - [x] VarMetadata struct (`internal/template/model/ignvar.go:26-37`)
-- [x] IgnListJson struct (`internal/template/model/ignlist.go:4-13`)
-- [x] TemplateEntry struct (`internal/template/model/ignlist.go:16-33`)
 - [x] Template runtime struct (`internal/template/model/template.go:4-13`)
 - [x] Unit tests for all structs (`internal/template/model/model_test.go`)
 
@@ -32,7 +30,7 @@
 - All models in single package `internal/template/model` for cohesion
 
 ## Notes
-- 11 unit tests pass covering all major data structures
+- 10 unit tests pass covering all major data structures
 - JSON marshaling/unmarshaling verified with round-trip tests
 - Tests include examples from reference documentation
 - Package follows Standard Go Project Layout with models in /internal/

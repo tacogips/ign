@@ -68,8 +68,6 @@ type OutputConfig struct {
 type DefaultsConfig struct {
 	// BuildDir is the default build directory name.
 	BuildDir string `json:"build_dir"`
-	// ListFile is the default template list file path.
-	ListFile string `json:"list_file"`
 	// OutputDir is the default output directory for ign init.
 	OutputDir string `json:"output_dir"`
 }

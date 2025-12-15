@@ -52,8 +52,8 @@ func TestDefaultConfig(t *testing.T) {
 	}
 
 	// Test defaults
-	if cfg.Defaults.BuildDir != ".ign-build" {
-		t.Errorf("Expected BuildDir=.ign-build, got %s", cfg.Defaults.BuildDir)
+	if cfg.Defaults.BuildDir != ".ign-config" {
+		t.Errorf("Expected BuildDir=.ign-config, got %s", cfg.Defaults.BuildDir)
 	}
 }
 

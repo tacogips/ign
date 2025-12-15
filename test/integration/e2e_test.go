@@ -11,11 +11,11 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-// TestE2E_CompleteWorkflow tests the complete build init -> init workflow
+// TestE2E_CompleteWorkflow tests the complete init -> checkout workflow
 func TestE2E_CompleteWorkflow(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	buildDir := filepath.Join(tempDir, ".ign-build")
+	configDir := filepath.Join(tempDir, ".ign-config")
 	outputDir := filepath.Join(tempDir, "my-project")
 
 	// Copy fixture to temp directory
@@ -31,23 +31,22 @@ func TestE2E_CompleteWorkflow(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	// Step 1: Build Init
-	t.Log("Step 1: Running build init")
-	if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-		URL:       templatePath,
-		OutputDir: buildDir,
+	// Step 1: Init
+	t.Log("Step 1: Running init")
+	if err := app.Init(context.Background(), app.InitOptions{
+		URL: templatePath,
 	}); err != nil {
-		t.Fatalf("BuildInit failed: %v", err)
+		t.Fatalf("Init failed: %v", err)
 	}
 
-	// Verify build directory created
-	if _, err := os.Stat(buildDir); os.IsNotExist(err) {
-		t.Fatalf("build directory not created")
+	// Verify config directory created
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		t.Fatalf("config directory not created")
 	}
 
 	// Step 2: Edit variables (simulating user editing ign-var.json)
 	t.Log("Step 2: Editing variables")
-	ignVarPath := filepath.Join(buildDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 	data, err := os.ReadFile(ignVarPath)
 	if err != nil {
 		t.Fatalf("failed to read ign-var.json: %v", err)
@@ -72,25 +71,13 @@ func TestE2E_CompleteWorkflow(t *testing.T) {
 		t.Fatalf("failed to write ign-var.json: %v", err)
 	}
 
-	// Step 3: Init (generate project)
-	t.Log("Step 3: Running init")
+	// Step 3: Checkout (generate project)
+	t.Log("Step 3: Running checkout")
 
-	// Change to temp directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("failed to change directory: %v", err)
-	}
-
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
 	}); err != nil {
-		t.Fatalf("Init failed: %v", err)
+		t.Fatalf("Checkout failed: %v", err)
 	}
 
 	// Step 4: Verify generated project
@@ -142,10 +129,10 @@ func TestE2E_CompleteWorkflow(t *testing.T) {
 		t.Errorf("ign.json should not be in output directory")
 	}
 
-	// Verify .ign-build NOT copied
-	ignBuildPath := filepath.Join(outputDir, ".ign-build")
-	if _, err := os.Stat(ignBuildPath); !os.IsNotExist(err) {
-		t.Errorf(".ign-build should not be in output directory")
+	// Verify .ign-config NOT copied
+	ignConfigPath := filepath.Join(outputDir, ".ign-config")
+	if _, err := os.Stat(ignConfigPath); !os.IsNotExist(err) {
+		t.Errorf(".ign-config should not be in output directory")
 	}
 
 	t.Log("E2E test completed successfully")
@@ -187,7 +174,7 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temp directory for this subtest
 			tempDir := t.TempDir()
-			buildDir := filepath.Join(tempDir, ".ign-build")
+			configDir := filepath.Join(tempDir, ".ign-config")
 			outputDir := filepath.Join(tempDir, "output")
 
 			// Copy fixture to temp directory
@@ -203,16 +190,15 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 			}
 			defer os.Chdir(origDir)
 
-			// Build init
-			if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-				URL:       templatePath,
-				OutputDir: buildDir,
+			// Init
+			if err := app.Init(context.Background(), app.InitOptions{
+				URL: templatePath,
 			}); err != nil {
-				t.Fatalf("BuildInit failed: %v", err)
+				t.Fatalf("Init failed: %v", err)
 			}
 
 			// Set variables
-			ignVarPath := filepath.Join(buildDir, "ign-var.json")
+			ignVarPath := filepath.Join(configDir, "ign-var.json")
 			data, err := os.ReadFile(ignVarPath)
 			if err != nil {
 				t.Fatalf("failed to read ign-var.json: %v", err)
@@ -236,12 +222,11 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 				t.Fatalf("failed to write ign-var.json: %v", err)
 			}
 
-			// Init
-			if _, err := app.Init(context.Background(), app.InitOptions{
-				OutputDir:  outputDir,
-				ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+			// Checkout
+			if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+				OutputDir: outputDir,
 			}); err != nil {
-				t.Fatalf("Init failed: %v", err)
+				t.Fatalf("Checkout failed: %v", err)
 			}
 
 			// Verify
@@ -262,7 +247,7 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 func TestE2E_DryRun(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	buildDir := filepath.Join(tempDir, ".ign-build")
+	configDir := filepath.Join(tempDir, ".ign-config")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Copy fixture to temp directory
@@ -278,15 +263,15 @@ func TestE2E_DryRun(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-		URL:       templatePath,
-		OutputDir: buildDir,
+	// Init
+	if err := app.Init(context.Background(), app.InitOptions{
+		URL: templatePath,
 	}); err != nil {
-		t.Fatalf("BuildInit failed: %v", err)
+		t.Fatalf("Init failed: %v", err)
 	}
 
 	// Set variables
-	ignVarPath := filepath.Join(buildDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 	data, err := os.ReadFile(ignVarPath)
 	if err != nil {
 		t.Fatalf("failed to read ign-var.json: %v", err)
@@ -310,13 +295,12 @@ func TestE2E_DryRun(t *testing.T) {
 		t.Fatalf("failed to write ign-var.json: %v", err)
 	}
 
-	// Execute init with dry-run
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
-		DryRun:     true,
+	// Execute checkout with dry-run
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
+		DryRun:    true,
 	}); err != nil {
-		t.Fatalf("Init (dry-run) failed: %v", err)
+		t.Fatalf("Checkout (dry-run) failed: %v", err)
 	}
 
 	// Verify output directory NOT created in dry-run mode
@@ -325,11 +309,10 @@ func TestE2E_DryRun(t *testing.T) {
 	}
 
 	// Now run without dry-run
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
 	}); err != nil {
-		t.Fatalf("Init (real) failed: %v", err)
+		t.Fatalf("Checkout (real) failed: %v", err)
 	}
 
 	// Verify output directory created
@@ -346,94 +329,90 @@ func TestE2E_DryRun(t *testing.T) {
 
 // TestE2E_ErrorHandling tests error scenarios
 func TestE2E_ErrorHandling(t *testing.T) {
-	tests := []struct {
-		name        string
-		setup       func(t *testing.T, tempDir string) (buildDir, outputDir string)
-		expectError bool
-		errorMsg    string
-	}{
-		{
-			name: "missing required variable",
-			setup: func(t *testing.T, tempDir string) (string, string) {
-				buildDir := filepath.Join(tempDir, ".ign-build")
-				outputDir := filepath.Join(tempDir, "output")
+	t.Run("missing required variable", func(t *testing.T) {
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".ign-config")
+		outputDir := filepath.Join(tempDir, "output")
 
-				// Build init with simple template
-				fixturesDir, _ := filepath.Abs("../fixtures/templates/simple-template")
-				relPath, _ := filepath.Rel(tempDir, fixturesDir)
-				app.BuildInit(context.Background(), app.BuildInitOptions{
-					URL:       "./" + relPath,
-					OutputDir: buildDir,
-				})
+		// Copy fixture to temp directory
+		templatePath := copyFixtureToTemp(t, "simple-template", tempDir)
 
-				// Read ign-var.json but don't set required variable
-				ignVarPath := filepath.Join(buildDir, "ign-var.json")
-				data, _ := os.ReadFile(ignVarPath)
-				var ignVar model.IgnVarJson
-				json.Unmarshal(data, &ignVar)
+		// Change to temp directory for relative path resolution
+		origDir, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("failed to get current directory: %v", err)
+		}
+		if err := os.Chdir(tempDir); err != nil {
+			t.Fatalf("failed to change to temp directory: %v", err)
+		}
+		defer os.Chdir(origDir)
 
-				// Ensure Variables map is initialized
-				if ignVar.Variables == nil {
-					ignVar.Variables = make(map[string]interface{})
-				}
+		// Init with simple template
+		if err := app.Init(context.Background(), app.InitOptions{
+			URL: templatePath,
+		}); err != nil {
+			t.Fatalf("Init failed: %v", err)
+		}
 
-				// Leave project_name empty (required variable)
-				ignVar.Variables["project_name"] = ""
-				ignVar.Variables["port"] = 8080
-				ignVar.Variables["enable_feature"] = false
+		// Read ign-var.json but don't set required variable
+		ignVarPath := filepath.Join(configDir, "ign-var.json")
+		data, err := os.ReadFile(ignVarPath)
+		if err != nil {
+			t.Fatalf("failed to read ign-var.json: %v", err)
+		}
 
-				updatedData, _ := json.MarshalIndent(ignVar, "", "  ")
-				os.WriteFile(ignVarPath, updatedData, 0644)
+		var ignVar model.IgnVarJson
+		if err := json.Unmarshal(data, &ignVar); err != nil {
+			t.Fatalf("failed to parse ign-var.json: %v", err)
+		}
 
-				return buildDir, outputDir
-			},
-			expectError: true,
-			errorMsg:    "required",
-		},
-		{
-			name: "missing ign-var.json",
-			setup: func(t *testing.T, tempDir string) (string, string) {
-				buildDir := filepath.Join(tempDir, ".ign-build")
-				outputDir := filepath.Join(tempDir, "output")
+		// Ensure Variables map is initialized
+		if ignVar.Variables == nil {
+			ignVar.Variables = make(map[string]interface{})
+		}
 
-				// Create build dir but no ign-var.json
-				os.MkdirAll(buildDir, 0755)
+		// Leave project_name empty (required variable)
+		ignVar.Variables["project_name"] = ""
+		ignVar.Variables["port"] = 8080
+		ignVar.Variables["enable_feature"] = false
 
-				return buildDir, outputDir
-			},
-			expectError: true,
-			errorMsg:    "ign-var.json",
-		},
-	}
+		updatedData, _ := json.MarshalIndent(ignVar, "", "  ")
+		os.WriteFile(ignVarPath, updatedData, 0644)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-
-			buildDir, outputDir := tt.setup(t, tempDir)
-
-			// Change directory
-			oldWd, _ := os.Getwd()
-			defer os.Chdir(oldWd)
-			os.Chdir(tempDir)
-
-			// Execute init
-			_, err := app.Init(context.Background(), app.InitOptions{
-				OutputDir:  outputDir,
-				ConfigPath: filepath.Join(buildDir, "ign-var.json"),
-			})
-
-			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got nil")
-				} else if !contains(err.Error(), tt.errorMsg) {
-					t.Errorf("error message does not contain expected substring: %s\nGot: %v", tt.errorMsg, err)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-			}
+		// Execute checkout
+		_, err = app.Checkout(context.Background(), app.CheckoutOptions{
+			OutputDir: outputDir,
 		})
-	}
+
+		if err == nil {
+			t.Errorf("expected error but got nil")
+		} else if !contains(err.Error(), "required") {
+			t.Errorf("error message does not contain expected substring: required\nGot: %v", err)
+		}
+	})
+
+	t.Run("missing ign-var.json", func(t *testing.T) {
+		tempDir := t.TempDir()
+		configDir := filepath.Join(tempDir, ".ign-config")
+		outputDir := filepath.Join(tempDir, "output")
+
+		// Create config dir but no ign-var.json
+		os.MkdirAll(configDir, 0755)
+
+		// Change directory
+		oldWd, _ := os.Getwd()
+		defer os.Chdir(oldWd)
+		os.Chdir(tempDir)
+
+		// Execute checkout
+		_, err := app.Checkout(context.Background(), app.CheckoutOptions{
+			OutputDir: outputDir,
+		})
+
+		if err == nil {
+			t.Errorf("expected error but got nil")
+		} else if !contains(err.Error(), "ign-var.json") {
+			t.Errorf("error message does not contain expected substring: ign-var.json\nGot: %v", err)
+		}
+	})
 }

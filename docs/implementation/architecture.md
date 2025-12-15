@@ -394,7 +394,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
    │  ├─ If not cached: provider.Fetch()
    │  └─ Cache result
    ├─ Parse ign.json
-   ├─ Create .ign-build directory
+   ├─ Create .ign-config directory
    ├─ Generate ign-var.json
    │  ├─ Template reference
    │  ├─ Empty variable values
@@ -410,7 +410,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
    └─ Return Template
 
 4. Output
-   └─ .ign-build/ign-var.json created
+   └─ .ign-config/ign-var.json created
 ```
 
 ### 4.2 Init Workflow
@@ -424,7 +424,7 @@ User: ign init --output ./my-project
    └─ Call app.Init()
 
 2. Application Layer (internal/app/init.go)
-   ├─ Load .ign-build/ign-var.json
+   ├─ Load .ign-config/ign-var.json
    ├─ Validate variables
    ├─ Resolve @file: references
    ├─ Get Provider and fetch template
@@ -526,26 +526,6 @@ type VarMetadata struct {
     TemplateName    string    `json:"template_name,omitempty"`
     TemplateVersion string    `json:"template_version,omitempty"`
     IgnVersion      string    `json:"ign_version,omitempty"`
-}
-
-// IgnListJson represents the ign-list.json file
-type IgnListJson struct {
-    Version     string           `json:"version"`
-    Name        string           `json:"name,omitempty"`
-    Description string           `json:"description,omitempty"`
-    Templates   []TemplateEntry  `json:"templates"`
-}
-
-// TemplateEntry represents a template in the list
-type TemplateEntry struct {
-    Name        string   `json:"name"`
-    URL         string   `json:"url"`
-    Path        string   `json:"path,omitempty"`
-    Ref         string   `json:"ref,omitempty"`
-    Description string   `json:"description,omitempty"`
-    Tags        []string `json:"tags,omitempty"`
-    Category    string   `json:"category,omitempty"`
-    Maintainer  string   `json:"maintainer,omitempty"`
 }
 ```
 
@@ -681,10 +661,10 @@ Error: Template variable not defined
 File: main.go.template:15
 Variable: @ign-var:database_url@
 
-This variable is required but not found in .ign-build/ign-var.json
+This variable is required but not found in .ign-config/ign-var.json
 Available variables: project_name, version, port
 
-Please edit .ign-build/ign-var.json and add:
+Please edit .ign-config/ign-var.json and add:
   "database_url": "your-value-here"
 ```
 

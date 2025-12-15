@@ -2,7 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"regexp"
+	"strings"
 )
 
 // Common flag names and descriptions
@@ -109,4 +112,31 @@ func ValidateOutputPath(path string) error {
 func containsPathTraversal(path string) bool {
 	// Simple check for now - can be enhanced
 	return regexp.MustCompile(`\.\.`).MatchString(path)
+}
+
+// getGitHubToken retrieves GitHub token from environment or gh CLI.
+// Priority: GITHUB_TOKEN env > GH_TOKEN env > gh auth token command
+func getGitHubToken(configPath string) string {
+	// Try environment variables first (highest priority)
+	if token := os.Getenv("GITHUB_TOKEN"); token != "" {
+		return token
+	}
+	if token := os.Getenv("GH_TOKEN"); token != "" {
+		return token
+	}
+
+	// Try gh CLI auth token (uses gh's secure credential storage)
+	// Only attempt if gh command is available
+	if _, err := exec.LookPath("gh"); err == nil {
+		cmd := exec.Command("gh", "auth", "token")
+		output, err := cmd.Output()
+		if err == nil {
+			token := strings.TrimSpace(string(output))
+			if token != "" {
+				return token
+			}
+		}
+	}
+
+	return ""
 }
