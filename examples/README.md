@@ -83,11 +83,11 @@ This convention prevents syntax errors from linters and IDEs that expect valid s
 
 ```bash
 # Initialize from a template
-ign build init --template github:example/ign-templates/02-with-variables
+ign init github.com/example/ign-templates/02-with-variables
 
 # Edit variables
 vim .ign-config/ign-var.json
 
 # Generate files
-ign build
+ign checkout .
 ```

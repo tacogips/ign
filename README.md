@@ -25,6 +25,16 @@ ign checkout ./my-project   # Specific directory
 
 ## Commands
 
+### Global Flags
+
+These flags apply to all commands:
+
+| Flag | Description |
+|------|-------------|
+| `--no-color` | Disable colored output |
+| `--quiet`, `-q` | Suppress non-error output |
+| `--debug` | Enable debug output |
+
 ### `ign init <url-or-path>`
 
 Initialize configuration from a template source.
@@ -38,8 +48,14 @@ ign init github.com/owner/repo --ref v1.0.0
 # From local path
 ign init ./my-local-template
 ign init /absolute/path/to/template
-ign init file://./relative-path
 ```
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--ref` | `-r` | Git branch, tag, or commit SHA (default: main) |
+| `--force` | `-f` | Backup existing config and reinitialize |
 
 **Behavior:**
 
@@ -69,9 +85,19 @@ Generate project files to the specified path using existing `.ign-config/`.
 ign checkout .              # Generate to current directory
 ign checkout ./my-project   # Generate to specific directory
 ign checkout sub_dir        # Generate to subdirectory
+ign checkout . --dry-run    # Preview without writing files
+ign checkout . --verbose    # Show detailed processing info
 ```
 
 **Requires:** `.ign-config/ign-var.json` must exist (run `ign init` first).
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Overwrite existing files |
+| `--dry-run` | `-d` | Show what would be generated without writing |
+| `--verbose` | `-v` | Show detailed processing information |
 
 **File handling:**
 
@@ -80,6 +106,34 @@ ign checkout sub_dir        # Generate to subdirectory
 | File does not exist | Create |
 | File exists | Skip (do not overwrite) |
 | File exists + `--force` | Overwrite |
+
+### `ign template check [PATH]`
+
+Validate template files for syntax errors.
+
+```bash
+ign template check              # Check current directory
+ign template check ./templates  # Check specific directory
+ign template check -r           # Recursive check
+ign template check -r -v        # Recursive with verbose output
+```
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--recursive` | `-r` | Recursively check subdirectories |
+| `--verbose` | `-v` | Show detailed validation info |
+
+### `ign version`
+
+Show version information.
+
+```bash
+ign version          # Full version info
+ign version --short  # Version number only
+ign version --json   # JSON format output
+```
 
 ## Configuration Directory
 
