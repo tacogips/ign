@@ -62,6 +62,28 @@ Examples:
 	RunE: runTemplateCheck,
 }
 
+// templateCollectVarsCmd represents the template collect-vars command
+var templateCollectVarsCmd = &cobra.Command{
+	Use:   "collect-vars [PATH]",
+	Short: "Collect variables from templates and update ign.json",
+	Long: `Scan template files for @ign-var: and @ign-if: directives and
+automatically update ign.json with the collected variable definitions.
+
+This command helps keep ign.json in sync with the actual variables used
+in your template files.
+
+If PATH is not specified, the current directory is used.
+
+Examples:
+  ign template collect-vars
+  ign template collect-vars ./my-template
+  ign template collect-vars -r           # Recursive scan
+  ign template collect-vars --dry-run    # Preview changes
+  ign template collect-vars --merge      # Only add new variables`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runTemplateCollectVars,
+}
+
 // Template new command flags
 var (
 	templateNewType  string
@@ -74,10 +96,18 @@ var (
 	templateCheckVerbose   bool
 )
 
+// Template auto-collect-vars command flags
+var (
+	templateCollectRecursive bool
+	templateCollectDryRun    bool
+	templateCollectMerge     bool
+)
+
 func init() {
 	// Add subcommands to template
 	templateCmd.AddCommand(templateNewCmd)
 	templateCmd.AddCommand(templateCheckCmd)
+	templateCmd.AddCommand(templateCollectVarsCmd)
 
 	// Flags for template new
 	templateNewCmd.Flags().StringVarP(&templateNewType, "type", "t", "default", "Scaffold type to use (e.g., default, go, web)")
@@ -86,6 +116,11 @@ func init() {
 	// Flags for template check
 	templateCheckCmd.Flags().BoolVarP(&templateCheckRecursive, "recursive", "r", false, "Recursively check subdirectories")
 	templateCheckCmd.Flags().BoolVarP(&templateCheckVerbose, "verbose", "v", false, "Show detailed validation info")
+
+	// Flags for template collect-vars
+	templateCollectVarsCmd.Flags().BoolVarP(&templateCollectRecursive, "recursive", "r", false, "Recursively scan subdirectories")
+	templateCollectVarsCmd.Flags().BoolVar(&templateCollectDryRun, "dry-run", false, "Preview changes without writing")
+	templateCollectVarsCmd.Flags().BoolVar(&templateCollectMerge, "merge", false, "Only add new variables, preserve existing")
 }
 
 func runTemplateCheck(cmd *cobra.Command, args []string) error {
@@ -209,6 +244,90 @@ func runTemplateNew(cmd *cobra.Command, args []string) error {
 	printInfo("  2. Edit ign.json to customize template variables")
 	printInfo("  3. Add your template files with @ign- directives")
 	printInfo("  4. Run 'ign template check' to validate")
+
+	return nil
+}
+
+func runTemplateCollectVars(cmd *cobra.Command, args []string) error {
+	// Default to current directory if no path specified
+	path := "."
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	printInfo(fmt.Sprintf("Scanning templates in: %s", path))
+	if templateCollectRecursive {
+		printInfo("Mode: Recursive")
+	}
+	if templateCollectDryRun {
+		printWarning("Dry-run mode: no files will be modified")
+	}
+	if templateCollectMerge {
+		printInfo("Merge mode: only adding new variables")
+	}
+	printSeparator()
+
+	// Call app layer
+	result, err := app.CollectVars(cmd.Context(), app.CollectVarsOptions{
+		Path:      path,
+		Recursive: templateCollectRecursive,
+		DryRun:    templateCollectDryRun,
+		Merge:     templateCollectMerge,
+	})
+
+	if err != nil {
+		printErrorMsg(fmt.Sprintf("Failed to collect variables: %v", err))
+		return err
+	}
+
+	// Display results
+	printHeader("Scan Results")
+	printInfo(fmt.Sprintf("Files scanned: %d", result.FilesScanned))
+	printInfo(fmt.Sprintf("Variables found: %d", len(result.Variables)))
+
+	if len(result.Variables) == 0 {
+		printWarning("No variables found in template files")
+		return nil
+	}
+
+	printSeparator()
+	printHeader("Variables")
+	for name, v := range result.Variables {
+		typeStr := string(v.Type)
+		if typeStr == "" {
+			typeStr = "string"
+		}
+		reqStr := ""
+		if v.Required {
+			reqStr = " (required)"
+		} else if v.HasDefault {
+			reqStr = fmt.Sprintf(" (default: %v)", v.Default)
+		}
+		printInfo(fmt.Sprintf("  %s: %s%s", name, typeStr, reqStr))
+	}
+
+	if len(result.NewVars) > 0 {
+		printSeparator()
+		printHeader("New Variables")
+		for _, name := range result.NewVars {
+			printSuccess(fmt.Sprintf("  + %s", name))
+		}
+	}
+
+	if len(result.UpdatedVars) > 0 {
+		printSeparator()
+		printHeader("Updated Variables")
+		for _, name := range result.UpdatedVars {
+			printInfo(fmt.Sprintf("  ~ %s", name))
+		}
+	}
+
+	printSeparator()
+	if templateCollectDryRun {
+		printWarning(fmt.Sprintf("Would update: %s", result.IgnJsonPath))
+	} else if result.Updated {
+		printSuccess(fmt.Sprintf("Updated: %s", result.IgnJsonPath))
+	}
 
 	return nil
 }
