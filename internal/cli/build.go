@@ -114,12 +114,15 @@ func getGitHubToken(configPath string) string {
 	}
 
 	// Try gh CLI auth token (uses gh's secure credential storage)
-	cmd := exec.Command("gh", "auth", "token")
-	output, err := cmd.Output()
-	if err == nil {
-		token := strings.TrimSpace(string(output))
-		if token != "" {
-			return token
+	// Only attempt if gh command is available
+	if _, err := exec.LookPath("gh"); err == nil {
+		cmd := exec.Command("gh", "auth", "token")
+		output, err := cmd.Output()
+		if err == nil {
+			token := strings.TrimSpace(string(output))
+			if token != "" {
+				return token
+			}
 		}
 	}
 
