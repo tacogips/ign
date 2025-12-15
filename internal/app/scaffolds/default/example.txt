@@ -1,0 +1,22 @@
+# Example Template File
+# This file demonstrates ign template directives
+
+Project: @ign-var:project_name@
+Description: @ign-var:description=A sample project@
+
+@ign-if:enable_feature@
+## Optional Feature
+
+This section only appears when enable_feature is true.
+@ign-else@
+## Basic Mode
+
+Optional feature is disabled.
+@ign-endif@
+
+@ign-comment: This comment will be removed from the output @
+
+## Configuration
+
+- Name: @ign-var:project_name@
+- Feature Enabled: @ign-var:enable_feature:bool=false@
