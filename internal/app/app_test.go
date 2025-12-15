@@ -324,14 +324,14 @@ func TestAppErrors(t *testing.T) {
 		wantType  AppErrorType
 	}{
 		{
-			name:      "BuildInitError",
-			createErr: func() error { return NewBuildInitError("test", nil) },
-			wantType:  BuildInitFailed,
-		},
-		{
 			name:      "InitError",
 			createErr: func() error { return NewInitError("test", nil) },
 			wantType:  InitFailed,
+		},
+		{
+			name:      "CheckoutError",
+			createErr: func() error { return NewCheckoutError("test", nil) },
+			wantType:  CheckoutFailed,
 		},
 		{
 			name:      "VariableLoadError",

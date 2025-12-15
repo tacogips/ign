@@ -20,16 +20,7 @@ Go web server template with configurable variables.
 - `ign-var.json` user configuration
 - String, int variable types
 
-### 03-ign-list
-Multi-template batch generation for microservices architecture.
-
-**Features demonstrated:**
-- `ign-list.json` for multiple templates
-- Different output paths per template
-- Shared variables across services
-- Local and GitHub template sources
-
-### 04-conditionals
+### 03-conditionals
 Go service template with feature flags using conditionals.
 
 **Features demonstrated:**
@@ -38,7 +29,7 @@ Go service template with feature flags using conditionals.
 - Boolean variables for feature toggles
 - Conditional imports and code sections
 
-### 05-includes
+### 04-includes
 Go project template with shared reusable content.
 
 **Features demonstrated:**
@@ -92,15 +83,11 @@ This convention prevents syntax errors from linters and IDEs that expect valid s
 
 ```bash
 # Initialize from a template
-ign build init --template github:example/ign-templates/02-with-variables
+ign init github.com/example/ign-templates/02-with-variables
 
 # Edit variables
-vim .ign-build/ign-var.json
+vim .ign-config/ign-var.json
 
 # Generate files
-ign build
-
-# Or use ign-list for multiple templates
-ign build init --from-list .ign-build/ign-list.json
-ign build
+ign checkout .
 ```

@@ -11,11 +11,11 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-// TestInit_SimpleTemplate tests project initialization with simple template
-func TestInit_SimpleTemplate(t *testing.T) {
+// TestCheckout_SimpleTemplate tests project checkout with simple template
+func TestCheckout_SimpleTemplate(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	buildDir := filepath.Join(tempDir, ".ign-build")
+	configDir := filepath.Join(tempDir, ".ign-config")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Copy fixture to temp directory
@@ -31,15 +31,15 @@ func TestInit_SimpleTemplate(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-		URL:       templatePath,
-		OutputDir: buildDir,
+	// Step 1: Initialize config
+	if err := app.Init(context.Background(), app.InitOptions{
+		URL: templatePath,
 	}); err != nil {
-		t.Fatalf("BuildInit failed: %v", err)
+		t.Fatalf("Init failed: %v", err)
 	}
 
 	// Edit ign-var.json with test values
-	ignVarPath := filepath.Join(buildDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 	data, err := os.ReadFile(ignVarPath)
 	if err != nil {
 		t.Fatalf("failed to read ign-var.json: %v", err)
@@ -65,24 +65,12 @@ func TestInit_SimpleTemplate(t *testing.T) {
 		t.Fatalf("failed to write ign-var.json: %v", err)
 	}
 
-	// Change to temp directory for init
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("failed to change directory: %v", err)
-	}
-
-	// Execute init
-	_, err = app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+	// Step 2: Execute checkout
+	_, err = app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
 	})
 	if err != nil {
-		t.Fatalf("Init failed: %v", err)
+		t.Fatalf("Checkout failed: %v", err)
 	}
 
 	// Verify output directory created
@@ -132,8 +120,8 @@ func TestInit_SimpleTemplate(t *testing.T) {
 	}
 }
 
-// TestInit_ConditionalTemplate tests project initialization with conditional directives
-func TestInit_ConditionalTemplate(t *testing.T) {
+// TestCheckout_ConditionalTemplate tests project checkout with conditional directives
+func TestCheckout_ConditionalTemplate(t *testing.T) {
 	tests := []struct {
 		name       string
 		useDocker  bool
@@ -158,10 +146,10 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			tempDir := t.TempDir()
-			buildDir := filepath.Join(tempDir, ".ign-build")
+			configDir := filepath.Join(tempDir, ".ign-config")
 			outputDir := filepath.Join(tempDir, "output")
 
-			// Copy fixture and build init
+			// Copy fixture and init
 			templatePath := copyFixtureToTemp(t, "conditional-template", tempDir)
 
 			origDir, err := os.Getwd()
@@ -173,15 +161,15 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 			}
 			defer os.Chdir(origDir)
 
-			if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-				URL:       templatePath,
-				OutputDir: buildDir,
+			// Step 1: Initialize config
+			if err := app.Init(context.Background(), app.InitOptions{
+				URL: templatePath,
 			}); err != nil {
-				t.Fatalf("BuildInit failed: %v", err)
+				t.Fatalf("Init failed: %v", err)
 			}
 
 			// Set variables
-			ignVarPath := filepath.Join(buildDir, "ign-var.json")
+			ignVarPath := filepath.Join(configDir, "ign-var.json")
 			data, err := os.ReadFile(ignVarPath)
 			if err != nil {
 				t.Fatalf("failed to read ign-var.json: %v", err)
@@ -205,12 +193,11 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 				t.Fatalf("failed to write ign-var.json: %v", err)
 			}
 
-			// Execute init
-			if _, err := app.Init(context.Background(), app.InitOptions{
-				OutputDir:  outputDir,
-				ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+			// Step 2: Execute checkout
+			if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+				OutputDir: outputDir,
 			}); err != nil {
-				t.Fatalf("Init failed: %v", err)
+				t.Fatalf("Checkout failed: %v", err)
 			}
 
 			// Verify README.md content based on conditions
@@ -266,14 +253,14 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 	}
 }
 
-// TestInit_GoProject tests Go project template with comment directive
-func TestInit_GoProject(t *testing.T) {
+// TestCheckout_GoProject tests Go project template with comment directive
+func TestCheckout_GoProject(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	buildDir := filepath.Join(tempDir, ".ign-build")
+	configDir := filepath.Join(tempDir, ".ign-config")
 	outputDir := filepath.Join(tempDir, "output")
 
-	// Copy fixture and build init
+	// Copy fixture and init
 	templatePath := copyFixtureToTemp(t, "go-project", tempDir)
 
 	origDir, err := os.Getwd()
@@ -285,15 +272,15 @@ func TestInit_GoProject(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-		URL:       templatePath,
-		OutputDir: buildDir,
+	// Step 1: Initialize config
+	if err := app.Init(context.Background(), app.InitOptions{
+		URL: templatePath,
 	}); err != nil {
-		t.Fatalf("BuildInit failed: %v", err)
+		t.Fatalf("Init failed: %v", err)
 	}
 
 	// Set variables
-	ignVarPath := filepath.Join(buildDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 	data, err := os.ReadFile(ignVarPath)
 	if err != nil {
 		t.Fatalf("failed to read ign-var.json: %v", err)
@@ -316,23 +303,11 @@ func TestInit_GoProject(t *testing.T) {
 		t.Fatalf("failed to write ign-var.json: %v", err)
 	}
 
-	// Change directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("failed to change directory: %v", err)
-	}
-
-	// Execute init
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+	// Step 2: Execute checkout
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
 	}); err != nil {
-		t.Fatalf("Init failed: %v", err)
+		t.Fatalf("Checkout failed: %v", err)
 	}
 
 	// Verify go.mod
@@ -385,14 +360,14 @@ func TestInit_GoProject(t *testing.T) {
 	}
 }
 
-// TestInit_Overwrite tests the overwrite flag
-func TestInit_Overwrite(t *testing.T) {
+// TestCheckout_Overwrite tests the overwrite flag
+func TestCheckout_Overwrite(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	buildDir := filepath.Join(tempDir, ".ign-build")
+	configDir := filepath.Join(tempDir, ".ign-config")
 	outputDir := filepath.Join(tempDir, "output")
 
-	// Copy fixture and build init
+	// Copy fixture and init
 	templatePath := copyFixtureToTemp(t, "simple-template", tempDir)
 
 	origDir, err := os.Getwd()
@@ -404,15 +379,15 @@ func TestInit_Overwrite(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	if err := app.BuildInit(context.Background(), app.BuildInitOptions{
-		URL:       templatePath,
-		OutputDir: buildDir,
+	// Step 1: Initialize config
+	if err := app.Init(context.Background(), app.InitOptions{
+		URL: templatePath,
 	}); err != nil {
-		t.Fatalf("BuildInit failed: %v", err)
+		t.Fatalf("Init failed: %v", err)
 	}
 
 	// Set variables
-	ignVarPath := filepath.Join(buildDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 	data, err := os.ReadFile(ignVarPath)
 	if err != nil {
 		t.Fatalf("failed to read ign-var.json: %v", err)
@@ -436,23 +411,11 @@ func TestInit_Overwrite(t *testing.T) {
 		t.Fatalf("failed to write ign-var.json: %v", err)
 	}
 
-	// Change directory
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("failed to get working directory: %v", err)
-	}
-	defer os.Chdir(oldWd)
-
-	if err := os.Chdir(tempDir); err != nil {
-		t.Fatalf("failed to change directory: %v", err)
-	}
-
-	// First init
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+	// First checkout
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
 	}); err != nil {
-		t.Fatalf("First Init failed: %v", err)
+		t.Fatalf("First Checkout failed: %v", err)
 	}
 
 	// Verify first run
@@ -477,12 +440,11 @@ func TestInit_Overwrite(t *testing.T) {
 		t.Fatalf("failed to write ign-var.json: %v", err)
 	}
 
-	// Second init without overwrite (should skip)
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
+	// Second checkout without overwrite (should skip)
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
 	}); err != nil {
-		t.Fatalf("Second Init (no overwrite) failed: %v", err)
+		t.Fatalf("Second Checkout (no overwrite) failed: %v", err)
 	}
 
 	// Verify files not overwritten
@@ -495,13 +457,12 @@ func TestInit_Overwrite(t *testing.T) {
 		t.Errorf("README.md should still contain first-run (not overwritten)")
 	}
 
-	// Third init with overwrite
-	if _, err := app.Init(context.Background(), app.InitOptions{
-		OutputDir:  outputDir,
-		ConfigPath: filepath.Join(buildDir, "ign-var.json"),
-		Overwrite:  true,
+	// Third checkout with overwrite
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{
+		OutputDir: outputDir,
+		Overwrite: true,
 	}); err != nil {
-		t.Fatalf("Third Init (with overwrite) failed: %v", err)
+		t.Fatalf("Third Checkout (with overwrite) failed: %v", err)
 	}
 
 	// Verify files overwritten

@@ -12,7 +12,17 @@ import (
 func NormalizeTemplateURL(url string) string {
 	url = strings.TrimSpace(url)
 
-	// Check for local paths first (before modifying URL)
+	// Check for file:// URLs first
+	if strings.HasPrefix(url, "file://") {
+		return url
+	}
+
+	// Check for absolute paths (UNIX-style)
+	if strings.HasPrefix(url, "/") {
+		return url
+	}
+
+	// Check for local paths (before modifying URL)
 	if strings.HasPrefix(url, "./") || strings.HasPrefix(url, "../") {
 		return url
 	}

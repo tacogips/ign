@@ -11,12 +11,10 @@ import (
 	"github.com/tacogips/ign/internal/template/provider"
 )
 
-// InitOptions contains options for project initialization.
-type InitOptions struct {
+// CheckoutOptions contains options for project checkout.
+type CheckoutOptions struct {
 	// OutputDir is the directory where project files will be generated.
 	OutputDir string
-	// ConfigPath is the path to ign-var.json.
-	ConfigPath string
 	// Overwrite determines whether to overwrite existing files.
 	Overwrite bool
 	// DryRun simulates generation without writing files.
@@ -27,8 +25,8 @@ type InitOptions struct {
 	GitHubToken string
 }
 
-// InitResult contains the results of project initialization.
-type InitResult struct {
+// CheckoutResult contains the results of project checkout.
+type CheckoutResult struct {
 	// FilesCreated is the number of new files created.
 	FilesCreated int
 	// FilesSkipped is the number of files skipped (already exist).
@@ -41,48 +39,50 @@ type InitResult struct {
 	Files []string
 }
 
-// Init initializes a project from a template using build configuration.
-// Loads ign-var.json, fetches template, and generates project files.
-func Init(ctx context.Context, opts InitOptions) (*InitResult, error) {
-	debug.DebugSection("[app] Init workflow start")
+// Checkout generates project files from template using configuration.
+// Loads .ign-config/ign-var.json, fetches template, and generates project files.
+func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error) {
+	configPath := ".ign-config/ign-var.json"
+
+	debug.DebugSection("[app] Checkout workflow start")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)
-	debug.DebugValue("[app] ConfigPath", opts.ConfigPath)
+	debug.DebugValue("[app] ConfigPath", configPath)
 	debug.DebugValue("[app] Overwrite", opts.Overwrite)
 	debug.DebugValue("[app] DryRun", opts.DryRun)
 	debug.DebugValue("[app] Verbose", opts.Verbose)
 
 	// Validate options
-	if err := validateInitOptions(opts); err != nil {
-		debug.Debug("[app] Init options validation failed: %v", err)
-		return nil, NewValidationError("invalid init options", err)
+	if err := validateCheckoutOptions(opts); err != nil {
+		debug.Debug("[app] Checkout options validation failed: %v", err)
+		return nil, NewValidationError("invalid checkout options", err)
 	}
-	debug.Debug("[app] Init options validated successfully")
+	debug.Debug("[app] Checkout options validated successfully")
 
 	// Load ign-var.json
-	debug.Debug("[app] Loading configuration from: %s", opts.ConfigPath)
-	ignVar, err := config.LoadIgnVarJson(opts.ConfigPath)
+	debug.Debug("[app] Loading configuration from: %s", configPath)
+	ignVar, err := config.LoadIgnVarJson(configPath)
 	if err != nil {
 		debug.Debug("[app] Failed to load configuration: %v", err)
-		return nil, NewInitError("failed to load configuration", err)
+		return nil, NewCheckoutError("failed to load configuration", err)
 	}
 	debug.Debug("[app] Configuration loaded successfully")
 
 	// Validate template source
 	if ignVar.Template.URL == "" {
 		debug.Debug("[app] Template URL is empty in configuration")
-		return nil, NewInitError("template URL is empty in configuration", nil)
+		return nil, NewCheckoutError("template URL is empty in configuration", nil)
 	}
 	debug.DebugValue("[app] Template URL", ignVar.Template.URL)
 	debug.DebugValue("[app] Template Ref", ignVar.Template.Ref)
 	debug.DebugValue("[app] Template Path", ignVar.Template.Path)
 
-	// Get build directory from config path
-	buildDir := filepath.Dir(opts.ConfigPath)
-	debug.DebugValue("[app] Build directory", buildDir)
+	// Get config directory from config path
+	configDir := filepath.Dir(configPath)
+	debug.DebugValue("[app] Config directory", configDir)
 
 	// Load and process variables (resolve @file: references)
 	debug.Debug("[app] Loading variables")
-	vars, err := LoadVariables(ignVar, buildDir)
+	vars, err := LoadVariables(ignVar, configDir)
 	if err != nil {
 		debug.Debug("[app] Failed to load variables: %v", err)
 		return nil, err
@@ -96,7 +96,7 @@ func Init(ctx context.Context, opts InitOptions) (*InitResult, error) {
 	prov, err := provider.NewProviderWithToken(normalizedURL, opts.GitHubToken)
 	if err != nil {
 		debug.Debug("[app] Failed to create provider: %v", err)
-		return nil, NewInitError("failed to create provider", err)
+		return nil, NewCheckoutError("failed to create provider", err)
 	}
 	debug.Debug("[app] Template provider created successfully")
 
@@ -105,7 +105,7 @@ func Init(ctx context.Context, opts InitOptions) (*InitResult, error) {
 	templateRef, err := prov.Resolve(normalizedURL)
 	if err != nil {
 		debug.Debug("[app] Failed to resolve template URL: %v", err)
-		return nil, NewInitError("failed to resolve template URL", err)
+		return nil, NewCheckoutError("failed to resolve template URL", err)
 	}
 	debug.Debug("[app] Template URL resolved successfully")
 
@@ -160,15 +160,15 @@ func Init(ctx context.Context, opts InitOptions) (*InitResult, error) {
 
 	if err != nil {
 		debug.Debug("[app] Generation failed: %v", err)
-		return nil, NewInitError("generation failed", err)
+		return nil, NewCheckoutError("generation failed", err)
 	}
 	debug.Debug("[app] Generation completed successfully")
 	debug.DebugValue("[app] Files created", genResult.FilesCreated)
 	debug.DebugValue("[app] Files skipped", genResult.FilesSkipped)
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
 
-	// Convert generator result to init result
-	result := &InitResult{
+	// Convert generator result to checkout result
+	result := &CheckoutResult{
 		FilesCreated:     genResult.FilesCreated,
 		FilesSkipped:     genResult.FilesSkipped,
 		FilesOverwritten: genResult.FilesOverwritten,
@@ -176,22 +176,18 @@ func Init(ctx context.Context, opts InitOptions) (*InitResult, error) {
 		Files:            genResult.Files,
 	}
 
-	debug.Debug("[app] Init workflow completed successfully")
+	debug.Debug("[app] Checkout workflow completed successfully")
 	return result, nil
 }
 
-// validateInitOptions validates init options.
-func validateInitOptions(opts InitOptions) error {
+// validateCheckoutOptions validates checkout options.
+func validateCheckoutOptions(opts CheckoutOptions) error {
 	if opts.OutputDir == "" {
 		return fmt.Errorf("output directory cannot be empty")
 	}
 
 	if err := ValidateOutputDir(opts.OutputDir); err != nil {
 		return err
-	}
-
-	if opts.ConfigPath == "" {
-		return fmt.Errorf("config path cannot be empty")
 	}
 
 	return nil

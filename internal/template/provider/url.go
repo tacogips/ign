@@ -104,17 +104,46 @@ func parseOwnerRepoPath(s string) (*model.TemplateRef, error) {
 	return ref, nil
 }
 
+// ParseFileURL extracts the filesystem path from a file:// URL.
+// Supported formats:
+//   - file://./relative/path  -> ./relative/path
+//   - file://../relative/path -> ../relative/path
+//   - file:///absolute/path   -> /absolute/path
+func ParseFileURL(fileURL string) (string, error) {
+	if !strings.HasPrefix(fileURL, "file://") {
+		return "", fmt.Errorf("not a file:// URL: %s", fileURL)
+	}
+
+	// Remove file:// prefix
+	path := strings.TrimPrefix(fileURL, "file://")
+
+	if path == "" {
+		return "", fmt.Errorf("file:// URL has no path")
+	}
+
+	return path, nil
+}
+
 // IsLocalPath checks if a path is a local filesystem path.
-// Returns true for relative paths starting with "./" or "../".
+// Returns true for:
+//   - Relative paths starting with "./" or "../"
+//   - Absolute paths (starting with "/")
+//   - file:// URL scheme
+//
 // Returns false for GitHub-style URLs.
 func IsLocalPath(path string) bool {
 	if path == "" {
 		return false
 	}
 
-	// Absolute paths are not considered local for portability
+	// file:// URL scheme is local
+	if strings.HasPrefix(path, "file://") {
+		return true
+	}
+
+	// Absolute paths are now considered local
 	if filepath.IsAbs(path) {
-		return false
+		return true
 	}
 
 	// Relative paths starting with "./" or "../"
@@ -140,7 +169,8 @@ func IsLocalPath(path string) bool {
 // ValidateLocalPath validates a local filesystem path for security.
 // Returns an error if:
 //   - Path contains ".." (traversal)
-//   - Path is absolute (portability)
+//
+// Note: Absolute paths are now allowed.
 func ValidateLocalPath(path string) error {
 	if path == "" {
 		return fmt.Errorf("path cannot be empty")
@@ -149,11 +179,6 @@ func ValidateLocalPath(path string) error {
 	// Check for ".." components (path traversal)
 	if strings.Contains(path, "..") {
 		return fmt.Errorf("path contains '..' which is not allowed for security: %s", path)
-	}
-
-	// Check for absolute paths (portability)
-	if filepath.IsAbs(path) {
-		return fmt.Errorf("absolute paths are not allowed, use relative paths: %s", path)
 	}
 
 	return nil

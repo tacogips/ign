@@ -113,7 +113,7 @@ type DefaultGenerator struct {
 2. Create output directory if needed
 3. For each file in Template.Files:
    - Check if should be ignored (filter.go)
-   - Skip ign.json and .ign-build directory
+   - Skip ign.json and .ign-config directory
    - Check if output file exists
    - If exists and !overwrite: skip and increment FilesSkipped
    - Determine if binary (processor.go)
@@ -209,7 +209,7 @@ func MatchesPattern(path, pattern string) bool
 **Logic**:
 - `IsSpecialFile`: Return true for:
   - "ign.json" (exact match)
-  - Paths starting with ".ign-build/" or ".ign-build"
+  - Paths starting with ".ign-config/" or ".ign-config"
 - `ShouldIgnoreFile`:
   - Check IsSpecialFile first
   - Then check against each ignore pattern using glob matching
@@ -281,7 +281,7 @@ const (
 - Other permissions use system defaults (0644 for regular files)
 
 **Special Files**:
-- `.ign-build/`: Never touched during generation
+- `.ign-config/`: Never touched during generation
 - `ign.json`: Never copied to output (template config only)
 - Hidden files (`.file`): Processed normally (unless filtered)
 - Binary files: Copied as-is (no template processing)
@@ -349,7 +349,7 @@ Non-critical errors (accumulate and continue):
 ✓ Executable permissions preserved (if PreserveExecutable=true)
 ✓ Ignore patterns applied
 ✓ ign.json excluded from output
-✓ .ign-build directory excluded from output
+✓ .ign-config directory excluded from output
 ✓ Unit tests pass
 ✓ `go build ./...` succeeds
 ✓ `go test ./internal/template/generator/...` passes
