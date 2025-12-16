@@ -181,6 +181,8 @@ See [CLI Reference](reference/cli-commands.md) for complete command documentatio
 
 **Required vs Optional:** Variables without default value are required (must be in ign-var.json). Variables with default value are optional (use default if not provided).
 
+**Filename Variables:** Variables can be used in filenames and directory names (e.g., `@ign-var:project_name@.go` or `cmd/@ign-var:app_name@/main.go`). The same variable syntax applies to both file content and filenames.
+
 See [Template Syntax Reference](reference/template-syntax.md) for detailed syntax documentation.
 
 ---

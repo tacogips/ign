@@ -1,0 +1,3 @@
+environment: @ign-var:env=dev@
+app_name: @ign-var:app_name@
+module: @ign-var:module_name@

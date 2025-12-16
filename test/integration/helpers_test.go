@@ -58,6 +58,61 @@ func copyFixtureToTemp(t *testing.T, fixtureName, tempDir string) string {
 	return "./" + fixtureName
 }
 
+// copyTestdataToTemp copies a testdata directory to a temp directory
+// and returns the path to the copied template (relative to tempDir).
+func copyTestdataToTemp(t *testing.T, testdataPath, tempDir string) string {
+	t.Helper()
+
+	// Get the absolute path to the testdata directory
+	absPath, err := filepath.Abs(testdataPath)
+	if err != nil {
+		t.Fatalf("failed to get testdata path: %v", err)
+	}
+
+	// Extract the base name for the destination
+	baseName := filepath.Base(absPath)
+
+	// Create destination directory
+	destDir := filepath.Join(tempDir, baseName)
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		t.Fatalf("failed to create destination directory: %v", err)
+	}
+
+	// Copy all files from testdata to destination
+	err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Get relative path from testdata root
+		relPath, err := filepath.Rel(absPath, path)
+		if err != nil {
+			return err
+		}
+
+		destPath := filepath.Join(destDir, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(destPath, info.Mode())
+		}
+
+		// Copy file
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		return os.WriteFile(destPath, data, info.Mode())
+	})
+
+	if err != nil {
+		t.Fatalf("failed to copy testdata: %v", err)
+	}
+
+	// Return relative path from tempDir
+	return "./" + baseName
+}
+
 // contains checks if string s contains substring substr
 func contains(s, substr string) bool {
 	return len(s) > 0 && len(substr) > 0 && (s == substr || len(s) >= len(substr) && findSubstring(s, substr))

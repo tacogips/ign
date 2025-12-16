@@ -1,0 +1,6 @@
+package @ign-var:module_name@
+
+// @ign-var:module_name@ module implementation
+func Process() {
+	// Implementation here
+}
