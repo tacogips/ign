@@ -88,6 +88,61 @@ func TestProcessFilename(t *testing.T) {
 			want:    "version-2.txt",
 			wantErr: false,
 		},
+		{
+			name:     "raw directive to escape @ in filename",
+			filePath: "email@ign-raw:@@example.com.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "email@example.com.txt",
+			wantErr: false,
+		},
+		{
+			name:     "raw directive with variable syntax inside",
+			filePath: "doc-@ign-raw:@ign-var:name@@.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "doc-@ign-var:name@.txt",
+			wantErr: false,
+		},
+		{
+			name:     "ign-if directive is NOT processed in filename (kept as-is)",
+			filePath: "config@ign-if:debug@-debug@ign-endif@.txt",
+			variables: map[string]interface{}{
+				"debug": true,
+			},
+			want:    "config@ign-if:debug@-debug@ign-endif@.txt",
+			wantErr: false,
+		},
+		{
+			name:     "ign-comment directive is NOT processed in filename (kept as-is)",
+			filePath: "file@ign-comment:note@.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "file@ign-comment:note@.txt",
+			wantErr: false,
+		},
+		{
+			name:     "ign-include directive is NOT processed in filename (kept as-is)",
+			filePath: "output@ign-include:header.txt@.log",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "output@ign-include:header.txt@.log",
+			wantErr: false,
+		},
+		{
+			name:     "only ign-var and ign-raw are processed in filenames",
+			filePath: "@ign-var:name@-@ign-raw:@@@ign-if:flag@-test.txt",
+			variables: map[string]interface{}{
+				"name": "output",
+				"flag": true,
+			},
+			want:    "output-@@ign-if:flag@-test.txt",
+			wantErr: false,
+		},
 		// Error cases
 		{
 			name:     "missing required variable",

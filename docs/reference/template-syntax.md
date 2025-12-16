@@ -260,10 +260,17 @@ package main
 
 Variables can be used in filenames and directory names, allowing dynamic file naming based on template variables.
 
+**Supported Directives in Filenames:**
+- `@ign-var:NAME@` - Variable substitution (all variants: with type, with default, etc.)
+- `@ign-raw:CONTENT@` - Raw/escape directive for literal `@` characters
+
+**IMPORTANT:** Only `@ign-var:` and `@ign-raw:` directives are processed in filenames. Other directives (`@ign-if:`, `@ign-comment:`, `@ign-include:`) are kept as-is in the filename and NOT processed. This is a security and simplicity design decision.
+
 **Syntax:**
 - Use the same `@ign-var:NAME@` syntax in file and directory names
 - All variable syntaxes are supported (with type, with default, etc.)
 - Variables are processed before files are written to disk
+- Use `@ign-raw:` to escape `@` characters in filenames (e.g., email addresses)
 
 **Template Structure Example:**
 ```
@@ -364,6 +371,24 @@ Generated:
 ```
 src/api/handlers/user.go
 ```
+
+**Escaping `@` in Filenames:**
+
+Use `@ign-raw:` to include literal `@` characters in filenames:
+
+Template filename: `support@ign-raw:@@company.com.txt`
+
+Generated: `support@company.com.txt`
+
+**Other Directives Are NOT Processed:**
+
+Filenames do NOT process `@ign-if:`, `@ign-comment:`, or `@ign-include:` directives - they are kept literally:
+
+Template filename: `config@ign-if:prod@-prod@ign-endif@.yaml`
+
+Generated: `config@ign-if:prod@-prod@ign-endif@.yaml` (kept as-is, NOT processed)
+
+This design ensures filenames remain predictable and secure without complex conditional logic.
 
 **Security and Validation:**
 - Variable values containing `..` are rejected
@@ -1052,18 +1077,20 @@ ign validate
 
 ## Appendix A: Complete Directive Reference
 
-| Directive | Syntax | Description |
-|-----------|--------|-------------|
-| `@ign-var:` | `@ign-var:NAME@` | Variable substitution (required) - usable in file content and filenames |
-| `@ign-var:` | `@ign-var:NAME:TYPE@` | Variable with type validation (required) - usable in file content and filenames |
-| `@ign-var:` | `@ign-var:NAME=DEFAULT@` | Variable with default (optional) - usable in file content and filenames |
-| `@ign-var:` | `@ign-var:NAME:TYPE=DEFAULT@` | Variable with type and default (optional) - usable in file content and filenames |
-| `@ign-comment:` | `@ign-comment:TEXT@` | Template comment (line removed from output) |
-| `@ign-raw:` | `@ign-raw:CONTENT@` | Literal output (escape) |
-| `@ign-if:` | `@ign-if:VAR@...\@ign-endif@` | Conditional block |
-| `@ign-else@` | `@ign-else@` | Alternative block for if |
-| `@ign-endif@` | `@ign-endif@` | End conditional block |
-| `@ign-include:` | `@ign-include:PATH@` | Include file content |
+| Directive | Syntax | In Content | In Filename | Description |
+|-----------|--------|------------|-------------|-------------|
+| `@ign-var:` | `@ign-var:NAME@` | ✓ | ✓ | Variable substitution (required) |
+| `@ign-var:` | `@ign-var:NAME:TYPE@` | ✓ | ✓ | Variable with type validation (required) |
+| `@ign-var:` | `@ign-var:NAME=DEFAULT@` | ✓ | ✓ | Variable with default (optional) |
+| `@ign-var:` | `@ign-var:NAME:TYPE=DEFAULT@` | ✓ | ✓ | Variable with type and default (optional) |
+| `@ign-raw:` | `@ign-raw:CONTENT@` | ✓ | ✓ | Literal output (escape `@` characters) |
+| `@ign-comment:` | `@ign-comment:TEXT@` | ✓ | ✗ | Template comment (line removed from output) |
+| `@ign-if:` | `@ign-if:VAR@...@ign-endif@` | ✓ | ✗ | Conditional block |
+| `@ign-else@` | `@ign-else@` | ✓ | ✗ | Alternative block for if |
+| `@ign-endif@` | `@ign-endif@` | ✓ | ✗ | End conditional block |
+| `@ign-include:` | `@ign-include:PATH@` | ✓ | ✗ | Include file content |
+
+**Note:** Only `@ign-var:` and `@ign-raw:` are processed in filenames. Other directives appear literally in the filename without processing.
 
 ## Appendix B: Variable Type Reference
 

@@ -33,8 +33,9 @@ func ProcessFilename(ctx context.Context, filePath string, vars parser.Variables
 		debug.Debug("[generator] ProcessFilename: processing component[%d]=%s", i, component)
 
 		// Process the component for variable substitution
-		// We use the parser to handle @ign-var: directives
-		processed, err := p.Parse(ctx, []byte(component), vars)
+		// We use ParseFilename to handle only @ign-var: and @ign-raw: directives
+		// Other directives (@ign-if:, @ign-comment:, @ign-include:) are NOT processed in filenames
+		processed, err := p.ParseFilename(ctx, []byte(component), vars)
 		if err != nil {
 			return "", fmt.Errorf("failed to process filename component %q: %w", component, err)
 		}
