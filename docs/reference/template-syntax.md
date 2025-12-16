@@ -256,6 +256,176 @@ Licensed under MIT License
 package main
 ```
 
+### 1.8 Filename Variable Substitution
+
+Variables can be used in filenames and directory names, allowing dynamic file naming based on template variables.
+
+**Supported Directives in Filenames:**
+- `@ign-var:NAME@` - Variable substitution (all variants: with type, with default, etc.)
+- `@ign-raw:CONTENT@` - Raw/escape directive to output literal directive text
+
+**IMPORTANT:** Only `@ign-var:` and `@ign-raw:` directives are processed in filenames. Other directives (`@ign-if:`, `@ign-comment:`, `@ign-include:`) are kept as-is in the filename and NOT processed. This is a security and simplicity design decision.
+
+**Note on `@` Characters:**
+- Plain `@` characters in filenames are NOT directives and work without escaping
+- Example: `email@example.com.txt` works fine as-is
+- Only `@ign-XXX:` patterns are recognized as directives
+- Use `@ign-raw:` only when you need to output literal directive text in filenames
+
+**Syntax:**
+- Use the same `@ign-var:NAME@` syntax in file and directory names
+- All variable syntaxes are supported (with type, with default, etc.)
+- Variables are processed before files are written to disk
+- Use `@ign-raw:` to escape directive patterns (not plain `@` characters)
+
+**Template Structure Example:**
+```
+<ign-root>/
+├── ign.json
+├── cmd/@ign-var:app_name@/
+│   └── main.go
+├── @ign-var:project_name@.go
+└── config-@ign-var:env@.yaml
+```
+
+**With ign-var.json:**
+```json
+{
+  "variables": {
+    "app_name": "myapp",
+    "project_name": "handler",
+    "env": "production"
+  }
+}
+```
+
+**Generated File Structure:**
+```
+<output-dir>/
+├── cmd/myapp/
+│   └── main.go
+├── handler.go
+└── config-production.yaml
+```
+
+**Rules:**
+- Variables in filenames are processed the same way as content variables
+- Type validation applies (use string variables for filenames)
+- Default values work in filenames
+- Required variables must be provided
+- The resulting path must be valid for the target filesystem
+- Path traversal (e.g., `../`) in variable values is rejected for security
+
+**Example 1: Project-Specific Files**
+
+Template:
+```
+templates/
+├── @ign-var:project_name@/
+│   ├── @ign-var:project_name@.go
+│   └── @ign-var:project_name@_test.go
+```
+
+With `project_name: "auth"`:
+```
+output/
+├── auth/
+│   ├── auth.go
+│   └── auth_test.go
+```
+
+**Example 2: Environment-Specific Configuration**
+
+Template:
+```
+config/
+├── @ign-var:env=dev@.yaml
+└── secrets-@ign-var:env=dev@.yaml
+```
+
+With `env: "staging"`:
+```
+config/
+├── staging.yaml
+└── secrets-staging.yaml
+```
+
+Without `env` variable (uses default):
+```
+config/
+├── dev.yaml
+└── secrets-dev.yaml
+```
+
+**Example 3: Multiple Variables in Path**
+
+Template:
+```
+src/@ign-var:module_name@/@ign-var:component_type@/@ign-var:component_name@.go
+```
+
+With variables:
+```json
+{
+  "module_name": "api",
+  "component_type": "handlers",
+  "component_name": "user"
+}
+```
+
+Generated:
+```
+src/api/handlers/user.go
+```
+
+**Plain `@` Characters in Filenames:**
+
+Plain `@` characters work without escaping since they are not directive patterns:
+
+Template filename: `email@example.com.txt`
+
+Generated: `email@example.com.txt` (no escaping needed)
+
+**Escaping Directive Patterns:**
+
+Use `@ign-raw:` when you need literal directive text in the output:
+
+Template filename: `doc-@ign-raw:@ign-var:name@@.txt`
+
+Generated: `doc-@ign-var:name@.txt` (directive pattern appears literally)
+
+**Other Directives Are NOT Processed:**
+
+Filenames do NOT process `@ign-if:`, `@ign-comment:`, or `@ign-include:` directives - they are kept literally:
+
+Template filename: `config@ign-if:prod@-prod@ign-endif@.yaml`
+
+Generated: `config@ign-if:prod@-prod@ign-endif@.yaml` (kept as-is, NOT processed)
+
+This design ensures filenames remain predictable and secure without complex conditional logic.
+
+**Security and Validation:**
+- Variable values containing `..` are rejected
+- Absolute paths in variable values are rejected
+- Invalid filesystem characters cause errors
+- Empty variable values in filenames cause errors
+
+**Error Example:**
+
+Template filename: `@ign-var:name@.go`
+
+With malicious variable:
+```json
+{
+  "name": "../etc/passwd"
+}
+```
+
+Error:
+```
+Error: Invalid filename variable value: "../etc/passwd" contains path traversal
+```
+
 ---
 
 ## 2. Template Comments
@@ -921,18 +1091,20 @@ ign validate
 
 ## Appendix A: Complete Directive Reference
 
-| Directive | Syntax | Description |
-|-----------|--------|-------------|
-| `@ign-var:` | `@ign-var:NAME@` | Variable substitution (required) |
-| `@ign-var:` | `@ign-var:NAME:TYPE@` | Variable with type validation (required) |
-| `@ign-var:` | `@ign-var:NAME=DEFAULT@` | Variable with default (optional) |
-| `@ign-var:` | `@ign-var:NAME:TYPE=DEFAULT@` | Variable with type and default (optional) |
-| `@ign-comment:` | `@ign-comment:TEXT@` | Template comment (line removed from output) |
-| `@ign-raw:` | `@ign-raw:CONTENT@` | Literal output (escape) |
-| `@ign-if:` | `@ign-if:VAR@...\@ign-endif@` | Conditional block |
-| `@ign-else@` | `@ign-else@` | Alternative block for if |
-| `@ign-endif@` | `@ign-endif@` | End conditional block |
-| `@ign-include:` | `@ign-include:PATH@` | Include file content |
+| Directive | Syntax | In Content | In Filename | Description |
+|-----------|--------|------------|-------------|-------------|
+| `@ign-var:` | `@ign-var:NAME@` | ✓ | ✓ | Variable substitution (required) |
+| `@ign-var:` | `@ign-var:NAME:TYPE@` | ✓ | ✓ | Variable with type validation (required) |
+| `@ign-var:` | `@ign-var:NAME=DEFAULT@` | ✓ | ✓ | Variable with default (optional) |
+| `@ign-var:` | `@ign-var:NAME:TYPE=DEFAULT@` | ✓ | ✓ | Variable with type and default (optional) |
+| `@ign-raw:` | `@ign-raw:CONTENT@` | ✓ | ✓ | Literal output (escape `@` characters) |
+| `@ign-comment:` | `@ign-comment:TEXT@` | ✓ | ✗ | Template comment (line removed from output) |
+| `@ign-if:` | `@ign-if:VAR@...@ign-endif@` | ✓ | ✗ | Conditional block |
+| `@ign-else@` | `@ign-else@` | ✓ | ✗ | Alternative block for if |
+| `@ign-endif@` | `@ign-endif@` | ✓ | ✗ | End conditional block |
+| `@ign-include:` | `@ign-include:PATH@` | ✓ | ✗ | Include file content |
+
+**Note:** Only `@ign-var:` and `@ign-raw:` are processed in filenames. Other directives appear literally in the filename without processing.
 
 ## Appendix B: Variable Type Reference
 

@@ -138,9 +138,18 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			continue
 		}
 
+		// Process filename for variable substitution
+		processedFilePath, err := ProcessFilename(ctx, file.Path, opts.Variables, g.parser)
+		if err != nil {
+			// Record error but continue processing
+			result.Errors = append(result.Errors, fmt.Errorf("failed to process filename %s: %w", file.Path, err))
+			continue
+		}
+
 		// Construct output path
-		outputPath := filepath.Join(opts.OutputDir, file.Path)
-		debug.Debug("[generator] Processing file: %s -> %s (size: %d bytes)", file.Path, outputPath, len(file.Content))
+		outputPath := filepath.Join(opts.OutputDir, processedFilePath)
+		debug.Debug("[generator] Processing file: %s -> %s (processed: %s, size: %d bytes)",
+			file.Path, outputPath, processedFilePath, len(file.Content))
 
 		// Add to processed files list
 		result.Files = append(result.Files, outputPath)

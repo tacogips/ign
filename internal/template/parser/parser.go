@@ -17,6 +17,10 @@ type Parser interface {
 	// ParseWithContext processes a template with full parse context.
 	ParseWithContext(ctx context.Context, input []byte, pctx *ParseContext) ([]byte, error)
 
+	// ParseFilename processes a filename with only @ign-var: and @ign-raw: directives.
+	// Other directives (@ign-if:, @ign-comment:, @ign-include:) are NOT processed.
+	ParseFilename(ctx context.Context, input []byte, vars Variables) ([]byte, error)
+
 	// Validate validates template syntax without processing.
 	Validate(ctx context.Context, input []byte) error
 
@@ -64,6 +68,45 @@ func (p *DefaultParser) ParseWithContext(ctx context.Context, input []byte, pctx
 	debug.Debug("[parser] ParseWithContext: depth=%d, file=%s, root=%s",
 		pctx.IncludeDepth, pctx.CurrentFile, pctx.TemplateRoot)
 	return parseInternal(ctx, input, pctx)
+}
+
+// ParseFilename processes a filename with only @ign-var: and @ign-raw: directives.
+// This is a simplified parser that skips @ign-if:, @ign-comment:, and @ign-include: directives.
+func (p *DefaultParser) ParseFilename(ctx context.Context, input []byte, vars Variables) ([]byte, error) {
+	debug.Debug("[parser] ParseFilename: starting with input size=%d bytes", len(input))
+	return parseFilenameInternal(ctx, input, vars)
+}
+
+// parseFilenameInternal processes filenames with only @ign-var: and @ign-raw: directives.
+// Processing order:
+// 1. Process @ign-raw: directives (replace with placeholders)
+// 2. Process @ign-var: directives
+// 3. Restore raw content from placeholders
+func parseFilenameInternal(ctx context.Context, input []byte, vars Variables) ([]byte, error) {
+	var err error
+	result := input
+
+	// Step 1: Process @ign-raw: directives first (replace with placeholders to prevent further processing)
+	debug.Debug("[parser] Filename Step 1: Extracting raw directives")
+	result, rawContent, err := extractRawDirectives(result)
+	if err != nil {
+		return nil, err
+	}
+	debug.Debug("[parser] Filename Step 1: Extracted %d raw directive(s)", len(rawContent))
+
+	// Step 2: Process @ign-var: directives
+	debug.Debug("[parser] Filename Step 2: Processing variables")
+	result, err = processVarDirectivesInText(result, vars)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 3: Restore raw content from placeholders
+	debug.Debug("[parser] Filename Step 3: Restoring raw content")
+	result = restoreRawContent(result, rawContent)
+
+	debug.Debug("[parser] Filename parsing complete, output size=%d bytes", len(result))
+	return result, nil
 }
 
 // parseInternal is the internal parsing implementation.

@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master, develop, featuer/* ]
+  pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
+    branches: [ main, master, develop ]
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.4'
+        cache: true
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run gofmt
+      run: |
+        if [ -n "$(gofmt -s -l .)" ]; then
+          echo "Go code is not formatted:"
+          gofmt -s -d .
+          exit 1
+        fi
+
+    - name: Run go build
+      run: go build -v ./...
+
+    - name: Run go test
+      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+    - name: Display test coverage
+      run: go tool cover -func=coverage.out
+
+    - name: Upload coverage to artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.out
+        retention-days: 7
