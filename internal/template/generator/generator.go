@@ -40,6 +40,20 @@ type GenerateOptions struct {
 	Verbose bool
 }
 
+// DryRunFile contains information about a file that would be created in dry-run mode.
+type DryRunFile struct {
+	// Path is the output file path.
+	Path string
+	// Content is the processed file content.
+	Content []byte
+	// Exists indicates if the file already exists.
+	Exists bool
+	// WouldOverwrite indicates if the file would be overwritten (Exists && Overwrite option).
+	WouldOverwrite bool
+	// WouldSkip indicates if the file would be skipped (Exists && !Overwrite option).
+	WouldSkip bool
+}
+
 // GenerateResult contains generation statistics.
 type GenerateResult struct {
 	// FilesCreated is the number of new files created.
@@ -56,6 +70,12 @@ type GenerateResult struct {
 
 	// Files contains the paths of all files processed (created, skipped, or overwritten).
 	Files []string
+
+	// DryRunFiles contains detailed information for dry-run mode (only populated in dry-run).
+	DryRunFiles []DryRunFile
+
+	// Directories contains directories that would be created (only populated in dry-run).
+	Directories []string
 }
 
 // DefaultGenerator implements Generator.
@@ -103,9 +123,14 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Initialize result
 	result := &GenerateResult{
-		Errors: []error{},
-		Files:  []string{},
+		Errors:      []error{},
+		Files:       []string{},
+		DryRunFiles: []DryRunFile{},
+		Directories: []string{},
 	}
+
+	// Track directories for dry-run mode
+	dirsToCreate := make(map[string]bool)
 
 	// Get template settings
 	settings := getTemplateSettings(opts.Template)
@@ -151,6 +176,21 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		debug.Debug("[generator] Processing file: %s -> %s (processed: %s, size: %d bytes)",
 			file.Path, outputPath, processedFilePath, len(file.Content))
 
+		// Track parent directories for dry-run
+		if dryRun {
+			dir := filepath.Dir(outputPath)
+			for dir != "." && dir != "/" && dir != opts.OutputDir {
+				if !dirsToCreate[dir] {
+					dirsToCreate[dir] = true
+				}
+				dir = filepath.Dir(dir)
+			}
+			// Also track the output directory itself
+			if !dirsToCreate[opts.OutputDir] {
+				dirsToCreate[opts.OutputDir] = true
+			}
+		}
+
 		// Add to processed files list
 		result.Files = append(result.Files, outputPath)
 
@@ -162,6 +202,14 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			// Skip existing file
 			debug.Debug("[generator] Skipping existing file: %s", outputPath)
 			result.FilesSkipped++
+			if dryRun {
+				result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+					Path:      outputPath,
+					Content:   nil,
+					Exists:    true,
+					WouldSkip: true,
+				})
+			}
 			continue
 		}
 
@@ -188,6 +236,13 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			}
 		} else {
 			debug.Debug("[generator] Dry run: would write %s (size: %d bytes)", outputPath, len(processed))
+			result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+				Path:           outputPath,
+				Content:        processed,
+				Exists:         fileExists,
+				WouldOverwrite: fileExists,
+				WouldSkip:      false,
+			})
 		}
 
 		// Update statistics
@@ -198,14 +253,53 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		}
 	}
 
+	// Collect directories for dry-run result
+	if dryRun {
+		for dir := range dirsToCreate {
+			result.Directories = append(result.Directories, dir)
+		}
+		// Sort directories for consistent output
+		sortPaths(result.Directories)
+	}
+
 	// Log final statistics
 	debug.Debug("[generator] Generation complete: created=%d, overwritten=%d, skipped=%d, errors=%d",
 		result.FilesCreated, result.FilesOverwritten, result.FilesSkipped, len(result.Errors))
 	if dryRun {
 		debug.Debug("[generator] Dry run mode: no files were actually written")
+		debug.Debug("[generator] Directories that would be created: %d", len(result.Directories))
 	}
 
 	return result, nil
+}
+
+// sortPaths sorts paths in a way that parent directories come before children.
+func sortPaths(paths []string) {
+	// Simple sort by path depth then lexicographically
+	for i := 0; i < len(paths)-1; i++ {
+		for j := i + 1; j < len(paths); j++ {
+			iDepth := pathDepth(paths[i])
+			jDepth := pathDepth(paths[j])
+			if iDepth > jDepth || (iDepth == jDepth && paths[i] > paths[j]) {
+				paths[i], paths[j] = paths[j], paths[i]
+			}
+		}
+	}
+}
+
+// pathDepth returns the depth of a path (number of path separators).
+func pathDepth(path string) int {
+	clean := filepath.Clean(path)
+	if clean == "." || clean == "/" {
+		return 0
+	}
+	depth := 0
+	for _, c := range clean {
+		if c == filepath.Separator {
+			depth++
+		}
+	}
+	return depth
 }
 
 // validateOptions validates GenerateOptions.

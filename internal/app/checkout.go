@@ -25,6 +25,20 @@ type CheckoutOptions struct {
 	GitHubToken string
 }
 
+// DryRunFile contains information about a file that would be created in dry-run mode.
+type DryRunFile struct {
+	// Path is the output file path.
+	Path string
+	// Content is the processed file content.
+	Content []byte
+	// Exists indicates if the file already exists.
+	Exists bool
+	// WouldOverwrite indicates if the file would be overwritten.
+	WouldOverwrite bool
+	// WouldSkip indicates if the file would be skipped.
+	WouldSkip bool
+}
+
 // CheckoutResult contains the results of project checkout.
 type CheckoutResult struct {
 	// FilesCreated is the number of new files created.
@@ -37,6 +51,10 @@ type CheckoutResult struct {
 	Errors []error
 	// Files contains the paths of all files processed.
 	Files []string
+	// DryRunFiles contains detailed information for dry-run mode.
+	DryRunFiles []DryRunFile
+	// Directories contains directories that would be created (dry-run only).
+	Directories []string
 }
 
 // Checkout generates project files from template using configuration.
@@ -174,6 +192,21 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 		FilesOverwritten: genResult.FilesOverwritten,
 		Errors:           genResult.Errors,
 		Files:            genResult.Files,
+		Directories:      genResult.Directories,
+	}
+
+	// Convert dry-run files
+	if opts.DryRun && len(genResult.DryRunFiles) > 0 {
+		result.DryRunFiles = make([]DryRunFile, len(genResult.DryRunFiles))
+		for i, f := range genResult.DryRunFiles {
+			result.DryRunFiles[i] = DryRunFile{
+				Path:           f.Path,
+				Content:        f.Content,
+				Exists:         f.Exists,
+				WouldOverwrite: f.WouldOverwrite,
+				WouldSkip:      f.WouldSkip,
+			}
+		}
 	}
 
 	debug.Debug("[app] Checkout workflow completed successfully")
