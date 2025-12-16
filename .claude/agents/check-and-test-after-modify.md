@@ -220,9 +220,15 @@ This is useless because:
 
 ### For Compilation Checks
 
-1. **Always run**: `go build ./...` to verify compilation
-2. **Also run**: `go vet ./...` to catch common issues
-3. **If Taskfile available**: Check for `task check` or similar targets
+1. **Fast compile check (recommended first)**: `go build -o /dev/null ./...` to verify compilation without producing binaries
+   - Faster than regular build since it discards output
+   - Ideal for quick compile verification
+   - Use `/dev/null` on Linux/Mac, `nul` on Windows
+2. **Full build (if needed)**: `go build ./...` to produce actual binaries
+   - Use when you need the binary output
+   - Slower than compile-only check
+3. **Always run**: `go vet ./...` to catch common issues and potential bugs
+4. **If Taskfile available**: Check for `task check` or similar targets
 
 ### For Testing
 
@@ -257,10 +263,13 @@ go test -cover ./...
 ### Compilation Commands
 
 ```bash
-# Check compilation
+# Fast compile check (recommended - discards binary output)
+go build -o /dev/null ./...
+
+# Full build (produces binaries)
 go build ./...
 
-# Run go vet
+# Run go vet (static analysis)
 go vet ./...
 
 # Format check

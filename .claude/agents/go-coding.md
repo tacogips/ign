@@ -87,7 +87,8 @@ Follow this workflow:
 3. **Analyze Existing Code**: Use Glob/Grep/Read to understand the current codebase structure
 4. **Implement Code**: Use Edit/Write tools to create or modify Go files
 5. **Run go mod tidy**: Execute `go mod tidy` after adding/removing imports
-6. **Run go build**: Execute `go build ./...` to verify compilation
+6. **Run fast compile check**: Execute `go build -o /dev/null ./...` to verify compilation quickly
+   - Faster than regular build since it discards output
    - If build fails: Investigate the cause, fix the code, and repeat until build passes
 7. **Run go test**: Execute `go test ./...` to verify tests pass
    - If tests fail: Investigate the cause, fix the code, and repeat until all tests pass
