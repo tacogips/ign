@@ -148,7 +148,7 @@
 
             src = ./.;
 
-            vendorHash = "sha256-7K17JaXFsjf163g5PXCb5ng2gYdotnZ2IDKk8KFjNj0=";
+            vendorHash = "sha256-esmcKwW2KbmEXIukBKUZgN32qovcSiVld41ZqAxN+y4=";
 
             subPackages = [ "cmd/ign" ];
 
