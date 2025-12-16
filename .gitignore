@@ -43,3 +43,4 @@ result
 
 ## go binaries
 /ign
+/vendor/
