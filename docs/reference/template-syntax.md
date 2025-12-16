@@ -262,15 +262,21 @@ Variables can be used in filenames and directory names, allowing dynamic file na
 
 **Supported Directives in Filenames:**
 - `@ign-var:NAME@` - Variable substitution (all variants: with type, with default, etc.)
-- `@ign-raw:CONTENT@` - Raw/escape directive for literal `@` characters
+- `@ign-raw:CONTENT@` - Raw/escape directive to output literal directive text
 
 **IMPORTANT:** Only `@ign-var:` and `@ign-raw:` directives are processed in filenames. Other directives (`@ign-if:`, `@ign-comment:`, `@ign-include:`) are kept as-is in the filename and NOT processed. This is a security and simplicity design decision.
+
+**Note on `@` Characters:**
+- Plain `@` characters in filenames are NOT directives and work without escaping
+- Example: `email@example.com.txt` works fine as-is
+- Only `@ign-XXX:` patterns are recognized as directives
+- Use `@ign-raw:` only when you need to output literal directive text in filenames
 
 **Syntax:**
 - Use the same `@ign-var:NAME@` syntax in file and directory names
 - All variable syntaxes are supported (with type, with default, etc.)
 - Variables are processed before files are written to disk
-- Use `@ign-raw:` to escape `@` characters in filenames (e.g., email addresses)
+- Use `@ign-raw:` to escape directive patterns (not plain `@` characters)
 
 **Template Structure Example:**
 ```
@@ -372,13 +378,21 @@ Generated:
 src/api/handlers/user.go
 ```
 
-**Escaping `@` in Filenames:**
+**Plain `@` Characters in Filenames:**
 
-Use `@ign-raw:` to include literal `@` characters in filenames:
+Plain `@` characters work without escaping since they are not directive patterns:
 
-Template filename: `support@ign-raw:@@company.com.txt`
+Template filename: `email@example.com.txt`
 
-Generated: `support@company.com.txt`
+Generated: `email@example.com.txt` (no escaping needed)
+
+**Escaping Directive Patterns:**
+
+Use `@ign-raw:` when you need literal directive text in the output:
+
+Template filename: `doc-@ign-raw:@ign-var:name@@.txt`
+
+Generated: `doc-@ign-var:name@.txt` (directive pattern appears literally)
 
 **Other Directives Are NOT Processed:**
 

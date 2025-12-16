@@ -89,7 +89,34 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:     "raw directive to escape @ in filename",
+			name:     "plain @ character in filename (not a directive, no escaping needed)",
+			filePath: "email@example.com.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "email@example.com.txt",
+			wantErr: false,
+		},
+		{
+			name:     "multiple @ characters in filename (not directives)",
+			filePath: "user@host@domain.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "user@host@domain.txt",
+			wantErr: false,
+		},
+		{
+			name:     "@ at start and end of filename (not directives)",
+			filePath: "@file@.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "@file@.txt",
+			wantErr: false,
+		},
+		{
+			name:     "raw directive to escape directive pattern in filename",
 			filePath: "email@ign-raw:@@example.com.txt",
 			variables: map[string]interface{}{
 				"unused": "value",
@@ -98,12 +125,21 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:     "raw directive with variable syntax inside",
+			name:     "raw directive to escape @ign-var directive in filename",
 			filePath: "doc-@ign-raw:@ign-var:name@@.txt",
 			variables: map[string]interface{}{
 				"unused": "value",
 			},
 			want:    "doc-@ign-var:name@.txt",
+			wantErr: false,
+		},
+		{
+			name:     "raw directive preserves literal directive text",
+			filePath: "template-@ign-raw:@ign-if:flag@@.txt",
+			variables: map[string]interface{}{
+				"unused": "value",
+			},
+			want:    "template-@ign-if:flag@.txt",
 			wantErr: false,
 		},
 		{
