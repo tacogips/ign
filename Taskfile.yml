@@ -35,10 +35,17 @@ tasks:
     cmds:
       - golangci-lint run
 
+  vet:
+    desc: Run go vet for static analysis
+    cmds:
+      - go vet ./...
+
   check:
-    desc: Format, fix imports, and run linter
+    desc: Format, fix imports, vet, build check, and run linter
     cmds:
       - task: fmt
+      - task: vet
+      - go build -gcflags="-N -l" -o /dev/null ./...
       - task: lint
 
   build:
