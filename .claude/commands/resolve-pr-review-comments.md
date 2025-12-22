@@ -315,7 +315,13 @@ mutation {
    - Get the code at `HEAD` (current)
    - If the specific lines mentioned in the review have changed, analyze the change
 
-2. **Semantic Analysis**:
+2. **Reply Indicates No Action Needed**:
+   - Check if there are reply comments in the thread
+   - If a reply explicitly states that no action is needed (e.g., "no action required", "not necessary", "intentional", "by design", "will not fix", "won't fix", "this is expected", "working as intended")
+   - Verify that the reply is from a project maintainer or the PR author
+   - If confirmed, mark as RESOLVED with reason "Acknowledged as no action needed"
+
+3. **Semantic Analysis**:
    - Parse the review comment to understand what issue was raised
    - Check if the code change addresses that specific issue
    - Common patterns:
@@ -324,23 +330,24 @@ mutation {
      - "Rename this variable" -> Check if variable was renamed
      - "Add validation" -> Check if validation was added
 
-3. **Commit Message Analysis**:
+4. **Commit Message Analysis**:
    - Look for commits that reference the file
    - Check commit messages for keywords like "fix", "address review", "resolve"
    - Consider commits from merged `_review_{n}` branches
 
-4. **Conservative Approach**:
+5. **Conservative Approach**:
    - If unclear whether the fix is complete, mark as UNRESOLVED
    - Only resolve when there is clear evidence of the fix
 
 ### Resolution Decision Matrix
 
-| Code Changed? | Addresses Feedback? | Resolution |
-|---------------|---------------------|------------|
-| Yes           | Yes                 | RESOLVED   |
-| Yes           | Partially           | Check context, may resolve if intent is clear |
-| Yes           | No                  | UNRESOLVED |
-| No            | N/A                 | UNRESOLVED |
+| Code Changed? | Addresses Feedback? | Reply Says No Action? | Resolution |
+|---------------|---------------------|----------------------|------------|
+| Yes           | Yes                 | N/A                  | RESOLVED   |
+| Yes           | Partially           | N/A                  | Check context, may resolve if intent is clear |
+| Yes           | No                  | N/A                  | UNRESOLVED |
+| No            | N/A                 | Yes (confirmed)      | RESOLVED (no action needed) |
+| No            | N/A                 | No                   | UNRESOLVED |
 
 ---
 

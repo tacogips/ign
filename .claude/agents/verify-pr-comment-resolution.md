@@ -161,15 +161,24 @@ git log --oneline -p --since="{review_created_at}" -- {file_path}
 3. **Alternative Solution Applied**: A different approach was taken that effectively addresses the underlying concern
    - Example: Review says "Use a constant instead" -> A config value or different pattern was used that achieves the same goal
 
+4. **Reply Indicates No Action Needed**: A reply in the comment thread explicitly states that no code change is required
+   - Check all comments in the thread (not just the first one)
+   - Look for phrases indicating no action: "no action required", "not necessary", "intentional", "by design", "will not fix", "won't fix", "this is expected", "working as intended", "acknowledged", "noted"
+   - Verify the reply is from the PR author or a project maintainer
+   - Example: Review says "Consider adding validation" -> Reply says "This is intentional, the caller guarantees valid input"
+   - Resolution reason should be: "Acknowledged as no action needed: {quote from reply}"
+
 ### UNRESOLVED - The comment should NOT be resolved when:
 
-1. **No Code Change**: The code at the commented location is identical to when the review was made
+1. **No Code Change Without Acknowledgment**: The code at the commented location is identical to when the review was made AND there is no reply indicating that no action is needed
 
 2. **Unrelated Change**: Code was changed but the change does not address the specific issue raised
 
 3. **Partial Fix**: Some aspects of the feedback were addressed but not all
 
 4. **Unclear Resolution**: Cannot determine with confidence whether the issue was addressed
+
+5. **No Action Reply from Unverified Source**: A "no action needed" reply exists but is not from the PR author or a maintainer
 
 ## Capabilities
 
@@ -281,15 +290,26 @@ The calling workflow will provide:
    - Extract lines around the commented line number
    - Identify what has changed
 
-4. **Analyze the Review Comment**
+4. **Check for "No Action Needed" Replies**
+   - Review ALL comments in the thread (the GraphQL query returns up to 10 comments per thread)
+   - Look for replies that indicate no action is required:
+     - Phrases: "no action required", "not necessary", "intentional", "by design", "will not fix", "won't fix", "this is expected", "working as intended", "acknowledged", "noted", "no changes needed"
+   - Verify the author of the "no action" reply:
+     - Must be the PR author (can be determined from PR info)
+     - Or a project maintainer/owner
+   - If a valid "no action needed" reply is found:
+     - Mark as RESOLVED with reason: "Acknowledged as no action needed: {quote from reply}"
+     - Skip code change analysis (steps 5-6) for this comment
+
+5. **Analyze the Review Comment**
    - Parse the comment to understand what issue was raised
    - Identify keywords: "add", "remove", "fix", "change", "rename", "validate", etc.
 
-5. **Determine Resolution Status**
+6. **Determine Resolution Status**
    - Check if the code change addresses the specific issue
    - Apply conservative judgment - only resolve if confident
 
-6. **If Resolvable, Execute Resolution**
+7. **If Resolvable, Execute Resolution**
    ```bash
    gh api graphql -f query='
    mutation {
@@ -422,11 +442,13 @@ git fetch origin {commit_sha}
 
 ## Example Verification
 
+### Example 1: Code Change Addresses Review
+
 **Input:**
 ```
-PR: #9 (tacogips/ign)
+PR: #123 ({owner}/{repo})
 Thread ID: PRRT_abc123
-File: internal/parser/parser.go:42
+File: src/parser/parser.go:42
 Original Commit: def456
 Comment: "Add validation for empty input"
 ```
@@ -434,13 +456,13 @@ Comment: "Add validation for empty input"
 **Process:**
 1. Fetch original source:
    ```bash
-   git show def456:internal/parser/parser.go | sed -n '37,47p'
+   git show def456:src/parser/parser.go | sed -n '37,47p'
    ```
    Result: Shows function without input validation
 
 2. Fetch current source:
    ```bash
-   git show HEAD:internal/parser/parser.go | sed -n '37,50p'
+   git show HEAD:src/parser/parser.go | sed -n '37,50p'
    ```
    Result: Shows function with `if input == "" { return error }` added
 
@@ -450,8 +472,39 @@ Comment: "Add validation for empty input"
 
 5. Output:
    ```
-   [RESOLVED] internal/parser/parser.go:42
+   [RESOLVED] src/parser/parser.go:42
      Comment: "Add validation for empty input"
      Resolution Reason: Input validation added at line 38-40 with empty string check
+     Resolution Status: SUCCESS
+   ```
+
+### Example 2: No Action Needed Reply
+
+**Input:**
+```
+PR: #456 ({owner}/{repo})
+Thread ID: PRRT_xyz789
+File: src/config/loader.go:55
+Original Commit: abc123
+Comments in thread:
+  1. @reviewer: "Consider adding nil check here"
+  2. @pr_author: "This is intentional - the caller guarantees non-nil value per the interface contract"
+```
+
+**Process:**
+1. Fetch original and current source - no code changes detected at line 55
+
+2. Check for "No Action Needed" replies:
+   - Found reply from @pr_author (PR author): "This is intentional - the caller guarantees non-nil value per the interface contract"
+   - Keywords detected: "intentional"
+   - Author verified: PR author
+
+3. Resolution: RESOLVED - No action needed acknowledged
+
+4. Output:
+   ```
+   [RESOLVED] src/config/loader.go:55
+     Comment: "Consider adding nil check here"
+     Resolution Reason: Acknowledged as no action needed: "This is intentional - the caller guarantees non-nil value per the interface contract"
      Resolution Status: SUCCESS
    ```
