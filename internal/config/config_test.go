@@ -302,10 +302,6 @@ func TestLoadIgnVarJson(t *testing.T) {
 		varPath := filepath.Join(tmpDir, "ign-var.json")
 
 		ignVar := &model.IgnVarJson{
-			Template: model.TemplateSource{
-				URL: "github.com/owner/repo",
-				Ref: "v1.0.0",
-			},
 			Variables: map[string]interface{}{
 				"project_name": "my-project",
 				"port":         8080,
@@ -327,9 +323,6 @@ func TestLoadIgnVarJson(t *testing.T) {
 			t.Fatalf("Failed to load ign-var.json: %v", err)
 		}
 
-		if loaded.Template.URL != "github.com/owner/repo" {
-			t.Errorf("Expected URL=github.com/owner/repo, got %s", loaded.Template.URL)
-		}
 		if loaded.Variables["project_name"] != "my-project" {
 			t.Errorf("Expected project_name=my-project, got %v", loaded.Variables["project_name"])
 		}
@@ -356,9 +349,6 @@ func TestSaveIgnVarJson(t *testing.T) {
 	varPath := filepath.Join(tmpDir, "build", "ign-var.json")
 
 	ignVar := &model.IgnVarJson{
-		Template: model.TemplateSource{
-			URL: "github.com/owner/repo",
-		},
 		Variables: map[string]interface{}{
 			"name": "test",
 		},
@@ -379,8 +369,8 @@ func TestSaveIgnVarJson(t *testing.T) {
 		t.Fatalf("Failed to load saved ign-var.json: %v", err)
 	}
 
-	if loaded.Template.URL != ignVar.Template.URL {
-		t.Errorf("URL mismatch after save/load")
+	if loaded.Variables["name"] != ignVar.Variables["name"] {
+		t.Errorf("Variables mismatch after save/load")
 	}
 }
 

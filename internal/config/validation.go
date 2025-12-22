@@ -70,17 +70,33 @@ func ValidateIgnJson(ign *model.IgnJson) error {
 }
 
 // ValidateIgnVarJson validates build configuration (ign-var.json).
+// ign-var.json now contains only variables, which are validated against
+// the template's ign.json during generation, so this is a simple nil check.
 func ValidateIgnVarJson(ignVar *model.IgnVarJson) error {
 	if ignVar == nil {
 		return NewConfigErrorWithField(ConfigValidationFailed, "ign-var.json", "", "ign-var.json cannot be nil")
 	}
 
-	// Validate template source
-	if ignVar.Template.URL == "" {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign-var.json", "template.url", "template URL is required")
+	// Variables can be empty (will be validated against template's ign.json during generation)
+	return nil
+}
+
+// ValidateIgnConfig validates configuration file (ign.json in .ign directory).
+func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
+	if ignConfig == nil {
+		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "", "ign.json cannot be nil")
 	}
 
-	// Variables can be empty (will be validated against ign.json during generation)
+	// Validate template source
+	if ignConfig.Template.URL == "" {
+		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "template.url", "template URL is required")
+	}
+
+	// Hash should be present (calculated during checkout)
+	if ignConfig.Hash == "" {
+		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "hash", "template hash is required")
+	}
+
 	return nil
 }
 

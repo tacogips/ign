@@ -2,10 +2,34 @@ package model
 
 import "time"
 
-// IgnVarJson represents the ign-var.json user variables file.
-type IgnVarJson struct {
+// IgnConfig represents the ign.json configuration file.
+// This file contains template source information and the downloaded template hash.
+type IgnConfig struct {
 	// Template identifies the template source.
 	Template TemplateSource `json:"template"`
+	// Hash is the SHA256 hash of the downloaded template content.
+	Hash string `json:"hash"`
+	// Metadata contains configuration metadata (auto-generated, informational).
+	Metadata *ConfigMetadata `json:"metadata,omitempty"`
+}
+
+// ConfigMetadata contains metadata about the configuration file generation.
+type ConfigMetadata struct {
+	// GeneratedAt is when the file was generated.
+	GeneratedAt time.Time `json:"generated_at,omitempty"`
+	// GeneratedBy is the tool/command that generated the file.
+	GeneratedBy string `json:"generated_by,omitempty"`
+	// TemplateName is the name of the template.
+	TemplateName string `json:"template_name,omitempty"`
+	// TemplateVersion is the version of the template.
+	TemplateVersion string `json:"template_version,omitempty"`
+	// IgnVersion is the version of ign that generated the file.
+	IgnVersion string `json:"ign_version,omitempty"`
+}
+
+// IgnVarJson represents the ign-var.json user variables file.
+// This file contains only user-provided variable values.
+type IgnVarJson struct {
 	// Variables contains all user-provided variable values.
 	Variables map[string]interface{} `json:"variables"`
 	// Metadata contains generation metadata (auto-generated, informational).

@@ -11,29 +11,24 @@ import (
 	"github.com/tacogips/ign/internal/template/parser"
 )
 
-// LoadVariables loads and processes variables from IgnVarJson.
+// LoadVariablesFromMap loads and processes variables from a map.
 // Resolves @file: prefixed values by reading file content from buildDir.
 // Returns a Variables interface suitable for template processing.
-func LoadVariables(ignVar *model.IgnVarJson, buildDir string) (parser.Variables, error) {
-	debug.Debug("[app] LoadVariables: starting variable loading")
+func LoadVariablesFromMap(variables map[string]interface{}, buildDir string) (parser.Variables, error) {
+	debug.Debug("[app] LoadVariablesFromMap: starting variable loading")
 	debug.DebugValue("[app] Build directory", buildDir)
 
-	if ignVar == nil {
-		debug.Debug("[app] LoadVariables: ignVar is nil")
-		return nil, NewVariableLoadError("ignVar is nil", nil)
-	}
-
-	if ignVar.Variables == nil {
-		debug.Debug("[app] LoadVariables: variables map is nil")
+	if variables == nil {
+		debug.Debug("[app] LoadVariablesFromMap: variables map is nil")
 		return nil, NewVariableLoadError("variables map is nil", nil)
 	}
 
-	debug.DebugValue("[app] Number of variables to process", len(ignVar.Variables))
+	debug.DebugValue("[app] Number of variables to process", len(variables))
 
 	// Create a copy of the variables map to avoid modifying the original
 	processedVars := make(map[string]interface{})
 
-	for name, value := range ignVar.Variables {
+	for name, value := range variables {
 		// Check if value is a string with @file: prefix
 		if strVal, ok := value.(string); ok && strings.HasPrefix(strVal, "@file:") {
 			// Extract filename
@@ -75,8 +70,29 @@ func LoadVariables(ignVar *model.IgnVarJson, buildDir string) (parser.Variables,
 		}
 	}
 
-	debug.Debug("[app] LoadVariables: all variables processed successfully")
+	debug.Debug("[app] LoadVariablesFromMap: all variables processed successfully")
 	return parser.NewMapVariables(processedVars), nil
+}
+
+// LoadVariables loads and processes variables from IgnVarJson.
+// Resolves @file: prefixed values by reading file content from buildDir.
+// Returns a Variables interface suitable for template processing.
+func LoadVariables(ignVar *model.IgnVarJson, buildDir string) (parser.Variables, error) {
+	debug.Debug("[app] LoadVariables: starting variable loading")
+	debug.DebugValue("[app] Build directory", buildDir)
+
+	if ignVar == nil {
+		debug.Debug("[app] LoadVariables: ignVar is nil")
+		return nil, NewVariableLoadError("ignVar is nil", nil)
+	}
+
+	if ignVar.Variables == nil {
+		debug.Debug("[app] LoadVariables: variables map is nil")
+		return nil, NewVariableLoadError("variables map is nil", nil)
+	}
+
+	// Delegate to LoadVariablesFromMap
+	return LoadVariablesFromMap(ignVar.Variables, buildDir)
 }
 
 // ValidateVariables validates that all required variables from IgnJson are set.

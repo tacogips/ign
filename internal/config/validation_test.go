@@ -240,10 +240,6 @@ func TestValidateVariables(t *testing.T) {
 func TestValidateIgnVarJson(t *testing.T) {
 	t.Run("valid ign-var.json", func(t *testing.T) {
 		ignVar := &model.IgnVarJson{
-			Template: model.TemplateSource{
-				URL: "github.com/owner/repo",
-				Ref: "v1.0.0",
-			},
 			Variables: map[string]interface{}{
 				"project_name": "test",
 			},
@@ -260,28 +256,57 @@ func TestValidateIgnVarJson(t *testing.T) {
 		}
 	})
 
-	t.Run("missing template URL", func(t *testing.T) {
+	t.Run("empty variables", func(t *testing.T) {
 		ignVar := &model.IgnVarJson{
-			Template: model.TemplateSource{},
-			Variables: map[string]interface{}{
-				"name": "test",
-			},
+			Variables: map[string]interface{}{},
 		}
-		if err := ValidateIgnVarJson(ignVar); err == nil {
+		// Empty variables should be valid (will be validated against template ign.json later)
+		if err := ValidateIgnVarJson(ignVar); err != nil {
+			t.Errorf("Empty variables should be valid: %v", err)
+		}
+	})
+}
+
+func TestValidateIgnConfig(t *testing.T) {
+	t.Run("valid ign.json", func(t *testing.T) {
+		ignConfig := &model.IgnConfig{
+			Template: model.TemplateSource{
+				URL: "github.com/owner/repo",
+				Ref: "v1.0.0",
+			},
+			Hash: "abc123def456",
+		}
+
+		if err := ValidateIgnConfig(ignConfig); err != nil {
+			t.Errorf("Valid ign.json should pass validation: %v", err)
+		}
+	})
+
+	t.Run("nil ign.json", func(t *testing.T) {
+		if err := ValidateIgnConfig(nil); err == nil {
+			t.Error("Expected error for nil ign.json")
+		}
+	})
+
+	t.Run("missing template URL", func(t *testing.T) {
+		ignConfig := &model.IgnConfig{
+			Template: model.TemplateSource{},
+			Hash:     "abc123",
+		}
+		if err := ValidateIgnConfig(ignConfig); err == nil {
 			t.Error("Expected error for missing template URL")
 		}
 	})
 
-	t.Run("empty variables", func(t *testing.T) {
-		ignVar := &model.IgnVarJson{
+	t.Run("missing hash", func(t *testing.T) {
+		ignConfig := &model.IgnConfig{
 			Template: model.TemplateSource{
 				URL: "github.com/owner/repo",
 			},
-			Variables: map[string]interface{}{},
+			Hash: "",
 		}
-		// Empty variables should be valid (will be validated against ign.json later)
-		if err := ValidateIgnVarJson(ignVar); err != nil {
-			t.Errorf("Empty variables should be valid: %v", err)
+		if err := ValidateIgnConfig(ignConfig); err == nil {
+			t.Error("Expected error for missing hash")
 		}
 	})
 }

@@ -62,14 +62,38 @@ func Init(ctx context.Context, opts InitOptions) error {
 		return err
 	}
 
-	// Create ign-var.json with empty/default variables (not generating files)
-	debug.Debug("[app] Creating ign-var.json with default variables")
-	ignVarJson := &model.IgnVarJson{
+	// Calculate template hash
+	templateHash := calculateTemplateHash(prepResult.Template)
+	debug.DebugValue("[app] Template hash", templateHash)
+
+	// Save ign.json (template source and hash)
+	ignConfigPath := filepath.Join(configDir, "ign.json")
+	debug.Debug("[app] Creating ign.json")
+	ignConfig := &model.IgnConfig{
 		Template: model.TemplateSource{
 			URL:  prepResult.NormalizedURL,
 			Path: prepResult.TemplateRef.Path,
 			Ref:  prepResult.TemplateRef.Ref,
 		},
+		Hash: templateHash,
+		Metadata: &model.ConfigMetadata{
+			GeneratedAt:     time.Now(),
+			GeneratedBy:     "ign init",
+			TemplateName:    prepResult.IgnJson.Name,
+			TemplateVersion: prepResult.IgnJson.Version,
+		},
+	}
+
+	debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
+	if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
+		debug.Debug("[app] Failed to save ign.json: %v", err)
+		return NewInitError("failed to save ign.json", err)
+	}
+	debug.Debug("[app] ign.json saved successfully")
+
+	// Create ign-var.json with empty/default variables (not generating files)
+	debug.Debug("[app] Creating ign-var.json with default variables")
+	ignVarJson := &model.IgnVarJson{
 		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
 		Metadata: &model.VarMetadata{
 			GeneratedAt:     time.Now(),

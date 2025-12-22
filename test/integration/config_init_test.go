@@ -43,6 +43,33 @@ func TestInit_LocalProvider(t *testing.T) {
 		t.Errorf("config directory not created: %s", configDir)
 	}
 
+	// Verify ign.json created
+	ignConfigPath := filepath.Join(configDir, "ign.json")
+	if _, err := os.Stat(ignConfigPath); os.IsNotExist(err) {
+		t.Errorf("ign.json not created: %s", ignConfigPath)
+	}
+
+	// Read and verify ign.json content
+	ignConfigData, err := os.ReadFile(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read ign.json: %v", err)
+	}
+
+	var ignConfig model.IgnConfig
+	if err := json.Unmarshal(ignConfigData, &ignConfig); err != nil {
+		t.Fatalf("failed to parse ign.json: %v", err)
+	}
+
+	// Verify template source in ign.json
+	if ignConfig.Template.URL == "" {
+		t.Errorf("template URL is empty in ign.json")
+	}
+
+	// Verify hash is present
+	if ignConfig.Hash == "" {
+		t.Errorf("template hash is empty in ign.json")
+	}
+
 	// Verify ign-var.json created
 	ignVarPath := filepath.Join(configDir, "ign-var.json")
 	if _, err := os.Stat(ignVarPath); os.IsNotExist(err) {
@@ -58,11 +85,6 @@ func TestInit_LocalProvider(t *testing.T) {
 	var ignVar model.IgnVarJson
 	if err := json.Unmarshal(data, &ignVar); err != nil {
 		t.Fatalf("failed to parse ign-var.json: %v", err)
-	}
-
-	// Verify template source
-	if ignVar.Template.URL == "" {
-		t.Errorf("template URL is empty")
 	}
 
 	// Verify variables initialized

@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/tacogips/ign/internal/config"
@@ -89,6 +92,27 @@ type CheckoutResult struct {
 	DryRunFiles []DryRunFile
 	// Directories contains directories that would be created (dry-run only).
 	Directories []string
+}
+
+// calculateTemplateHash calculates SHA256 hash of template files content.
+// Files are sorted by path to ensure deterministic hash generation.
+func calculateTemplateHash(template *model.Template) string {
+	h := sha256.New()
+
+	// Sort files by path for deterministic hash
+	files := make([]model.TemplateFile, len(template.Files))
+	copy(files, template.Files)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Path < files[j].Path
+	})
+
+	// Hash each file's path and content
+	for _, file := range files {
+		h.Write([]byte(file.Path))
+		h.Write(file.Content)
+	}
+
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // findNextBackupNumber finds the next available backup number for ign-var.json.bkN
@@ -239,15 +263,40 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	}
 	debug.Debug("[app] Variables validated successfully")
 
-	// Create and save ign-var.json (unless dry-run)
+	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {
-		debug.Debug("[app] Creating ign-var.json")
-		ignVarJson := &model.IgnVarJson{
+		// Calculate template hash
+		templateHash := calculateTemplateHash(prep.Template)
+		debug.DebugValue("[app] Template hash", templateHash)
+
+		// Save ign.json (template source and hash)
+		ignConfigPath := filepath.Join(configDir, "ign.json")
+		debug.Debug("[app] Creating ign.json")
+		ignConfig := &model.IgnConfig{
 			Template: model.TemplateSource{
 				URL:  prep.NormalizedURL,
 				Path: prep.TemplateRef.Path,
 				Ref:  prep.TemplateRef.Ref,
 			},
+			Hash: templateHash,
+			Metadata: &model.ConfigMetadata{
+				GeneratedAt:     time.Now(),
+				GeneratedBy:     "ign checkout",
+				TemplateName:    prep.IgnJson.Name,
+				TemplateVersion: prep.IgnJson.Version,
+			},
+		}
+
+		debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
+		if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
+			debug.Debug("[app] Failed to save ign.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign.json", err)
+		}
+		debug.Debug("[app] ign.json saved successfully")
+
+		// Save ign-var.json (variables only)
+		debug.Debug("[app] Creating ign-var.json")
+		ignVarJson := &model.IgnVarJson{
 			Variables: opts.Variables,
 			Metadata: &model.VarMetadata{
 				GeneratedAt:     time.Now(),
@@ -342,14 +391,17 @@ type CheckoutOptions struct {
 }
 
 // Checkout generates project files from template using existing configuration.
-// Loads .ign/ign-var.json, fetches template, and generates project files.
+// Loads .ign/ign.json and .ign/ign-var.json, fetches template, and generates project files.
+// Supports backward compatibility with old ign-var.json format that includes template info.
 // Deprecated: Use PrepareCheckout and CompleteCheckout for new code.
 func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error) {
-	configPath := ".ign/ign-var.json"
+	configDir := ".ign"
+	ignConfigPath := filepath.Join(configDir, "ign.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 
 	debug.DebugSection("[app] Checkout workflow start (backward-compatible)")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)
-	debug.DebugValue("[app] ConfigPath", configPath)
+	debug.DebugValue("[app] ConfigDir", configDir)
 	debug.DebugValue("[app] Overwrite", opts.Overwrite)
 	debug.DebugValue("[app] DryRun", opts.DryRun)
 	debug.DebugValue("[app] Verbose", opts.Verbose)
@@ -362,31 +414,54 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 		return nil, NewValidationError("invalid output directory", err)
 	}
 
-	// Load ign-var.json
-	debug.Debug("[app] Loading configuration from: %s", configPath)
-	ignVar, err := config.LoadIgnVarJson(configPath)
-	if err != nil {
-		debug.Debug("[app] Failed to load configuration: %v", err)
-		return nil, NewCheckoutError("failed to load configuration", err)
+	// Load configuration - try new format first, fallback to old format
+	var templateSource model.TemplateSource
+	var variables map[string]interface{}
+
+	// Try loading new format (ign.json + ign-var.json)
+	ignConfig, err := config.LoadIgnConfig(ignConfigPath)
+	if err == nil {
+		// New format found - load template from ign.json
+		debug.Debug("[app] Loaded template config from ign.json")
+		templateSource = ignConfig.Template
+
+		// Load variables from ign-var.json
+		ignVar, err := config.LoadIgnVarJson(ignVarPath)
+		if err != nil {
+			debug.Debug("[app] Failed to load ign-var.json: %v", err)
+			return nil, NewCheckoutError("failed to load ign-var.json", err)
+		}
+		variables = ignVar.Variables
+		debug.Debug("[app] Loaded variables from ign-var.json")
+	} else {
+		// New format not found - try old format (ign-var.json with template)
+		debug.Debug("[app] ign.json not found, trying old format ign-var.json")
+
+		// For backward compatibility, try loading old ign-var.json format
+		// We need to use LoadIgnJson which expects the old IgnJson structure
+		_, err := config.LoadIgnJson(ignVarPath)
+		if err != nil {
+			debug.Debug("[app] Failed to load configuration: %v", err)
+			return nil, NewCheckoutError("failed to load configuration from either ign.json or old ign-var.json", err)
+		}
+
+		// Old format detected - user needs to re-run checkout to upgrade
+		debug.Debug("[app] Using old ign-var.json format (deprecated)")
+		return nil, NewCheckoutError("old ign-var.json format detected - please re-run 'ign checkout' to upgrade to new format", nil)
 	}
-	debug.Debug("[app] Configuration loaded successfully")
 
 	// Validate template source
-	if ignVar.Template.URL == "" {
+	if templateSource.URL == "" {
 		debug.Debug("[app] Template URL is empty in configuration")
 		return nil, NewCheckoutError("template URL is empty in configuration", nil)
 	}
-	debug.DebugValue("[app] Template URL", ignVar.Template.URL)
-	debug.DebugValue("[app] Template Ref", ignVar.Template.Ref)
-	debug.DebugValue("[app] Template Path", ignVar.Template.Path)
+	debug.DebugValue("[app] Template URL", templateSource.URL)
+	debug.DebugValue("[app] Template Ref", templateSource.Ref)
+	debug.DebugValue("[app] Template Path", templateSource.Path)
 
-	// Get config directory from config path
-	configDir := filepath.Dir(configPath)
-	debug.DebugValue("[app] Config directory", configDir)
-
-	// Load and process variables (resolve @file: references)
+	// Convert variables map to parser.Variables and resolve @file: references
 	debug.Debug("[app] Loading variables")
-	vars, err := LoadVariables(ignVar, configDir)
+	vars, err := LoadVariablesFromMap(variables, configDir)
 	if err != nil {
 		debug.Debug("[app] Failed to load variables: %v", err)
 		return nil, err
@@ -394,7 +469,7 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	debug.Debug("[app] Variables loaded successfully")
 
 	// Create provider from template URL
-	normalizedURL := NormalizeTemplateURL(ignVar.Template.URL)
+	normalizedURL := NormalizeTemplateURL(templateSource.URL)
 	debug.DebugValue("[app] Normalized template URL", normalizedURL)
 	debug.Debug("[app] Creating template provider")
 	prov, err := provider.NewProviderWithToken(normalizedURL, opts.GitHubToken)
@@ -414,13 +489,13 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	debug.Debug("[app] Template URL resolved successfully")
 
 	// Use ref from configuration if available
-	if ignVar.Template.Ref != "" {
-		templateRef.Ref = ignVar.Template.Ref
+	if templateSource.Ref != "" {
+		templateRef.Ref = templateSource.Ref
 	}
 
 	// Use path from configuration if available
-	if ignVar.Template.Path != "" {
-		templateRef.Path = ignVar.Template.Path
+	if templateSource.Path != "" {
+		templateRef.Path = templateSource.Path
 	}
 
 	// Fetch template

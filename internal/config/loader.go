@@ -135,6 +135,44 @@ func SaveIgnVarJson(path string, ignVar *model.IgnVarJson) error {
 	return nil
 }
 
+// LoadIgnConfig loads ign.json from the specified path.
+func LoadIgnConfig(path string) (*model.IgnConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, NewConfigErrorWithCause(ConfigNotFound, path, "ign.json not found", err)
+		}
+		return nil, NewConfigErrorWithCause(ConfigInvalid, path, "failed to read ign.json", err)
+	}
+
+	var ignConfig model.IgnConfig
+	if err := json.Unmarshal(data, &ignConfig); err != nil {
+		return nil, NewConfigErrorWithCause(ConfigInvalid, path, "invalid JSON syntax in ign.json", err)
+	}
+
+	return &ignConfig, nil
+}
+
+// SaveIgnConfig saves ign.json to the specified path.
+func SaveIgnConfig(path string, ignConfig *model.IgnConfig) error {
+	// Create parent directory if it doesn't exist
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to create directory", err)
+	}
+
+	data, err := json.MarshalIndent(ignConfig, "", "  ")
+	if err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to marshal ign.json", err)
+	}
+
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to write ign.json", err)
+	}
+
+	return nil
+}
+
 // mergeConfig merges missing fields from defaults into cfg.
 func mergeConfig(cfg, defaults *Config) {
 	// Cache
