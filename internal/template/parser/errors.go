@@ -22,6 +22,8 @@ const (
 	IncludeNotFound
 	// InvalidDirectiveSyntax indicates malformed directive syntax.
 	InvalidDirectiveSyntax
+	// SecurityViolation indicates a security policy violation in filename variable values.
+	SecurityViolation
 )
 
 // ParseError represents a template parsing error with detailed context.
