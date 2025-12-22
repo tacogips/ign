@@ -289,6 +289,24 @@ func TestProcessFilename(t *testing.T) {
 			errMsg:  "colon",
 		},
 		{
+			name:     "Windows absolute path with drive and slash (C:/)",
+			filePath: "@ign-var:path@/file.txt",
+			variables: map[string]interface{}{
+				"path": "C:",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:     "Windows UNC path prefix (backslashes)",
+			filePath: "@ign-var:server@/share/file.txt",
+			variables: map[string]interface{}{
+				"server": "\\\\fileserver",
+			},
+			wantErr: true,
+			errMsg:  "backslash",
+		},
+		{
 			name:     "single dot in variable value (current directory)",
 			filePath: "@ign-var:name@.go",
 			variables: map[string]interface{}{
@@ -604,10 +622,21 @@ func TestValidateProcessedPath(t *testing.T) {
 			wantErr:   true,
 			errMsg:    "current directory",
 		},
-		// Note: Windows absolute paths are only detected as absolute on Windows systems
-		// due to filepath.IsAbs() platform-specific behavior. On Unix systems, these
-		// look like relative paths, so we document expected behavior rather than enforce it.
-		// Real protection happens at parser level where path separators are rejected.
+		// Note: The following Windows absolute path tests document the expected behavior
+		// but filepath.IsAbs() is platform-specific, so these paths are only detected as
+		// absolute on Windows systems. On Unix/Linux, they appear as relative paths and
+		// won't trigger errors in validateProcessedPath.
+		//
+		// However, real protection happens at the parser level (validateFilenameVarValue)
+		// where these dangerous patterns are rejected:
+		// - C:/path  -> rejected due to ':' in "C:" variable value
+		// - D:\path  -> rejected due to '\' in "D:\Users" variable value
+		// - \\server -> rejected due to '\' in "\\server\share" variable value
+		//
+		// These test cases serve as documentation of the security model:
+		// 1. Parser validates variable values (rejects :, \, /)
+		// 2. Generator validates processed paths (defense-in-depth)
+		// 3. filepath.IsAbs() provides platform-specific absolute path detection
 	}
 
 	for _, tt := range tests {

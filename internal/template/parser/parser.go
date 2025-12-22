@@ -260,50 +260,46 @@ func processVarDirectivesInFilename(input []byte, vars Variables) ([]byte, error
 
 // validateFilenameVarValue validates that a variable value is safe to use in a filename.
 // This is called only when substituting variable values in filenames.
-// Returns InvalidDirectiveSyntax error if the value contains dangerous characters.
-//
-// Note: While these are security policy violations rather than syntax errors,
-// we use InvalidDirectiveSyntax for consistency with other directive validation errors.
-// The error type indicates the directive usage is invalid, which includes security violations.
+// Returns SecurityViolation error if the value contains dangerous characters.
 func validateFilenameVarValue(value, varSpec string) error {
 	// Check for null bytes (can truncate strings in file systems)
 	if strings.Contains(value, "\x00") {
-		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+		return newParseErrorWithDirective(SecurityViolation,
 			"variable value contains null byte",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for forward slash (Unix/Linux path separator)
 	if strings.Contains(value, "/") {
-		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+		return newParseErrorWithDirective(SecurityViolation,
 			"variable value contains forward slash (/) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for backslash (Windows path separator)
 	if strings.Contains(value, "\\") {
-		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+		return newParseErrorWithDirective(SecurityViolation,
 			"variable value contains backslash (\\) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for colon (Windows drive letter separator and NTFS alternate data streams)
 	if strings.Contains(value, ":") {
-		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+		return newParseErrorWithDirective(SecurityViolation,
 			"variable value contains colon (:) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for single dot (current directory reference)
 	if value == "." {
-		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+		return newParseErrorWithDirective(SecurityViolation,
 			"variable value is '.' (current directory) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for double dot (parent directory reference / path traversal)
 	if value == ".." {
-		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+		return newParseErrorWithDirective(SecurityViolation,
 			fmt.Sprintf("variable value is '..' (parent directory) which is not allowed in filenames"),
 			"@ign-var:"+varSpec+"@")
 	}
