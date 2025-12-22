@@ -411,8 +411,8 @@ func TestE2E_ErrorHandling(t *testing.T) {
 
 		if err == nil {
 			t.Errorf("expected error but got nil")
-		} else if !contains(err.Error(), "ign-var.json") {
-			t.Errorf("error message does not contain expected substring: ign-var.json\nGot: %v", err)
+		} else if !contains(err.Error(), "ign.json") {
+			t.Errorf("error message does not contain expected substring: ign.json\nGot: %v", err)
 		}
 	})
 }

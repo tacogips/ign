@@ -274,7 +274,7 @@ func TestValidateIgnConfig(t *testing.T) {
 				URL: "github.com/owner/repo",
 				Ref: "v1.0.0",
 			},
-			Hash: "abc123def456",
+			Hash: "abc123def456789012345678901234567890123456789012345678901234abcd",
 		}
 
 		if err := ValidateIgnConfig(ignConfig); err != nil {
@@ -307,6 +307,30 @@ func TestValidateIgnConfig(t *testing.T) {
 		}
 		if err := ValidateIgnConfig(ignConfig); err == nil {
 			t.Error("Expected error for missing hash")
+		}
+	})
+
+	t.Run("invalid hash format - too short", func(t *testing.T) {
+		ignConfig := &model.IgnConfig{
+			Template: model.TemplateSource{
+				URL: "github.com/owner/repo",
+			},
+			Hash: "abc123",
+		}
+		if err := ValidateIgnConfig(ignConfig); err == nil {
+			t.Error("Expected error for invalid hash format")
+		}
+	})
+
+	t.Run("invalid hash format - non-hex characters", func(t *testing.T) {
+		ignConfig := &model.IgnConfig{
+			Template: model.TemplateSource{
+				URL: "github.com/owner/repo",
+			},
+			Hash: "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+		}
+		if err := ValidateIgnConfig(ignConfig); err == nil {
+			t.Error("Expected error for invalid hash format with non-hex characters")
 		}
 	})
 }

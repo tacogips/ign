@@ -27,7 +27,10 @@ type InitOptions struct {
 }
 
 // Init initializes configuration from a template.
-// Creates .ign/ign-var.json with template metadata and empty/default variables.
+// Creates two configuration files in .ign directory:
+//   - .ign/ign.json (template source and hash)
+//   - .ign/ign-var.json (variable values with defaults)
+//
 // Deprecated: Use PrepareCheckout and CompleteCheckout instead.
 func Init(ctx context.Context, opts InitOptions) error {
 	configDir := ".ign"
@@ -76,7 +79,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 			Ref:  prepResult.TemplateRef.Ref,
 		},
 		Hash: templateHash,
-		Metadata: &model.ConfigMetadata{
+		Metadata: &model.FileMetadata{
 			GeneratedAt:     time.Now(),
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,
@@ -95,7 +98,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 	debug.Debug("[app] Creating ign-var.json with default variables")
 	ignVarJson := &model.IgnVarJson{
 		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
-		Metadata: &model.VarMetadata{
+		Metadata: &model.FileMetadata{
 			GeneratedAt:     time.Now(),
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,

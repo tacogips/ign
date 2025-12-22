@@ -81,7 +81,9 @@ func ValidateIgnVarJson(ignVar *model.IgnVarJson) error {
 	return nil
 }
 
-// ValidateIgnConfig validates configuration file (ign.json in .ign directory).
+// ValidateIgnConfig validates user project configuration file (.ign/ign.json).
+// This validates the project's configuration file which contains template source information,
+// NOT the template's own ign.json metadata file. For template metadata validation, see ValidateIgnJson.
 func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
 	if ignConfig == nil {
 		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "", "ign.json cannot be nil")
@@ -95,6 +97,12 @@ func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
 	// Hash should be present (calculated during checkout)
 	if ignConfig.Hash == "" {
 		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "hash", "template hash is required")
+	}
+
+	// Validate hash format (must be valid SHA256: 64 hexadecimal characters)
+	if !isValidSHA256Hash(ignConfig.Hash) {
+		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "hash",
+			"hash must be a valid SHA256 string (64 hexadecimal characters)")
 	}
 
 	return nil

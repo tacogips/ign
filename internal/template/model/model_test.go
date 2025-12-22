@@ -189,7 +189,7 @@ func TestIgnVarJson_MarshalUnmarshal(t *testing.T) {
 			"enable_tls":   true,
 			"description":  "User management service",
 		},
-		Metadata: &VarMetadata{
+		Metadata: &FileMetadata{
 			GeneratedAt:     now,
 			GeneratedBy:     "ign build init v1.0.0",
 			TemplateName:    "go-rest-api",
@@ -249,7 +249,7 @@ func TestIgnConfig_MarshalUnmarshal(t *testing.T) {
 			Ref:  "v2.1.0",
 		},
 		Hash: "abc123def456",
-		Metadata: &ConfigMetadata{
+		Metadata: &FileMetadata{
 			GeneratedAt:     now,
 			GeneratedBy:     "ign checkout v1.0.0",
 			TemplateName:    "go-rest-api",

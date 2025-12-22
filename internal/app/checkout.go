@@ -96,7 +96,18 @@ type CheckoutResult struct {
 
 // calculateTemplateHash calculates SHA256 hash of template files content.
 // Files are sorted by path to ensure deterministic hash generation.
+// Returns empty string if template is nil or has no files.
 func calculateTemplateHash(template *model.Template) string {
+	// Defensive: handle nil template
+	if template == nil {
+		return ""
+	}
+
+	// Handle empty template (no files)
+	if len(template.Files) == 0 {
+		return ""
+	}
+
 	h := sha256.New()
 
 	// Sort files by path for deterministic hash
@@ -252,11 +263,11 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 // CompleteCheckout completes checkout by saving configuration and generating files.
 func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*CheckoutResult, error) {
 	configDir := ".ign"
-	configPath := filepath.Join(configDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
 
 	debug.DebugSection("[app] CompleteCheckout workflow start")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)
-	debug.DebugValue("[app] ConfigPath", configPath)
+	debug.DebugValue("[app] IgnVarPath", ignVarPath)
 	debug.DebugValue("[app] Overwrite", opts.Overwrite)
 	debug.DebugValue("[app] DryRun", opts.DryRun)
 	debug.DebugValue("[app] Verbose", opts.Verbose)
@@ -291,6 +302,12 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 		templateHash := calculateTemplateHash(prep.Template)
 		debug.DebugValue("[app] Template hash", templateHash)
 
+		// Validate hash is not empty (should not happen if template is valid)
+		if templateHash == "" {
+			debug.Debug("[app] Template hash is empty - template may be nil or have no files")
+			return nil, NewCheckoutError("failed to calculate template hash: template is empty or invalid", nil)
+		}
+
 		// Save ign.json (template source and hash)
 		ignConfigPath := filepath.Join(configDir, "ign.json")
 		debug.Debug("[app] Creating ign.json")
@@ -301,7 +318,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 				Ref:  prep.TemplateRef.Ref,
 			},
 			Hash: templateHash,
-			Metadata: &model.ConfigMetadata{
+			Metadata: &model.FileMetadata{
 				GeneratedAt:     time.Now(),
 				GeneratedBy:     "ign checkout",
 				TemplateName:    prep.IgnJson.Name,
@@ -320,7 +337,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 		debug.Debug("[app] Creating ign-var.json")
 		ignVarJson := &model.IgnVarJson{
 			Variables: opts.Variables,
-			Metadata: &model.VarMetadata{
+			Metadata: &model.FileMetadata{
 				GeneratedAt:     time.Now(),
 				GeneratedBy:     "ign checkout",
 				TemplateName:    prep.IgnJson.Name,
@@ -328,8 +345,8 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 			},
 		}
 
-		debug.DebugValue("[app] Saving ign-var.json to", configPath)
-		if err := config.SaveIgnVarJson(configPath, ignVarJson); err != nil {
+		debug.DebugValue("[app] Saving ign-var.json to", ignVarPath)
+		if err := config.SaveIgnVarJson(ignVarPath, ignVarJson); err != nil {
 			debug.Debug("[app] Failed to save ign-var.json: %v", err)
 			return nil, NewCheckoutError("failed to save ign-var.json", err)
 		}
@@ -456,20 +473,26 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 		variables = ignVar.Variables
 		debug.Debug("[app] Loaded variables from ign-var.json")
 	} else {
-		// New format not found - try old format (ign-var.json with template)
-		debug.Debug("[app] ign.json not found, trying old format ign-var.json")
+		// New format not found - check if old format exists and provide helpful error
+		debug.Debug("[app] ign.json not found")
 
-		// For backward compatibility, try loading old ign-var.json format
-		// We need to use LoadIgnJson which expects the old IgnJson structure
-		_, err := config.LoadIgnJson(ignVarPath)
-		if err != nil {
-			debug.Debug("[app] Failed to load configuration: %v", err)
-			return nil, NewCheckoutError("failed to load configuration from either ign.json or old ign-var.json", err)
+		// Check if old ign-var.json format exists (with template metadata)
+		if _, err := os.Stat(ignVarPath); err == nil {
+			// Old format file exists - provide migration instructions
+			debug.Debug("[app] Found old format ign-var.json - migration required")
+			return nil, NewCheckoutError(
+				"old configuration format detected: .ign/ign-var.json exists but .ign/ign.json is missing.\n"+
+					"The configuration format has been split into two files:\n"+
+					"  - .ign/ign.json (template source and hash)\n"+
+					"  - .ign/ign-var.json (variable values only)\n"+
+					"To migrate, please delete the .ign directory and run 'ign checkout <template-url>' again.",
+				nil,
+			)
 		}
 
-		// Old format detected - user needs to re-run checkout to upgrade
-		debug.Debug("[app] Using old ign-var.json format (deprecated)")
-		return nil, NewCheckoutError("old ign-var.json format detected - please re-run 'ign checkout' to upgrade to new format", nil)
+		// Neither new nor old format found
+		debug.Debug("[app] No configuration found")
+		return nil, NewCheckoutError("configuration not found: .ign/ign.json does not exist. Run 'ign checkout <template-url>' first.", nil)
 	}
 
 	// Validate template source

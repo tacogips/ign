@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/tacogips/ign/internal/template/model"
 )
@@ -97,7 +98,16 @@ func LoadIgnVarJson(path string) (*model.IgnVarJson, error) {
 	return &ignVar, nil
 }
 
-// LoadIgnJson loads ign.json from the specified path.
+// LoadIgnJson loads ign.json template metadata from the specified path.
+// This function reads the template's ign.json file which contains template information
+// (name, version, variable definitions). This is DIFFERENT from LoadIgnConfig which
+// loads the user's project configuration (.ign/ign.json).
+//
+// Use cases:
+//   - Loading template metadata from a template repository
+//   - Reading template variable definitions during template collection
+//
+// NOT for loading user project configuration - use LoadIgnConfig instead.
 func LoadIgnJson(path string) (*model.IgnJson, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -116,26 +126,46 @@ func LoadIgnJson(path string) (*model.IgnJson, error) {
 }
 
 // SaveIgnVarJson saves ign-var.json to the specified path.
+// Security: The path is validated to prevent path traversal attacks.
 func SaveIgnVarJson(path string, ignVar *model.IgnVarJson) error {
+	// Security: Validate path doesn't contain path traversal sequences
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		return NewConfigErrorWithCause(ConfigInvalid, path,
+			"path contains '..' which is not allowed for security reasons", nil)
+	}
+
 	// Create parent directory if it doesn't exist
-	dir := filepath.Dir(path)
+	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to create directory", err)
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath,
+			fmt.Sprintf("failed to create directory %s", dir), err)
 	}
 
 	data, err := json.MarshalIndent(ignVar, "", "  ")
 	if err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to marshal ign-var.json", err)
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-var.json", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to write ign-var.json", err)
+	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-var.json", err)
 	}
 
 	return nil
 }
 
-// LoadIgnConfig loads ign.json from the specified path.
+// LoadIgnConfig loads user project configuration (ign.json) from the specified path.
+// This function reads the user's project configuration file (.ign/ign.json) which contains
+// template source information and template hash. This is DIFFERENT from LoadIgnJson which
+// loads template metadata from the template repository.
+//
+// Use cases:
+//   - Loading user project configuration during checkout operations
+//   - Reading template source and hash information from .ign directory
+//
+// NOT for loading template metadata - use LoadIgnJson instead.
+//
+// The loaded configuration is validated to ensure required fields are present and hash format is valid.
 func LoadIgnConfig(path string) (*model.IgnConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -150,24 +180,57 @@ func LoadIgnConfig(path string) (*model.IgnConfig, error) {
 		return nil, NewConfigErrorWithCause(ConfigInvalid, path, "invalid JSON syntax in ign.json", err)
 	}
 
+	// Validate required fields and format
+	if ignConfig.Template.URL == "" {
+		return nil, NewConfigErrorWithField(ConfigValidationFailed, path, "template.url", "template URL is required")
+	}
+
+	// Validate hash format if present (64 hex characters for SHA256)
+	if ignConfig.Hash != "" && !isValidSHA256Hash(ignConfig.Hash) {
+		return nil, NewConfigErrorWithField(ConfigValidationFailed, path, "hash",
+			"hash must be a valid SHA256 string (64 hexadecimal characters)")
+	}
+
 	return &ignConfig, nil
 }
 
+// isValidSHA256Hash validates that a string is a valid SHA256 hash (64 hex characters).
+func isValidSHA256Hash(hash string) bool {
+	if len(hash) != 64 {
+		return false
+	}
+	for _, c := range hash {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 // SaveIgnConfig saves ign.json to the specified path.
+// Security: The path is validated to prevent path traversal attacks.
 func SaveIgnConfig(path string, ignConfig *model.IgnConfig) error {
+	// Security: Validate path doesn't contain path traversal sequences
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		return NewConfigErrorWithCause(ConfigInvalid, path,
+			"path contains '..' which is not allowed for security reasons", nil)
+	}
+
 	// Create parent directory if it doesn't exist
-	dir := filepath.Dir(path)
+	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to create directory", err)
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath,
+			fmt.Sprintf("failed to create directory %s", dir), err)
 	}
 
 	data, err := json.MarshalIndent(ignConfig, "", "  ")
 	if err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to marshal ign.json", err)
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign.json", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, path, "failed to write ign.json", err)
+	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign.json", err)
 	}
 
 	return nil
