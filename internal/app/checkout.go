@@ -115,16 +115,19 @@ func calculateTemplateHash(template *model.Template) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// findNextBackupNumber finds the next available backup number for ign-var.json.bkN
-func findNextBackupNumber(dir string) int {
-	n := 1
-	for {
-		backupPath := filepath.Join(dir, fmt.Sprintf("ign-var.json.bk%d", n))
+// maxBackups is the maximum number of backup files allowed to prevent infinite loops
+const maxBackups = 100
+
+// findNextBackupNumber finds the next available backup number for the given filename.
+// Returns an error if the maximum number of backups (100) has been exceeded.
+func findNextBackupNumber(dir, filename string) (int, error) {
+	for n := 1; n <= maxBackups; n++ {
+		backupPath := filepath.Join(dir, fmt.Sprintf("%s.bk%d", filename, n))
 		if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-			return n
+			return n, nil
 		}
-		n++
 	}
+	return 0, fmt.Errorf("too many backup files exist for %s (max %d), please clean up old backups", filename, maxBackups)
 }
 
 // PrepareCheckout prepares for checkout by fetching the template and handling config directory.
@@ -196,17 +199,36 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 		// Directory exists and Force is true (checked in CLI layer)
 		debug.Debug("[app] Config directory exists, Force mode - backing up")
 
+		// Backup existing ign.json if it exists
+		ignConfigPath := filepath.Join(configDir, "ign.json")
+		if _, err := os.Stat(ignConfigPath); err == nil {
+			backupNum, err := findNextBackupNumber(configDir, "ign.json")
+			if err != nil {
+				return nil, NewCheckoutError(err.Error(), nil)
+			}
+			backupPath := filepath.Join(configDir, fmt.Sprintf("ign.json.bk%d", backupNum))
+			debug.Debug("[app] Backing up existing ign.json to: %s", backupPath)
+			if err := os.Rename(ignConfigPath, backupPath); err != nil {
+				debug.Debug("[app] Failed to backup existing ign.json: %v", err)
+				return nil, NewCheckoutError("failed to backup existing ign.json", err)
+			}
+			debug.Debug("[app] Existing ign.json backed up successfully")
+		}
+
 		// Backup existing ign-var.json if it exists
 		ignVarPath := filepath.Join(configDir, "ign-var.json")
 		if _, err := os.Stat(ignVarPath); err == nil {
-			backupNum := findNextBackupNumber(configDir)
-			backupPath := filepath.Join(configDir, fmt.Sprintf("ign-var.json.bk%d", backupNum))
-			debug.Debug("[app] Backing up existing config to: %s", backupPath)
-			if err := os.Rename(ignVarPath, backupPath); err != nil {
-				debug.Debug("[app] Failed to backup existing config: %v", err)
-				return nil, NewCheckoutError("failed to backup existing configuration", err)
+			backupNum, err := findNextBackupNumber(configDir, "ign-var.json")
+			if err != nil {
+				return nil, NewCheckoutError(err.Error(), nil)
 			}
-			debug.Debug("[app] Existing config backed up successfully")
+			backupPath := filepath.Join(configDir, fmt.Sprintf("ign-var.json.bk%d", backupNum))
+			debug.Debug("[app] Backing up existing ign-var.json to: %s", backupPath)
+			if err := os.Rename(ignVarPath, backupPath); err != nil {
+				debug.Debug("[app] Failed to backup existing ign-var.json: %v", err)
+				return nil, NewCheckoutError("failed to backup existing ign-var.json", err)
+			}
+			debug.Debug("[app] Existing ign-var.json backed up successfully")
 		}
 	} else {
 		// Create config directory
