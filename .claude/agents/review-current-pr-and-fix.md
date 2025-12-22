@@ -1,6 +1,6 @@
 ---
 name: review-current-pr-and-fix
-description: Reviews the current directory's PR and fixes identified issues. Orchestrates two-stage review (single-file and cross-file) then delegates fixes to apply-pr-review-chunk agents per module/package.
+description: Reviews the current directory's PR and fixes identified issues. Orchestrates three-stage review (single-file, cross-file, and Go coding guideline compliance) then delegates fixes to apply-pr-review-chunk agents per module/package.
 ---
 
 # review-current-pr-and-fix
@@ -11,9 +11,10 @@ Review the current directory's PR and fix identified issues.
 
 This agent orchestrates a comprehensive PR review and fix workflow:
 
-1. **Review Phase** (Two-Stage):
+1. **Review Phase** (Three-Stage):
    - Stage 1: Single-file review using review-single-target agents
    - Stage 2: Cross-file consistency review using review-multiple-target agents
+   - Stage 3: Go coding guideline compliance review using go-coding-guideline agent
 2. **Grouping Phase**: Groups all PR comment URLs by module/package
 3. **Fix Phase**: Delegates fixes to apply-pr-review-chunk agents per module/package
 
@@ -331,10 +332,73 @@ Remember:
 - Cross-file issues found with: affected files, severity, problem, direction, PR comment URL
 - Track progress: `[v] Cross-file review [X/N chunks]: Chunk Y - Found Z issues, posted Z PR comments`
 
-**Combine results from both phases:**
+**Combine results from Phases 4.1 and 4.2:**
 - Merge single-file issues and cross-file issues
 - Deduplicate if same issue identified in both phases
 - Track total PR comment URLs from both phases
+
+**Phase 4.3: Go Coding Guideline Review**
+
+Use `go-coding-guideline` agent to get the official Go coding guidelines, then verify all changed Go files comply with these guidelines.
+
+1. **Get Go coding guidelines** by launching `go-coding-guideline` agent:
+
+```
+Return Go coding rules and guidelines for reviewing PR changes.
+
+Include:
+- Standard Go Project Layout conventions
+- Go coding best practices
+- Layered architecture patterns (if applicable)
+- Package naming and organization rules
+- Error handling conventions
+- Documentation requirements for exported identifiers
+```
+
+2. **For each changed Go file in the PR**, check compliance with guidelines:
+
+```
+Review Go file for coding guideline compliance: <file-path>
+
+Context:
+- PR: #<number> - <title>
+- Repository: <repository-url>
+- File: <file-path>
+
+Go Coding Guidelines to check against:
+<guidelines-from-step-1>
+
+Diff content:
+```diff
+<diff-content-from-github>
+```
+
+Check for:
+- Standard Go Project Layout violations (wrong directory placement)
+- Package naming violations (underscores, mixedCaps, non-matching directory names)
+- Missing documentation for exported identifiers
+- Improper error handling (ignored errors, panic instead of return error)
+- Non-idiomatic Go code patterns
+- Anti-patterns (everything in main, /src directory, unnecessary package hierarchies)
+- Missing `gofmt` or improper formatting
+- Dependency management issues (unused imports, missing go mod tidy)
+
+For each guideline violation found:
+- Severity: Low (style/convention) or Medium (maintainability concern)
+- Post review comment to GitHub PR using gh api
+- Include specific guideline reference in comment
+
+Focus ONLY on guideline violations. Functional bugs are handled by review-single-target.
+```
+
+3. **Collect guideline review results:**
+   - Issues found with: file, line, guideline violated, severity, PR comment URL
+   - Track progress: `[v] Guideline check [X/N]: <file> - Found Y violations, posted Y PR comments`
+
+**Combine results from all three phases:**
+- Merge single-file issues, cross-file issues, and guideline violations
+- Deduplicate if same issue identified in multiple phases
+- Track total PR comment URLs from all phases
 
 ### Step 5: Consolidate Review Findings
 
@@ -672,18 +736,22 @@ Remember:
 1. **review-single-target**: Analyzes individual files and posts PR comments for single-file issues
 2. **collect-relative-files-in-pr**: Identifies groups of related files that should be reviewed together
 3. **review-multiple-target**: Analyzes cross-file consistency and posts PR comments for integration issues
-4. **apply-pr-review-chunk**: Implements fixes per package using PR comment URLs
-5. **review-current-pr-and-fix** (this): Orchestrates entire workflow
+4. **go-coding-guideline**: Provides Go coding guidelines for compliance verification
+5. **apply-pr-review-chunk**: Implements fixes per package using PR comment URLs
+6. **review-current-pr-and-fix** (this): Orchestrates entire workflow
 
 ### Multi-Phase Process
 
-1. **Review Phase** (Two-Stage):
+1. **Review Phase** (Three-Stage):
    - **Stage 1 - Single-File Review**: Collect issues from individual files using review-single-target
    - **Stage 2 - Cross-File Review**:
      - Use collect-relative-files-in-pr to identify related file chunks
      - Use review-multiple-target to check cross-file consistency for each chunk
-   - Post all PR comments (both single-file and cross-file issues)
-2. **Grouping Phase**: Group all PR comment URLs (from both stages) by module/package
+   - **Stage 3 - Go Coding Guideline Review**:
+     - Use go-coding-guideline to get official Go coding guidelines
+     - Verify all changed Go files comply with guidelines (project layout, naming, error handling, documentation, formatting)
+   - Post all PR comments (single-file, cross-file, and guideline issues)
+2. **Grouping Phase**: Group all PR comment URLs (from all stages) by module/package
 3. **Fix Phase**: Delegate to apply-pr-review-chunk agents per module/package
 
 ### Instruction Argument Support

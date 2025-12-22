@@ -46,9 +46,42 @@ func LoadVariablesFromMap(variables map[string]interface{}, buildDir string) (pa
 				)
 			}
 
+			// Security: Validate filename does not contain path traversal sequences
+			if strings.Contains(filename, "..") {
+				debug.Debug("[app] Variable '%s': path traversal attempt detected", name)
+				return nil, NewVariableLoadError(
+					fmt.Sprintf("variable %s: @file: path contains '..' which is not allowed for security reasons", name),
+					nil,
+				)
+			}
+
 			// Resolve file path relative to buildDir
 			filePath := filepath.Join(buildDir, filename)
 			debug.DebugValue("[app] Resolved file path", filePath)
+
+			// Security: Verify resolved path is within buildDir
+			absBuildDir, err := filepath.Abs(buildDir)
+			if err != nil {
+				return nil, NewVariableLoadError(
+					fmt.Sprintf("variable %s: failed to resolve build directory", name),
+					err,
+				)
+			}
+			absFilePath, err := filepath.Abs(filePath)
+			if err != nil {
+				return nil, NewVariableLoadError(
+					fmt.Sprintf("variable %s: failed to resolve file path", name),
+					err,
+				)
+			}
+			relPath, err := filepath.Rel(absBuildDir, absFilePath)
+			if err != nil || strings.HasPrefix(relPath, "..") {
+				debug.Debug("[app] Variable '%s': file path escapes build directory", name)
+				return nil, NewVariableLoadError(
+					fmt.Sprintf("variable %s: @file: path must be within the configuration directory", name),
+					nil,
+				)
+			}
 
 			// Read file content
 			content, err := os.ReadFile(filePath)

@@ -196,7 +196,7 @@ func TestProcessFilename(t *testing.T) {
 				"name": "../etc/passwd",
 			},
 			wantErr: true,
-			errMsg:  "path traversal",
+			errMsg:  "forward slash", // Now caught at parser layer
 		},
 		{
 			name:     "empty variable value - filename only variable",
@@ -232,7 +232,7 @@ func TestProcessFilename(t *testing.T) {
 				"name": "dir/file",
 			},
 			wantErr: true,
-			errMsg:  "contains path separator",
+			errMsg:  "forward slash", // Now caught at parser layer
 		},
 		{
 			name:     "backslash in variable value (Windows path separator)",
@@ -241,7 +241,7 @@ func TestProcessFilename(t *testing.T) {
 				"name": "dir\\file",
 			},
 			wantErr: true,
-			errMsg:  "contains path separator",
+			errMsg:  "backslash", // Now caught at parser layer
 		},
 		{
 			name:     "dot-dot in variable value",
@@ -250,7 +250,7 @@ func TestProcessFilename(t *testing.T) {
 				"dir": "..",
 			},
 			wantErr: true,
-			errMsg:  "path traversal",
+			errMsg:  "parent directory", // Now caught at parser layer
 		},
 		{
 			name:     "type mismatch",
