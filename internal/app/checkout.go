@@ -552,6 +552,28 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	}
 	debug.Debug("[app] Template fetched successfully")
 
+	// Calculate and update template hash in ign.json (unless dry-run)
+	if !opts.DryRun {
+		debug.Debug("[app] Calculating template hash")
+		templateHash := calculateTemplateHash(template)
+		debug.DebugValue("[app] Template hash", templateHash)
+
+		// Load existing ign.json
+		existingConfig, err := config.LoadIgnConfig(ignConfigPath)
+		if err != nil {
+			debug.Debug("[app] Could not load existing ign.json (will skip hash update): %v", err)
+		} else {
+			// Update hash in ign.json
+			existingConfig.Hash = templateHash
+			debug.Debug("[app] Updating template hash in ign.json")
+			if err := config.SaveIgnConfig(ignConfigPath, existingConfig); err != nil {
+				debug.Debug("[app] Failed to update hash in ign.json: %v", err)
+				return nil, NewCheckoutError("failed to update template hash in ign.json", err)
+			}
+			debug.Debug("[app] Template hash updated in ign.json")
+		}
+	}
+
 	// Validate that all required variables are set
 	debug.Debug("[app] Validating required variables")
 	if err := ValidateVariables(&template.Config, vars); err != nil {

@@ -14,9 +14,10 @@ type IgnConfig struct {
 }
 
 // IgnVarJson represents the ign-var.json user variables file.
-// This file contains only user-provided variable values.
+// This file stores user-provided variable values used during template generation.
+// It is separate from ign.json to allow updating template source independently from variables.
 type IgnVarJson struct {
-	// Variables contains all user-provided variable values.
+	// Variables contains all user-provided variable values mapped by variable name.
 	Variables map[string]interface{} `json:"variables"`
 	// Metadata contains generation metadata (auto-generated, informational).
 	Metadata *FileMetadata `json:"metadata,omitempty"`

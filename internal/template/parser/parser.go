@@ -265,35 +265,35 @@ func validateFilenameVarValue(value, varSpec string) error {
 	// Check for null bytes (can truncate strings in file systems)
 	if strings.Contains(value, "\x00") {
 		return newParseErrorWithDirective(InvalidDirectiveSyntax,
-			fmt.Sprintf("variable value contains null byte"),
+			"variable value contains null byte",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for forward slash (Unix/Linux path separator)
 	if strings.Contains(value, "/") {
 		return newParseErrorWithDirective(InvalidDirectiveSyntax,
-			fmt.Sprintf("variable value contains forward slash (/) which is not allowed in filenames"),
+			"variable value contains forward slash (/) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for backslash (Windows path separator)
 	if strings.Contains(value, "\\") {
 		return newParseErrorWithDirective(InvalidDirectiveSyntax,
-			fmt.Sprintf("variable value contains backslash (\\) which is not allowed in filenames"),
+			"variable value contains backslash (\\) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for colon (Windows drive letter separator and NTFS alternate data streams)
 	if strings.Contains(value, ":") {
 		return newParseErrorWithDirective(InvalidDirectiveSyntax,
-			fmt.Sprintf("variable value contains colon (:) which is not allowed in filenames"),
+			"variable value contains colon (:) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
 	// Check for single dot (current directory reference)
 	if value == "." {
 		return newParseErrorWithDirective(InvalidDirectiveSyntax,
-			fmt.Sprintf("variable value is '.' (current directory) which is not allowed in filenames"),
+			"variable value is '.' (current directory) which is not allowed in filenames",
 			"@ign-var:"+varSpec+"@")
 	}
 
