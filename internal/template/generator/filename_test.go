@@ -261,6 +261,44 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: true,
 			errMsg:  "type mismatch",
 		},
+		{
+			name:     "null byte in variable value",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "file\x00name",
+			},
+			wantErr: true,
+			errMsg:  "null byte",
+		},
+		{
+			name:     "colon in variable value (Windows drive separator)",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "C:",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:     "colon in variable value (NTFS alternate data stream)",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "file:stream",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:     "single dot in variable value (current directory)",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": ".",
+			},
+			wantErr: true,
+			errMsg:  "current directory",
+		},
+		// The following tests ensure that directive syntax (which contains colons) is still allowed
+		// because the validation only applies to variable VALUES, not template syntax
 	}
 
 	p := parser.NewParser()
@@ -355,6 +393,8 @@ func TestValidateFilenameComponent(t *testing.T) {
 			wantErr:   true,
 			errMsg:    "path separator",
 		},
+		// Note: null byte and colon validation is done in the parser layer
+		// during variable substitution, not in validateFilenameComponent
 	}
 
 	for _, tt := range tests {

@@ -94,9 +94,9 @@ func parseFilenameInternal(ctx context.Context, input []byte, vars Variables) ([
 	}
 	debug.Debug("[parser] Filename Step 1: Extracted %d raw directive(s)", len(rawContent))
 
-	// Step 2: Process @ign-var: directives
+	// Step 2: Process @ign-var: directives (with filename-specific validation)
 	debug.Debug("[parser] Filename Step 2: Processing variables")
-	result, err = processVarDirectivesInText(result, vars)
+	result, err = processVarDirectivesInFilename(result, vars)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +226,64 @@ func processVarDirectivesInText(input []byte, vars Variables) ([]byte, error) {
 	}
 
 	return []byte(text), nil
+}
+
+// processVarDirectivesInFilename processes @ign-var:NAME@ directives in filenames
+// with additional security validation for the substituted values.
+// This prevents dangerous characters in variable values that could cause security issues.
+func processVarDirectivesInFilename(input []byte, vars Variables) ([]byte, error) {
+	text := string(input)
+	matches := findDirectives(input)
+
+	// Process from last to first to maintain positions
+	for i := len(matches) - 1; i >= 0; i-- {
+		match := matches[i]
+		if match.Type != DirectiveVar {
+			continue
+		}
+
+		replacement, err := processVarDirective(match.Args, vars)
+		if err != nil {
+			return nil, err
+		}
+
+		// Validate the variable value for filename safety
+		if err := validateFilenameVarValue(replacement, match.Args); err != nil {
+			return nil, err
+		}
+
+		text = text[:match.Start] + replacement + text[match.End:]
+	}
+
+	return []byte(text), nil
+}
+
+// validateFilenameVarValue validates that a variable value is safe to use in a filename.
+// This is called only when substituting variable values in filenames.
+// Returns an error if the value contains dangerous characters.
+func validateFilenameVarValue(value, varSpec string) error {
+	// Check for null bytes (can truncate strings in file systems)
+	if strings.Contains(value, "\x00") {
+		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+			fmt.Sprintf("variable value contains null byte"),
+			"@ign-var:"+varSpec+"@")
+	}
+
+	// Check for colon (Windows drive letter separator and NTFS alternate data streams)
+	if strings.Contains(value, ":") {
+		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+			fmt.Sprintf("variable value contains colon (:) which is not allowed in filenames"),
+			"@ign-var:"+varSpec+"@")
+	}
+
+	// Check for single dot (current directory reference)
+	if value == "." {
+		return newParseErrorWithDirective(InvalidDirectiveSyntax,
+			fmt.Sprintf("variable value is '.' (current directory) which is not allowed in filenames"),
+			"@ign-var:"+varSpec+"@")
+	}
+
+	return nil
 }
 
 // processCommentDirectivesInText removes all lines containing @ign-comment:XXX@ directives.

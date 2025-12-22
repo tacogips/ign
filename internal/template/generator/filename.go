@@ -64,6 +64,9 @@ func ProcessFilename(ctx context.Context, filePath string, vars parser.Variables
 }
 
 // validateFilenameComponent validates a single processed filename component.
+// Note: Security validation for dangerous characters (null bytes, colons) in variable values
+// is performed during variable substitution in the parser layer.
+// This function validates the overall component structure after substitution.
 func validateFilenameComponent(processed, original string) error {
 	// Check for path traversal in component (must check before trimming)
 	if strings.Contains(processed, "..") {

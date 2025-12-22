@@ -495,6 +495,116 @@ func TestExtractVariables(t *testing.T) {
 	}
 }
 
+// TestParseFilename tests filename parsing with security validation
+func TestParseFilename(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		vars     map[string]interface{}
+		expected string
+		wantErr  bool
+		errMsg   string
+	}{
+		{
+			name:     "simple variable substitution",
+			input:    "@ign-var:name@.go",
+			vars:     map[string]interface{}{"name": "handler"},
+			expected: "handler.go",
+			wantErr:  false,
+		},
+		{
+			name:     "variable in directory path",
+			input:    "@ign-var:pkg@",
+			vars:     map[string]interface{}{"pkg": "mypackage"},
+			expected: "mypackage",
+			wantErr:  false,
+		},
+		{
+			name:     "multiple variables",
+			input:    "@ign-var:prefix@-@ign-var:suffix@.txt",
+			vars:     map[string]interface{}{"prefix": "file", "suffix": "test"},
+			expected: "file-test.txt",
+			wantErr:  false,
+		},
+		{
+			name:     "raw directive to escape",
+			input:    "@ign-raw:@@.txt",
+			vars:     map[string]interface{}{},
+			expected: "@.txt",
+			wantErr:  false,
+		},
+		{
+			name:    "null byte in variable value - rejected",
+			input:   "@ign-var:name@.go",
+			vars:    map[string]interface{}{"name": "file\x00name"},
+			wantErr: true,
+			errMsg:  "null byte",
+		},
+		{
+			name:    "colon in variable value - rejected",
+			input:   "@ign-var:name@.go",
+			vars:    map[string]interface{}{"name": "file:stream"},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:    "Windows drive letter in variable value - rejected",
+			input:   "@ign-var:name@",
+			vars:    map[string]interface{}{"name": "C:"},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:    "single dot in variable value - rejected",
+			input:   "@ign-var:name@",
+			vars:    map[string]interface{}{"name": "."},
+			wantErr: true,
+			errMsg:  "current directory",
+		},
+		{
+			name:     "ign-if directive is NOT processed (kept as-is)",
+			input:    "file@ign-if:debug@.txt",
+			vars:     map[string]interface{}{"debug": true},
+			expected: "file@ign-if:debug@.txt",
+			wantErr:  false,
+		},
+		{
+			name:     "ign-comment directive is NOT processed (kept as-is)",
+			input:    "file@ign-comment:note@.txt",
+			vars:     map[string]interface{}{},
+			expected: "file@ign-comment:note@.txt",
+			wantErr:  false,
+		},
+	}
+
+	parser := NewParser()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := parser.ParseFilename(context.Background(), []byte(tt.input), testVars(tt.vars))
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error containing %q, got none", tt.errMsg)
+					return
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("expected error containing %q, got: %v", tt.errMsg, err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if string(result) != tt.expected {
+				t.Errorf("expected %q, got %q", tt.expected, string(result))
+			}
+		})
+	}
+}
+
 // TestMapVariables tests the MapVariables implementation
 func TestMapVariables(t *testing.T) {
 	vars := NewMapVariables(map[string]interface{}{
