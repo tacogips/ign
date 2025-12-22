@@ -6,13 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/debug"
+	"github.com/tacogips/ign/internal/version"
 )
 
+// Alias version variables for compatibility
 var (
-	// Build-time variables set via ldflags
-	Version   = "dev"
-	GitCommit = "unknown"
-	BuildDate = "unknown"
+	Version   = version.Version
+	GitCommit = version.GitCommit
+	BuildDate = version.BuildDate
 )
 
 // Global flags

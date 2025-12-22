@@ -324,6 +324,63 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: true,
 			errMsg:  "path traversal",
 		},
+		// Edge case: whitespace in middle of filename component
+		{
+			name:     "whitespace in middle of filename",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "my file",
+			},
+			wantErr: false, // Spaces are allowed in filenames
+			want:    "my file.txt",
+		},
+		{
+			name:     "tab character in filename",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "handler\tname",
+			},
+			wantErr: false, // Tab is allowed (though unusual)
+			want:    "handler\tname.txt",
+		},
+		// Edge case: multiple path separators in sequence
+		{
+			name:     "multiple forward slashes",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "dir//file",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "multiple backslashes",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "path\\\\file",
+			},
+			wantErr: true,
+			errMsg:  "backslash",
+		},
+		// Edge case: mixed valid and invalid characters
+		{
+			name:     "null byte in middle of valid filename",
+			filePath: "@ign-var:name@.backup",
+			variables: map[string]interface{}{
+				"name": "handler\x00",
+			},
+			wantErr: true,
+			errMsg:  "null byte",
+		},
+		{
+			name:     "colon in middle of filename",
+			filePath: "@ign-var:name@.yaml",
+			variables: map[string]interface{}{
+				"name": "config:debug",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
 		// Integration tests: Multiple path components
 		{
 			name:     "multiple components - each valid individually",
@@ -383,8 +440,9 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: true,
 			errMsg:  "forward slash",
 		},
-		// The following tests ensure that directive syntax (which contains colons) is still allowed
-		// because the validation only applies to variable VALUES, not template syntax
+		// Note: Directive syntax validation (e.g., @ign-var:name@ with colons) happens during parsing,
+		// not during filename generation. The parser validates directive syntax separately from
+		// variable value validation. See internal/template/parser/parser_test.go for directive syntax tests.
 	}
 
 	p := parser.NewParser()
@@ -546,6 +604,10 @@ func TestValidateProcessedPath(t *testing.T) {
 			wantErr:   true,
 			errMsg:    "current directory",
 		},
+		// Note: Windows absolute paths are only detected as absolute on Windows systems
+		// due to filepath.IsAbs() platform-specific behavior. On Unix systems, these
+		// look like relative paths, so we document expected behavior rather than enforce it.
+		// Real protection happens at parser level where path separators are rejected.
 	}
 
 	for _, tt := range tests {

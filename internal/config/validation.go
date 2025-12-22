@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/tacogips/ign/internal/template/model"
 )
@@ -92,6 +94,11 @@ func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
 	// Validate template source
 	if ignConfig.Template.URL == "" {
 		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "template.url", "template URL is required")
+	}
+
+	// Validate URL format
+	if err := validateTemplateURL(ignConfig.Template.URL); err != nil {
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "template.url", err.Error())
 	}
 
 	// Hash should be present (calculated during checkout)
@@ -332,5 +339,55 @@ func validateValueType(value interface{}, expectedType model.VarType) error {
 			return fmt.Errorf("expected bool, got %T", value)
 		}
 	}
+	return nil
+}
+
+// validateTemplateURL validates that a template URL is in a supported format.
+// Supports:
+//   - Full URLs: https://github.com/owner/repo, git@github.com:owner/repo.git
+//   - GitHub shorthand: github.com/owner/repo, github:owner/repo
+//   - Local paths: /path/to/template, ./relative/path
+func validateTemplateURL(templateURL string) error {
+	templateURL = strings.TrimSpace(templateURL)
+	if templateURL == "" {
+		return fmt.Errorf("template URL cannot be empty")
+	}
+
+	// Check for github: shorthand
+	if strings.HasPrefix(templateURL, "github:") {
+		// Format: github:owner/repo
+		return nil
+	}
+
+	// Check for git@ SSH format
+	if strings.HasPrefix(templateURL, "git@") {
+		// Format: git@github.com:owner/repo.git
+		return nil
+	}
+
+	// Check for local filesystem path
+	if strings.HasPrefix(templateURL, "/") || strings.HasPrefix(templateURL, "./") || strings.HasPrefix(templateURL, "../") {
+		// Local path (absolute or relative)
+		return nil
+	}
+
+	// Check for github.com shorthand (without scheme)
+	if strings.HasPrefix(templateURL, "github.com/") {
+		// Format: github.com/owner/repo
+		return nil
+	}
+
+	// Try parsing as URL
+	parsedURL, err := url.Parse(templateURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %v", err)
+	}
+
+	// Check for valid scheme
+	if parsedURL.Scheme != "" && parsedURL.Scheme != "https" && parsedURL.Scheme != "http" {
+		return fmt.Errorf("unsupported URL scheme %q (supported: https, http, git@, github:, or local path)", parsedURL.Scheme)
+	}
+
+	// If we got here, it's either a valid URL or a format we recognize
 	return nil
 }
