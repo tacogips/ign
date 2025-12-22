@@ -260,7 +260,11 @@ func processVarDirectivesInFilename(input []byte, vars Variables) ([]byte, error
 
 // validateFilenameVarValue validates that a variable value is safe to use in a filename.
 // This is called only when substituting variable values in filenames.
-// Returns an error if the value contains dangerous characters.
+// Returns InvalidDirectiveSyntax error if the value contains dangerous characters.
+//
+// Note: While these are security policy violations rather than syntax errors,
+// we use InvalidDirectiveSyntax for consistency with other directive validation errors.
+// The error type indicates the directive usage is invalid, which includes security violations.
 func validateFilenameVarValue(value, varSpec string) error {
 	// Check for null bytes (can truncate strings in file systems)
 	if strings.Contains(value, "\x00") {
@@ -304,6 +308,12 @@ func validateFilenameVarValue(value, varSpec string) error {
 			"@ign-var:"+varSpec+"@")
 	}
 
+	// Note: Empty and whitespace-only values are NOT validated here.
+	// This is intentional to support use cases like "prefix@ign-var:optional@.txt" → "prefix.txt"
+	// where an empty variable value produces "prefix.txt" as the final filename.
+	// Empty/whitespace validation happens later at the component level in
+	// internal/template/generator/filename.go:validateFilenameComponent which checks
+	// after variable substitution and rejects components that are empty after trimming.
 	return nil
 }
 

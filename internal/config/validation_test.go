@@ -57,6 +57,28 @@ func TestValidateIgnJson(t *testing.T) {
 		}
 	})
 
+	t.Run("empty name string", func(t *testing.T) {
+		ign := &model.IgnJson{
+			Name:      "",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		}
+		if err := ValidateIgnJson(ign); err == nil {
+			t.Error("Expected error for empty name")
+		}
+	})
+
+	t.Run("empty version string", func(t *testing.T) {
+		ign := &model.IgnJson{
+			Name:      "test",
+			Version:   "",
+			Variables: map[string]model.VarDef{},
+		}
+		if err := ValidateIgnJson(ign); err == nil {
+			t.Error("Expected error for empty version")
+		}
+	})
+
 	t.Run("invalid name format", func(t *testing.T) {
 		ign := &model.IgnJson{
 			Name:      "Test-Template", // uppercase not allowed
@@ -307,6 +329,16 @@ func TestValidateIgnConfig(t *testing.T) {
 		}
 		if err := ValidateIgnConfig(ignConfig); err == nil {
 			t.Error("Expected error for missing hash")
+		}
+	})
+
+	t.Run("empty template URL", func(t *testing.T) {
+		ignConfig := &model.IgnConfig{
+			Template: model.TemplateSource{URL: ""},
+			Hash:     "abc123def456789012345678901234567890123456789012345678901234abcd",
+		}
+		if err := ValidateIgnConfig(ignConfig); err == nil {
+			t.Error("Expected error for empty URL")
 		}
 	})
 

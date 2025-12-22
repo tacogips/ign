@@ -9,6 +9,7 @@ import (
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
+	"github.com/tacogips/ign/internal/version"
 )
 
 // InitOptions contains options for configuration initialization.
@@ -84,15 +85,9 @@ func Init(ctx context.Context, opts InitOptions) error {
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,
 			TemplateVersion: prepResult.IgnJson.Version,
+			IgnVersion:      version.Version,
 		},
 	}
-
-	debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
-	if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
-		debug.Debug("[app] Failed to save ign.json: %v", err)
-		return NewInitError("failed to save ign.json", err)
-	}
-	debug.Debug("[app] ign.json saved successfully")
 
 	// Create ign-var.json with empty/default variables (not generating files)
 	debug.Debug("[app] Creating ign-var.json with default variables")
@@ -103,15 +98,32 @@ func Init(ctx context.Context, opts InitOptions) error {
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,
 			TemplateVersion: prepResult.IgnJson.Version,
+			IgnVersion:      version.Version,
 		},
 	}
 
-	// Save ign-var.json
 	ignVarPath := filepath.Join(configDir, "ign-var.json")
+
+	// Save both configuration files with rollback on failure.
+	// Write ign.json first, then ign-var.json.
+	// If ign-var.json save fails, remove ign.json to maintain consistent state.
+	debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
+	if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
+		debug.Debug("[app] Failed to save ign.json: %v", err)
+		return NewInitError("failed to save ign.json", err)
+	}
+	debug.Debug("[app] ign.json saved successfully")
+
+	// Save ign-var.json
 	debug.DebugValue("[app] Saving ign-var.json to", ignVarPath)
 	if err := config.SaveIgnVarJson(ignVarPath, ignVarJson); err != nil {
 		debug.Debug("[app] Failed to save ign-var.json: %v", err)
-		return NewInitError("failed to save ign-var.json", err)
+		// Rollback: remove ign.json to avoid inconsistent state
+		debug.Debug("[app] Rolling back ign.json due to ign-var.json save failure")
+		if removeErr := os.Remove(ignConfigPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
+		}
+		return NewInitError("failed to save ign-var.json (rolled back ign.json)", err)
 	}
 	debug.Debug("[app] ign-var.json saved successfully")
 
