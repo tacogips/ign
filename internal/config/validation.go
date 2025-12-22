@@ -86,22 +86,22 @@ func ValidateIgnVarJson(ignVar *model.IgnVarJson) error {
 // NOT the template's own ign.json metadata file. For template metadata validation, see ValidateIgnJson.
 func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
 	if ignConfig == nil {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "", "ign.json cannot be nil")
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "", "project configuration (.ign/ign.json) cannot be nil")
 	}
 
 	// Validate template source
 	if ignConfig.Template.URL == "" {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "template.url", "template URL is required")
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "template.url", "template URL is required")
 	}
 
 	// Hash should be present (calculated during checkout)
 	if ignConfig.Hash == "" {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "hash", "template hash is required")
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "hash", "template hash is required")
 	}
 
 	// Validate hash format (must be valid SHA256: 64 hexadecimal characters)
 	if !isValidSHA256Hash(ignConfig.Hash) {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "hash",
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "hash",
 			"hash must be a valid SHA256 string (64 hexadecimal characters)")
 	}
 
@@ -186,6 +186,52 @@ func validateVariables(variables map[string]model.VarDef) error {
 					fmt.Sprintf("invalid regex pattern: %v", err),
 				)
 			}
+
+			// Validate default value against pattern
+			if varDef.Default != nil {
+				if str, ok := varDef.Default.(string); ok {
+					matched, err := regexp.MatchString(varDef.Pattern, str)
+					if err != nil {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.pattern", name),
+							fmt.Sprintf("error matching pattern: %v", err),
+						)
+					}
+					if !matched {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.default", name),
+							fmt.Sprintf("default value %q does not match pattern %q", str, varDef.Pattern),
+						)
+					}
+				}
+			}
+
+			// Validate example value against pattern
+			if varDef.Example != nil {
+				if str, ok := varDef.Example.(string); ok {
+					matched, err := regexp.MatchString(varDef.Pattern, str)
+					if err != nil {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.pattern", name),
+							fmt.Sprintf("error matching pattern: %v", err),
+						)
+					}
+					if !matched {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.example", name),
+							fmt.Sprintf("example value %q does not match pattern %q", str, varDef.Pattern),
+						)
+					}
+				}
+			}
 		}
 
 		// Validate min/max for integer types
@@ -206,6 +252,50 @@ func validateVariables(variables map[string]model.VarDef) error {
 				fmt.Sprintf("variables.%s", name),
 				fmt.Sprintf("min (%d) cannot be greater than max (%d)", *varDef.Min, *varDef.Max),
 			)
+		}
+
+		// Validate default value against min/max constraints
+		if varDef.Default != nil && varDef.Type == model.VarTypeInt {
+			if intVal, ok := varDef.Default.(int); ok {
+				if varDef.Min != nil && intVal < *varDef.Min {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.default", name),
+						fmt.Sprintf("default value %d is less than min %d", intVal, *varDef.Min),
+					)
+				}
+				if varDef.Max != nil && intVal > *varDef.Max {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.default", name),
+						fmt.Sprintf("default value %d is greater than max %d", intVal, *varDef.Max),
+					)
+				}
+			}
+		}
+
+		// Validate example value against min/max constraints
+		if varDef.Example != nil && varDef.Type == model.VarTypeInt {
+			if intVal, ok := varDef.Example.(int); ok {
+				if varDef.Min != nil && intVal < *varDef.Min {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.example", name),
+						fmt.Sprintf("example value %d is less than min %d", intVal, *varDef.Min),
+					)
+				}
+				if varDef.Max != nil && intVal > *varDef.Max {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.example", name),
+						fmt.Sprintf("example value %d is greater than max %d", intVal, *varDef.Max),
+					)
+				}
+			}
 		}
 	}
 

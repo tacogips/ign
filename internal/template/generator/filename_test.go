@@ -297,6 +297,92 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: true,
 			errMsg:  "current directory",
 		},
+		{
+			name:     "path traversal with embedded dots at start",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "..hidden",
+			},
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		{
+			name:     "path traversal with embedded dots in middle",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "data..backup",
+			},
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		{
+			name:     "path traversal with embedded dots at end",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "test..",
+			},
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		// Integration tests: Multiple path components
+		{
+			name:     "multiple components - each valid individually",
+			filePath: "@ign-var:dir1@/@ign-var:dir2@/file.go",
+			variables: map[string]interface{}{
+				"dir1": "pkg",
+				"dir2": "handler",
+			},
+			wantErr: false,
+			want:    "pkg/handler/file.go",
+		},
+		{
+			name:     "multiple components - second component with path separator",
+			filePath: "@ign-var:dir1@/@ign-var:dir2@/file.go",
+			variables: map[string]interface{}{
+				"dir1": "pkg",
+				"dir2": "../etc",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "multiple components - second component with path in value",
+			filePath: "@ign-var:dir1@/@ign-var:dir2@",
+			variables: map[string]interface{}{
+				"dir1": "valid",
+				"dir2": "etc/passwd",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "three-level deep path with valid values",
+			filePath: "a/@ign-var:b@/c.go",
+			variables: map[string]interface{}{
+				"b": "middleware",
+			},
+			wantErr: false,
+			want:    "a/middleware/c.go",
+		},
+		{
+			name:     "three-level deep path with path separator in middle",
+			filePath: "a/@ign-var:b@/c.go",
+			variables: map[string]interface{}{
+				"b": "../secret",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "path with absolute path in variable value",
+			filePath: "@ign-var:dir@/@ign-var:file@",
+			variables: map[string]interface{}{
+				"dir":  "valid",
+				"file": "/etc/passwd",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
 		// The following tests ensure that directive syntax (which contains colons) is still allowed
 		// because the validation only applies to variable VALUES, not template syntax
 	}
