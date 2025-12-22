@@ -99,6 +99,90 @@ REVIEW_COMMENTS=$(echo "$PR_BODY" | grep -oP 'https://github.com/[^/]+/[^/]+/pul
 - If original PR not found: Exit with error "Could not find original PR reference in PR body"
 - If no review comments found: Exit with message "No review comment URLs found in PR body"
 
+### Step 3.5: Fetch Review Comments and Thread IDs via GraphQL API
+
+**IMPORTANT**: Use GraphQL API to fetch review comments with their thread IDs, which are required for resolution.
+
+**GraphQL Query to fetch all review threads with comments:**
+
+```bash
+# Fetch all unresolved review threads with their comment details
+gh api graphql -f query='
+query {
+  repository(owner: "{owner}", name: "{repo}") {
+    pullRequest(number: {pr_number}) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              id
+              databaseId
+              body
+              path
+              line
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+**Parse the response to get thread IDs:**
+
+```bash
+# Get unresolved threads with their comment IDs and thread IDs
+gh api graphql -f query='...' | jq '
+  .data.repository.pullRequest.reviewThreads.nodes
+  | map(select(.isResolved == false))
+  | .[] | {
+      thread_id: .id,
+      comment_id: .comments.nodes[0].databaseId,
+      path: .comments.nodes[0].path,
+      line: .comments.nodes[0].line,
+      body: .comments.nodes[0].body[0:100]
+    }
+'
+```
+
+**Alternative: Fetch comments via REST API and filter:**
+
+```bash
+# List all review comments (REST API)
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments
+
+# Filter to get specific comment details by ID
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments 2>/dev/null | \
+  jq '.[] | select(.id == {comment_id})'
+```
+
+**Note**: The REST API endpoint `/repos/{owner}/{repo}/pulls/comments/{comment_id}` may return 404 for some comments. Use the list endpoint and filter with jq instead:
+
+```bash
+# Correct approach - list and filter
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments | \
+  jq '.[] | select(.id == 2639259350) | {id, node_id, path, line, body: .body[0:200]}'
+```
+
+**Map comment IDs to thread IDs:**
+
+The `discussion_r{id}` in the URL corresponds to the comment's `databaseId` in GraphQL. To resolve a thread, you need the thread's `id` (not the comment's `id`). Use the GraphQL query above to create a mapping:
+
+```bash
+# Create mapping of comment_id -> thread_id
+THREAD_MAP=$(gh api graphql -f query='...' | jq '
+  .data.repository.pullRequest.reviewThreads.nodes
+  | map({
+      comment_id: .comments.nodes[0].databaseId,
+      thread_id: .id
+    })
+  | from_entries
+')
+```
+
 ### Step 4: Verify Original PR State
 
 ```bash
@@ -189,30 +273,138 @@ Do you want to resolve these comments on GitHub?
 
 For each confirmed resolvable comment:
 
-```bash
-# Resolve the review thread
-# Note: GitHub doesn't have a direct "resolve" API for review comments
-# Instead, we need to mark the thread as resolved
+**Step 8.1: Get Thread ID from Comment ID**
 
+First, map the comment ID (from `discussion_r{id}`) to the thread ID using GraphQL:
+
+```bash
+# Full GraphQL query to get all threads with their comment IDs
 gh api graphql -f query='
-  mutation {
-    resolveReviewThread(input: {threadId: "{thread_id}"}) {
-      thread {
-        id
-        isResolved
+query {
+  repository(owner: "tacogips", name: "ign") {
+    pullRequest(number: 9) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              id
+              databaseId
+              body
+              path
+              line
+            }
+          }
+        }
       }
     }
   }
-'
+}'
 ```
 
-**Alternative approach using REST API:**
-```bash
-# Get the review thread ID from the comment
-THREAD_INFO=$(gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id})
+**Step 8.2: Filter to find specific thread by comment ID**
 
-# If GitHub API supports direct resolution, use it
-# Otherwise, post a resolution comment to the thread
+```bash
+# Filter unresolved threads and extract thread_id, comment_id mapping
+gh api graphql -f query='...' | jq '
+  .data.repository.pullRequest.reviewThreads.nodes
+  | map(select(.isResolved == false))
+  | .[] | {
+      thread_id: .id,
+      comment_id: .comments.nodes[0].databaseId,
+      body: .comments.nodes[0].body[0:100]
+    }'
+```
+
+Example output:
+```json
+{
+  "thread_id": "PRRT_kwDONMmJGs5m-mWt",
+  "comment_id": 2639259350,
+  "body": "## [REVIEW] Critical: Missing path separator validation..."
+}
+```
+
+**Step 8.3: Resolve the thread using GraphQL mutation**
+
+```bash
+# Resolve a single review thread
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {threadId: "PRRT_kwDONMmJGs5m-mWt"}) {
+    thread {
+      id
+      isResolved
+    }
+  }
+}'
+```
+
+Expected success response:
+```json
+{
+  "data": {
+    "resolveReviewThread": {
+      "thread": {
+        "id": "PRRT_kwDONMmJGs5m-mWt",
+        "isResolved": true
+      }
+    }
+  }
+}
+```
+
+**Complete example workflow:**
+
+```bash
+# 1. Get all unresolved threads for PR #9
+THREADS=$(gh api graphql -f query='
+query {
+  repository(owner: "tacogips", name: "ign") {
+    pullRequest(number: 9) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              databaseId
+            }
+          }
+        }
+      }
+    }
+  }
+}')
+
+# 2. Find thread ID for comment ID 2639259350
+THREAD_ID=$(echo "$THREADS" | jq -r '
+  .data.repository.pullRequest.reviewThreads.nodes[]
+  | select(.comments.nodes[0].databaseId == 2639259350)
+  | .id
+')
+
+# 3. Resolve the thread
+gh api graphql -f query="
+mutation {
+  resolveReviewThread(input: {threadId: \"$THREAD_ID\"}) {
+    thread {
+      id
+      isResolved
+    }
+  }
+}"
+```
+
+**Alternative approach using REST API (not recommended - no direct resolve):**
+```bash
+# Get the review comment details (use list and filter, not direct endpoint)
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments | \
+  jq '.[] | select(.id == {comment_id})'
+
+# REST API does not support resolving threads directly
+# You can only post a reply to the thread
 gh api repos/{owner}/{repo}/pulls/comments/{comment_id}/replies \
   -f body="Resolved by merge of #{review_fixes_pr_number}"
 ```
@@ -220,6 +412,9 @@ gh api repos/{owner}/{repo}/pulls/comments/{comment_id}/replies \
 **Error handling for each comment:**
 - If resolution fails: Log error but continue with other comments
 - Track success/failure count
+- Common errors:
+  - `NOT_FOUND`: Thread ID is invalid or thread was already deleted
+  - `FORBIDDEN`: No permission to resolve threads in this repository
 
 ### Step 9: Display Final Summary
 

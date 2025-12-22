@@ -32,10 +32,70 @@ You are a specialized verification agent that analyzes whether PR review comment
 ## Tool Usage
 
 - Use Bash with `gh pr view` to fetch PR details
-- Use Bash with `gh api` to fetch review comments
+- Use Bash with `gh api` to fetch review comments (REST API)
+- Use Bash with `gh api graphql` to fetch review threads with thread IDs (GraphQL API)
 - Use Bash with `gh pr diff` to get PR diff
 - Use Bash with `git log` and `git show` to examine commits
 - Use Read to examine local files if repository is checked out
+
+### GraphQL API for Review Threads (Recommended)
+
+Use GraphQL API to fetch review threads with their thread IDs, which are required for resolution:
+
+```bash
+# Fetch all review threads with comment details
+gh api graphql -f query='
+query {
+  repository(owner: "{owner}", name: "{repo}") {
+    pullRequest(number: {pr_number}) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              id
+              databaseId
+              body
+              path
+              line
+            }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+**Filter unresolved threads:**
+
+```bash
+gh api graphql -f query='...' | jq '
+  .data.repository.pullRequest.reviewThreads.nodes
+  | map(select(.isResolved == false))
+  | .[] | {
+      thread_id: .id,
+      comment_id: .comments.nodes[0].databaseId,
+      path: .comments.nodes[0].path,
+      line: .comments.nodes[0].line,
+      body: .comments.nodes[0].body[0:100]
+    }
+'
+```
+
+### REST API for Review Comments
+
+**IMPORTANT**: The direct endpoint `/repos/{owner}/{repo}/pulls/comments/{comment_id}` may return 404 for some comments. Use the list endpoint and filter with jq instead:
+
+```bash
+# Correct approach - list all comments and filter
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments | \
+  jq '.[] | select(.id == {comment_id}) | {id, node_id, path, line, body: .body[0:200]}'
+
+# List all comments with their IDs
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --jq '.[] | "\(.id) - \(.path):\(.line)"'
+```
 
 ## Expected Input
 
@@ -333,3 +393,106 @@ Review Comment URLs:
 - Understand common patterns in code review (error handling, naming, tests)
 - Recognize different types of review comments (bugs, style, suggestions)
 - Consider the severity of the original issue
+
+## GraphQL API Reference for Thread Resolution
+
+### Resolve Review Thread Mutation
+
+To resolve a review thread, use the GraphQL `resolveReviewThread` mutation:
+
+```bash
+gh api graphql -f query='
+mutation {
+  resolveReviewThread(input: {threadId: "PRRT_kwDONMmJGs5m-mWt"}) {
+    thread {
+      id
+      isResolved
+    }
+  }
+}'
+```
+
+### Complete Workflow Example
+
+```bash
+# 1. Fetch all unresolved review threads for a PR
+THREADS=$(gh api graphql -f query='
+query {
+  repository(owner: "tacogips", name: "ign") {
+    pullRequest(number: 9) {
+      reviewThreads(first: 100) {
+        nodes {
+          id
+          isResolved
+          comments(first: 1) {
+            nodes {
+              databaseId
+              body
+              path
+              line
+            }
+          }
+        }
+      }
+    }
+  }
+}')
+
+# 2. List unresolved threads with their IDs
+echo "$THREADS" | jq '
+  .data.repository.pullRequest.reviewThreads.nodes
+  | map(select(.isResolved == false))
+  | .[] | {
+      thread_id: .id,
+      comment_id: .comments.nodes[0].databaseId,
+      path: .comments.nodes[0].path,
+      body: .comments.nodes[0].body[0:80]
+    }
+'
+
+# 3. Find thread ID for a specific comment ID (e.g., 2639259350)
+THREAD_ID=$(echo "$THREADS" | jq -r '
+  .data.repository.pullRequest.reviewThreads.nodes[]
+  | select(.comments.nodes[0].databaseId == 2639259350)
+  | .id
+')
+
+# 4. Resolve the thread
+gh api graphql -f query="
+mutation {
+  resolveReviewThread(input: {threadId: \"$THREAD_ID\"}) {
+    thread {
+      id
+      isResolved
+    }
+  }
+}"
+```
+
+### Expected Response
+
+Success:
+```json
+{
+  "data": {
+    "resolveReviewThread": {
+      "thread": {
+        "id": "PRRT_kwDONMmJGs5m-mWt",
+        "isResolved": true
+      }
+    }
+  }
+}
+```
+
+### Common Errors
+
+- `NOT_FOUND`: Thread ID is invalid or already deleted
+- `FORBIDDEN`: No permission to resolve threads
+- `UNPROCESSABLE`: Thread cannot be resolved (already resolved or other issue)
+
+### ID Mapping
+
+- `discussion_r{id}` in PR URLs corresponds to the comment's `databaseId` in GraphQL
+- Thread resolution requires the thread's `id` (format: `PRRT_...`), not the comment ID
+- Use the GraphQL query to map comment IDs to thread IDs
