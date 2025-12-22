@@ -16,6 +16,7 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 	"github.com/tacogips/ign/internal/template/provider"
+	"github.com/tacogips/ign/internal/version"
 )
 
 // PrepareCheckoutOptions contains options for preparing checkout.
@@ -323,15 +324,9 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 				GeneratedBy:     "ign checkout",
 				TemplateName:    prep.IgnJson.Name,
 				TemplateVersion: prep.IgnJson.Version,
+				IgnVersion:      version.Version,
 			},
 		}
-
-		debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
-		if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
-			debug.Debug("[app] Failed to save ign.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign.json", err)
-		}
-		debug.Debug("[app] ign.json saved successfully")
 
 		// Save ign-var.json (variables only)
 		debug.Debug("[app] Creating ign-var.json")
@@ -342,13 +337,29 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 				GeneratedBy:     "ign checkout",
 				TemplateName:    prep.IgnJson.Name,
 				TemplateVersion: prep.IgnJson.Version,
+				IgnVersion:      version.Version,
 			},
 		}
+
+		// Save both configuration files with rollback on failure.
+		// Write ign.json first, then ign-var.json.
+		// If ign-var.json save fails, remove ign.json to maintain consistent state.
+		debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
+		if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
+			debug.Debug("[app] Failed to save ign.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign.json", err)
+		}
+		debug.Debug("[app] ign.json saved successfully")
 
 		debug.DebugValue("[app] Saving ign-var.json to", ignVarPath)
 		if err := config.SaveIgnVarJson(ignVarPath, ignVarJson); err != nil {
 			debug.Debug("[app] Failed to save ign-var.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign-var.json", err)
+			// Rollback: remove ign.json to avoid inconsistent state
+			debug.Debug("[app] Rolling back ign.json due to ign-var.json save failure")
+			if removeErr := os.Remove(ignConfigPath); removeErr != nil {
+				debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
+			}
+			return nil, NewCheckoutError("failed to save ign-var.json (rolled back ign.json)", err)
 		}
 		debug.Debug("[app] ign-var.json saved successfully")
 	}
