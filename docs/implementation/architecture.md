@@ -394,7 +394,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
    │  ├─ If not cached: provider.Fetch()
    │  └─ Cache result
    ├─ Parse ign.json
-   ├─ Create .ign-config directory
+   ├─ Create .ign directory
    ├─ Generate ign-var.json
    │  ├─ Template reference
    │  ├─ Empty variable values
@@ -410,7 +410,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
    └─ Return Template
 
 4. Output
-   └─ .ign-config/ign-var.json created
+   └─ .ign/ign-var.json created
 ```
 
 ### 4.2 Init Workflow
@@ -424,7 +424,7 @@ User: ign init --output ./my-project
    └─ Call app.Init()
 
 2. Application Layer (internal/app/init.go)
-   ├─ Load .ign-config/ign-var.json
+   ├─ Load .ign/ign-var.json
    ├─ Validate variables
    ├─ Resolve @file: references
    ├─ Get Provider and fetch template
@@ -661,10 +661,10 @@ Error: Template variable not defined
 File: main.go.template:15
 Variable: @ign-var:database_url@
 
-This variable is required but not found in .ign-config/ign-var.json
+This variable is required but not found in .ign/ign-var.json
 Available variables: project_name, version, port
 
-Please edit .ign-config/ign-var.json and add:
+Please edit .ign/ign-var.json and add:
   "database_url": "your-value-here"
 ```
 

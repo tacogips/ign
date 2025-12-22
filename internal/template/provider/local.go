@@ -286,7 +286,7 @@ func isSubPath(parent, child string) bool {
 	}
 
 	// If rel starts with "..", it's outside parent
-	return !filepath.IsAbs(rel) && !filepath.HasPrefix(rel, "..")
+	return !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "..")
 }
 
 // readIgnConfig reads and parses the ign.json file.

@@ -22,7 +22,7 @@
 ## Design Decisions
 - Clean Architecture: CLI -> App -> Domain layer separation
 - Validation at app layer for better testability
-- @file: paths resolved relative to .ign-config/
+- @file: paths resolved relative to .ign/
 - GitHub token resolution: GITHUB_TOKEN env > GH_TOKEN env > gh auth token
 - Non-fatal errors accumulated for partial generation
 

@@ -72,30 +72,6 @@ func printVerbose(verbose bool, msg string) {
 	}
 }
 
-// printDebug prints a debug message
-func printDebug(msg string) {
-	if globalQuiet {
-		return
-	}
-	if globalNoColor {
-		fmt.Printf("[DEBUG] %s\n", msg)
-	} else {
-		fmt.Printf("%s[DEBUG]%s %s\n", colorCyan, colorReset, msg)
-	}
-}
-
-// printProgress prints a progress indicator
-func printProgress(msg string) {
-	if globalQuiet {
-		return
-	}
-	if globalNoColor {
-		fmt.Printf("→ %s\n", msg)
-	} else {
-		fmt.Printf("%s→%s %s\n", colorBlue, colorReset, msg)
-	}
-}
-
 // formatBytes formats bytes as human-readable string
 func formatBytes(bytes int64) string {
 	const unit = 1024

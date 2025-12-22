@@ -21,9 +21,9 @@ type PrepareCheckoutOptions struct {
 	URL string
 	// Ref is the git branch, tag, or commit SHA.
 	Ref string
-	// Force backs up and overwrites existing .ign-config directory if true.
+	// Force backs up and overwrites existing .ign directory if true.
 	Force bool
-	// ConfigExists indicates if .ign-config already exists.
+	// ConfigExists indicates if .ign already exists.
 	ConfigExists bool
 	// GitHubToken is the GitHub personal access token (optional).
 	GitHubToken string
@@ -106,7 +106,7 @@ func findNextBackupNumber(dir string) int {
 // PrepareCheckout prepares for checkout by fetching the template and handling config directory.
 // Returns template information and variable definitions for interactive prompting.
 func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*PrepareCheckoutResult, error) {
-	configDir := ".ign-config"
+	configDir := ".ign"
 
 	debug.DebugSection("[app] PrepareCheckout workflow start")
 	debug.DebugValue("[app] Template URL", opts.URL)
@@ -205,7 +205,7 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 
 // CompleteCheckout completes checkout by saving configuration and generating files.
 func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*CheckoutResult, error) {
-	configDir := ".ign-config"
+	configDir := ".ign"
 	configPath := filepath.Join(configDir, "ign-var.json")
 
 	debug.DebugSection("[app] CompleteCheckout workflow start")
@@ -326,7 +326,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 }
 
 // CheckoutOptions contains options for project checkout (backward-compatible).
-// This is used when .ign-config/ign-var.json already exists.
+// This is used when .ign/ign-var.json already exists.
 // Deprecated: Use PrepareCheckout and CompleteCheckout for new code.
 type CheckoutOptions struct {
 	// OutputDir is the directory where project files will be generated.
@@ -342,10 +342,10 @@ type CheckoutOptions struct {
 }
 
 // Checkout generates project files from template using existing configuration.
-// Loads .ign-config/ign-var.json, fetches template, and generates project files.
+// Loads .ign/ign-var.json, fetches template, and generates project files.
 // Deprecated: Use PrepareCheckout and CompleteCheckout for new code.
 func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error) {
-	configPath := ".ign-config/ign-var.json"
+	configPath := ".ign/ign-var.json"
 
 	debug.DebugSection("[app] Checkout workflow start (backward-compatible)")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)

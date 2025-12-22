@@ -15,7 +15,7 @@ import (
 func TestInit_LocalProvider(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 
 	// Copy fixture to temp directory
 	templatePath := copyFixtureToTemp(t, "simple-template", tempDir)
@@ -28,7 +28,7 @@ func TestInit_LocalProvider(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Execute init
 	err = app.Init(context.Background(), app.InitOptions{
@@ -38,7 +38,7 @@ func TestInit_LocalProvider(t *testing.T) {
 		t.Fatalf("Init failed: %v", err)
 	}
 
-	// Verify .ign-config directory created
+	// Verify .ign directory created
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		t.Errorf("config directory not created: %s", configDir)
 	}
@@ -112,7 +112,7 @@ func TestInit_WithAbsolutePath(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Absolute paths should now work
 	err = app.Init(context.Background(), app.InitOptions{
@@ -135,7 +135,7 @@ func TestInit_WithPathTraversal(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Try with path traversal (should fail)
 	traversalPath := "../../../etc/passwd"
@@ -166,7 +166,7 @@ func TestInit_InvalidTemplate(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Get relative path
 	relPath := "./invalid-template"
@@ -183,7 +183,7 @@ func TestInit_InvalidTemplate(t *testing.T) {
 // TestInit_ConditionalTemplate tests init with conditional template
 func TestInit_ConditionalTemplate(t *testing.T) {
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 
 	// Copy fixture to temp directory
 	templatePath := copyFixtureToTemp(t, "conditional-template", tempDir)
@@ -196,7 +196,7 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Execute init
 	err = app.Init(context.Background(), app.InitOptions{
@@ -230,7 +230,7 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 // TestInit_Force tests the --force flag for backup and reinitialize
 func TestInit_Force(t *testing.T) {
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 
 	// Copy fixture to temp directory
 	templatePath := copyFixtureToTemp(t, "simple-template", tempDir)
@@ -243,7 +243,7 @@ func TestInit_Force(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// First init
 	err = app.Init(context.Background(), app.InitOptions{

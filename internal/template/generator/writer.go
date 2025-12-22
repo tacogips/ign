@@ -81,7 +81,7 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 	closeErr := f.Close()
 
 	if err != nil {
-		os.Remove(tempFile) // Clean up temp file
+		_ = os.Remove(tempFile) // Clean up temp file
 		return newGeneratorError(GeneratorWriteFailed,
 			"failed to write file content",
 			path,
@@ -89,7 +89,7 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 	}
 
 	if closeErr != nil {
-		os.Remove(tempFile) // Clean up temp file
+		_ = os.Remove(tempFile) // Clean up temp file
 		return newGeneratorError(GeneratorWriteFailed,
 			"failed to close file",
 			path,
@@ -99,7 +99,7 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 	// Atomic rename
 	debug.Debug("[generator] Renaming temporary file: %s -> %s", tempFile, path)
 	if err := os.Rename(tempFile, path); err != nil {
-		os.Remove(tempFile) // Clean up temp file
+		_ = os.Remove(tempFile) // Clean up temp file
 		return newGeneratorError(GeneratorWriteFailed,
 			"failed to rename temporary file",
 			path,
@@ -137,7 +137,7 @@ func CopyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	// Create parent directories
 	dir := filepath.Dir(dst)
@@ -151,7 +151,7 @@ func CopyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		return fmt.Errorf("failed to copy file content: %w", err)

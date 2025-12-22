@@ -38,11 +38,11 @@ func TestDebugOutput(t *testing.T) {
 
 	Debug("test message %s", "arg")
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "[DEBUG]") {
@@ -68,11 +68,11 @@ func TestDebugDisabled(t *testing.T) {
 	SetDebug(false)
 	Debug("this should not appear")
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if output != "" {
@@ -91,11 +91,11 @@ func TestDebugSection(t *testing.T) {
 
 	DebugSection("Test Section")
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "[DEBUG]") {
@@ -118,11 +118,11 @@ func TestDebugValue(t *testing.T) {
 
 	DebugValue("key", "value")
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "[DEBUG]") {
@@ -149,11 +149,11 @@ func TestDebugJSON(t *testing.T) {
 	}
 	DebugJSON("testData", testData)
 
-	w.Close()
+	_ = w.Close()
 	os.Stderr = oldStderr
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "[DEBUG]") {

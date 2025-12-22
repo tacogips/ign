@@ -27,6 +27,6 @@
 
 ## Notes
 - 10 test suites with comprehensive coverage
-- Special file filtering excludes ign.json and .ign-config/
+- Special file filtering excludes ign.json and .ign/
 - Executable permissions preserved when PreserveExecutable is true
 - All tests pass in under 0.02s

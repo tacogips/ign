@@ -29,7 +29,7 @@ var rootCmd = &cobra.Command{
 	Long: `ign is a CLI tool for initializing projects from templates.
 
 Use "ign checkout <url> [output-path]" to:
-  1. Create .ign-config directory with configuration
+  1. Create .ign directory with configuration
   2. Interactively prompt for template variables
   3. Generate project files from the template
 

@@ -92,7 +92,7 @@ func CreateEmptyVariablesMap(ignJson *model.IgnJson) map[string]interface{} {
 // Suggests using @file: for string variables without defaults.
 func FormatVariableTip(name string, varDef model.VarDef) string {
 	if varDef.Type == model.VarTypeString && varDef.Default == nil {
-		return fmt.Sprintf("Tip: You can use @file:filename.txt to load content from a file")
+		return "Tip: You can use @file:filename.txt to load content from a file"
 	}
 	return ""
 }

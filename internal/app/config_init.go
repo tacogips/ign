@@ -18,7 +18,7 @@ type InitOptions struct {
 	URL string
 	// Ref is the git branch, tag, or commit SHA.
 	Ref string
-	// Force backs up and overwrites existing .ign-config directory if true.
+	// Force backs up and overwrites existing .ign directory if true.
 	Force bool
 	// Config is the path to global config file (optional).
 	Config string
@@ -27,10 +27,10 @@ type InitOptions struct {
 }
 
 // Init initializes configuration from a template.
-// Creates .ign-config/ign-var.json with template metadata and empty/default variables.
+// Creates .ign/ign-var.json with template metadata and empty/default variables.
 // Deprecated: Use PrepareCheckout and CompleteCheckout instead.
 func Init(ctx context.Context, opts InitOptions) error {
-	configDir := ".ign-config"
+	configDir := ".ign"
 
 	debug.DebugSection("[app] Init workflow start (deprecated)")
 	debug.DebugValue("[app] Template URL", opts.URL)

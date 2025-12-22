@@ -15,7 +15,7 @@ import (
 func TestCheckout_SimpleTemplate(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Copy fixture to temp directory
@@ -29,7 +29,7 @@ func TestCheckout_SimpleTemplate(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Step 1: Initialize config
 	if err := app.Init(context.Background(), app.InitOptions{
@@ -146,7 +146,7 @@ func TestCheckout_ConditionalTemplate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			tempDir := t.TempDir()
-			configDir := filepath.Join(tempDir, ".ign-config")
+			configDir := filepath.Join(tempDir, ".ign")
 			outputDir := filepath.Join(tempDir, "output")
 
 			// Copy fixture and init
@@ -159,7 +159,7 @@ func TestCheckout_ConditionalTemplate(t *testing.T) {
 			if err := os.Chdir(tempDir); err != nil {
 				t.Fatalf("failed to change to temp directory: %v", err)
 			}
-			defer os.Chdir(origDir)
+			defer func() { _ = os.Chdir(origDir) }()
 
 			// Step 1: Initialize config
 			if err := app.Init(context.Background(), app.InitOptions{
@@ -257,7 +257,7 @@ func TestCheckout_ConditionalTemplate(t *testing.T) {
 func TestCheckout_GoProject(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Copy fixture and init
@@ -270,7 +270,7 @@ func TestCheckout_GoProject(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Step 1: Initialize config
 	if err := app.Init(context.Background(), app.InitOptions{
@@ -364,7 +364,7 @@ func TestCheckout_GoProject(t *testing.T) {
 func TestCheckout_Overwrite(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Copy fixture and init
@@ -377,7 +377,7 @@ func TestCheckout_Overwrite(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Step 1: Initialize config
 	if err := app.Init(context.Background(), app.InitOptions{

@@ -311,7 +311,7 @@ func TestIncludeDirective(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create test include file
 	includeFile := filepath.Join(tmpDir, "header.txt")
@@ -352,7 +352,7 @@ func TestCircularInclude(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create circular includes: a.txt -> b.txt -> a.txt
 	fileA := filepath.Join(tmpDir, "a.txt")

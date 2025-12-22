@@ -86,7 +86,7 @@ This convention prevents syntax errors from linters and IDEs that expect valid s
 ign init github.com/example/ign-templates/02-with-variables
 
 # Edit variables
-vim .ign-config/ign-var.json
+vim .ign/ign-var.json
 
 # Generate files
 ign checkout .
