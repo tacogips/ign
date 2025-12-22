@@ -505,11 +505,16 @@ type TemplateSettings struct {
     MaxIncludeDepth    int      `json:"max_include_depth,omitempty"`
 }
 
-// IgnVarJson represents the ign-var.json file
+// IgnConfig represents the .ign/ign.json file (template reference + hash)
+type IgnConfig struct {
+    Template  TemplateSource   `json:"template"`
+    Hash      string           `json:"hash"`
+    Metadata  *ConfigMetadata  `json:"metadata,omitempty"`
+}
+
+// IgnVarJson represents the .ign/ign-var.json file (user variables only)
 type IgnVarJson struct {
-    Template  TemplateSource         `json:"template"`
     Variables map[string]interface{} `json:"variables"`
-    Metadata  *VarMetadata           `json:"metadata,omitempty"`
 }
 
 // TemplateSource identifies the template
@@ -519,8 +524,8 @@ type TemplateSource struct {
     Ref  string `json:"ref,omitempty"`
 }
 
-// VarMetadata contains generation metadata
-type VarMetadata struct {
+// ConfigMetadata contains generation metadata for IgnConfig
+type ConfigMetadata struct {
     GeneratedAt     time.Time `json:"generated_at,omitempty"`
     GeneratedBy     string    `json:"generated_by,omitempty"`
     TemplateName    string    `json:"template_name,omitempty"`

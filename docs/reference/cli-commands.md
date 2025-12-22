@@ -191,7 +191,8 @@ ign init --dry-run
 
 ```
 1. Read Configuration
-   ├─ Load ign-var.json
+   ├─ Load ign.json (template source and hash)
+   ├─ Load ign-var.json (variables)
    ├─ Validate all required variables are set
    └─ Resolve @file: references
 
@@ -335,7 +336,7 @@ Output (if dir1/ exists with file1.txt):
 ### 2.3 Error Handling
 
 **Fatal Errors (exit immediately):**
-- Missing `.ign/ign-var.json`
+- Missing `.ign/ign.json` or `.ign/ign-var.json`
 - Invalid JSON in config file
 - Missing required variables
 - Template fetch failure

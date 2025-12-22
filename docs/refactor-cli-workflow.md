@@ -17,12 +17,32 @@ ign init --output ./my-project
 ## New Workflow (After)
 
 ```bash
-# Step 1: Create .ign/ign-var.json
+# Step 1: Create .ign/ign.json and .ign/ign-var.json
 ign init github.com/owner/repo
 
 # Step 2: Generate project
 ign checkout ./my-project
 ```
+
+## Configuration File Split
+
+The `.ign/` directory now contains two separate configuration files:
+
+1. **`ign.json`** - Template source reference and content hash
+   ```json
+   {
+     "template": { "url": "...", "path": "...", "ref": "..." },
+     "hash": "sha256:...",
+     "metadata": { ... }
+   }
+   ```
+
+2. **`ign-var.json`** - User-provided variable values only
+   ```json
+   {
+     "variables": { "key": "value", ... }
+   }
+   ```
 
 ## Changes Required
 

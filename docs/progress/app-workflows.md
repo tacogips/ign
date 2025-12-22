@@ -28,7 +28,8 @@
 
 ## Notes
 - 6 test suites with 31 test cases
-- BuildInit creates ign-var.json with empty variables and metadata
+- Checkout creates both ign.json (template source + hash) and ign-var.json (variables only)
 - Init supports dry-run mode for preview
 - Error messages include context for debugging
 - All tests pass in under 0.01s
+- Configuration split: ign.json contains template source and hash, ign-var.json contains only user variables

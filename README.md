@@ -141,11 +141,12 @@ ign version --json   # JSON format output
 
 ```
 .ign/
-  ign-var.json         # Template reference and variable values
+  ign.json             # Template reference and content hash
+  ign-var.json         # User variable values
   license-header.txt   # Optional files for @file: references
 ```
 
-### ign-var.json
+### ign.json (Template Reference)
 
 ```json
 {
@@ -153,6 +154,14 @@ ign version --json   # JSON format output
     "url": "github.com/owner/templates/go-basic",
     "ref": "main"
   },
+  "hash": "sha256:e3b0c44298fc1c149..."
+}
+```
+
+### ign-var.json (User Variables)
+
+```json
+{
   "variables": {
     "app_name": "my-app",
     "port": 8080,

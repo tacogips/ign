@@ -87,9 +87,14 @@ User-created directory containing build configuration:
 ```
 <working-dir>/
 +-- .ign/
-    |-- ign-var.json           # Template reference + variables
+    |-- ign.json               # Template reference + hash
+    |-- ign-var.json           # User variables
     +-- license-header.txt     # Files for @file: references (optional)
 ```
+
+**Note:** The configuration is split into two files:
+- `ign.json` - Template source (URL, path, ref) and content hash for verification
+- `ign-var.json` - User-provided variable values only
 
 ### 2.3 Template Sources
 
@@ -194,7 +199,8 @@ See [Template Syntax Reference](reference/template-syntax.md) for detailed synta
 | File | Location | Purpose |
 |------|----------|---------|
 | `ign.json` | Template root | Template definition (not deployed) |
-| `ign-var.json` | `.ign/` | User variables and template reference |
+| `ign.json` | `.ign/` | Template reference and content hash |
+| `ign-var.json` | `.ign/` | User-provided variable values |
 | `config.json` | `~/.config/ign/` | Global ign configuration |
 
 See [Configuration Reference](reference/configuration.md) for complete file format documentation.
