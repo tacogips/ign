@@ -20,6 +20,10 @@ type IgnJson struct {
 	Variables map[string]VarDef `json:"variables"`
 	// Settings contains template-specific settings.
 	Settings *TemplateSettings `json:"settings,omitempty"`
+	// Hash is a SHA256 hash of all template files content.
+	// This is automatically calculated when the template is modified (e.g., via collect-vars).
+	// Used by 'ign update' to detect template changes.
+	Hash string `json:"hash,omitempty"`
 }
 
 // VarDef defines a template variable with validation rules.

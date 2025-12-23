@@ -8,9 +8,12 @@ Complete reference for all ign command-line interface commands, flags, and behav
 
 | Command | Purpose | Common Flags |
 |---------|---------|--------------|
-| `ign build init` | Create build configuration | `--config`, `--output`, `--ref` |
-| `ign init` | Generate project from template | `--output`, `--overwrite`, `--config` |
-| `ign version` | Show version information | None |
+| `ign checkout` | Initialize and generate project from template | `--ref`, `--force`, `--dry-run` |
+| `ign update` | Update project when template changes | `--force`, `--dry-run` |
+| `ign template collect-vars` | Collect variables and update template hash | `--recursive`, `--dry-run`, `--merge` |
+| `ign template check` | Validate template syntax | `--recursive`, `--verbose` |
+| `ign template new` | Create new template scaffold | `--type`, `--force` |
+| `ign version` | Show version information | `--short`, `--json` |
 | `ign help` | Show help information | None |
 
 ---
@@ -363,9 +366,122 @@ Exit code: 1
 
 ---
 
-## 3. Utility Commands
+## 3. Update Command
 
-### 3.1 `ign version`
+### 3.1 `ign update`
+
+Update project files when the template has changed.
+
+**Syntax:**
+```bash
+ign update [output-path] [flags]
+```
+
+**Arguments:**
+- `output-path`: Output directory for regenerated files (default: current directory)
+
+**Examples:**
+```bash
+# Update in current directory
+ign update
+
+# Update to specific directory
+ign update ./my-project
+
+# Preview changes without writing
+ign update --dry-run
+
+# Overwrite existing files
+ign update --force
+```
+
+**Flags:**
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--force` | `-f` | bool | `false` | Overwrite existing files |
+| `--dry-run` | `-d` | bool | `false` | Show what would be generated without writing files |
+| `--verbose` | `-v` | bool | `false` | Show detailed processing information |
+
+**Requirements:**
+- `.ign/ign.json` must exist (created by `ign checkout`)
+- `.ign/ign-var.json` must exist (stores variable values)
+
+**Process Flow:**
+
+```
+1. Load Configuration
+   ├─ Load .ign/ign.json (template source and hash)
+   ├─ Load .ign/ign-var.json (existing variable values)
+   └─ Validate both files exist
+
+2. Fetch Template
+   ├─ Fetch template from stored URL
+   ├─ Read template's ign.json
+   └─ Get template hash
+
+3. Compare Hash
+   ├─ Compare template hash with stored hash
+   ├─ If unchanged: "Template is up to date" (exit)
+   └─ If changed: continue to update
+
+4. Handle Variable Changes
+   ├─ Detect new variables in template
+   ├─ Detect removed variables
+   ├─ Prompt for new required variables (if any)
+   └─ Apply defaults for new optional variables
+
+5. Regenerate Project
+   ├─ Merge existing and new variable values
+   ├─ Update .ign/ign.json with new hash
+   ├─ Update .ign/ign-var.json with merged variables
+   └─ Generate project files
+```
+
+**Example Output (no changes):**
+```
+Checking for template updates...
+Template: github.com/owner/template
+────────────────────────────────────────
+✓ Template is up to date (no changes detected)
+```
+
+**Example Output (with changes):**
+```
+Checking for template updates...
+Template: github.com/owner/template
+────────────────────────────────────────
+Template has been updated
+  Previous hash: 9887e8ca...479e6e58
+  New hash:      1c413a3d...ffb9ba62
+────────────────────────────────────────
+New variables have been added to the template:
+  + version (default: 1.0.0)
+────────────────────────────────────────
+Regenerating project from template...
+✓ Project updated successfully
+
+Summary:
+  Created: 5 files
+  Overwritten: 2 files
+
+Configuration updated: .ign/ign.json, .ign/ign-var.json
+Project ready at: .
+```
+
+**Error Cases:**
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `.ign directory not found` | No prior checkout | Run `ign checkout <url>` first |
+| `Failed to load ign.json` | Corrupted config | Re-run `ign checkout <url>` |
+| `Template fetch failed` | Network/URL issue | Check URL and connection |
+
+---
+
+## 4. Utility Commands
+
+### 4.1 `ign version`
 
 Display version information.
 
@@ -408,7 +524,7 @@ $ ign version --json
 }
 ```
 
-### 3.2 `ign help`
+### 4.2 `ign help`
 
 Display help information.
 

@@ -299,8 +299,12 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {
-		// Calculate template hash
-		templateHash := calculateTemplateHash(prep.Template)
+		// Get template hash from ign.json, or calculate if not present
+		templateHash := prep.IgnJson.Hash
+		if templateHash == "" {
+			debug.Debug("[app] Template has no hash in ign.json, calculating from content")
+			templateHash = calculateTemplateHash(prep.Template)
+		}
 		debug.DebugValue("[app] Template hash", templateHash)
 
 		// Validate hash is not empty (should not happen if template is valid)

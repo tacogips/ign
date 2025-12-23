@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -430,6 +432,17 @@ func updateIgnJson(path string, result *CollectVarsResult, existing *model.IgnJs
 		ignJson.Variables[name] = varDef
 	}
 
+	// Calculate and update template hash
+	templateDir := filepath.Dir(path)
+	newHash, err := CalculateTemplateHashFromDir(templateDir)
+	if err != nil {
+		debug.Debug("[app] Failed to calculate template hash: %v", err)
+		// Continue without hash if calculation fails
+	} else {
+		ignJson.Hash = newHash
+		debug.DebugValue("[app] Template hash calculated", newHash)
+	}
+
 	// Write ign.json
 	data, err := json.MarshalIndent(ignJson, "", "  ")
 	if err != nil {
@@ -441,4 +454,67 @@ func updateIgnJson(path string, result *CollectVarsResult, existing *model.IgnJs
 	}
 
 	return nil
+}
+
+// CalculateTemplateHashFromDir calculates SHA256 hash of all template files in a directory.
+// Files are sorted by path to ensure deterministic hash generation.
+// Excludes ign.json itself from the hash calculation.
+func CalculateTemplateHashFromDir(dirPath string) (string, error) {
+	h := sha256.New()
+	var files []string
+
+	// Collect all file paths
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories
+		if info.IsDir() {
+			// Skip hidden directories
+			if strings.HasPrefix(info.Name(), ".") && path != dirPath {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Skip hidden files
+		if strings.HasPrefix(info.Name(), ".") {
+			return nil
+		}
+
+		// Skip ign.json (we're calculating hash for everything else)
+		if info.Name() == "ign.json" {
+			return nil
+		}
+
+		// Get relative path
+		relPath, err := filepath.Rel(dirPath, path)
+		if err != nil {
+			return err
+		}
+
+		files = append(files, relPath)
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// Sort files for deterministic hash
+	sort.Strings(files)
+
+	// Hash each file's path and content
+	for _, relPath := range files {
+		fullPath := filepath.Join(dirPath, relPath)
+		content, err := os.ReadFile(fullPath)
+		if err != nil {
+			return "", err
+		}
+
+		h.Write([]byte(relPath))
+		h.Write(content)
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
