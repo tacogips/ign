@@ -1,0 +1,9 @@
+{
+  "variables": {
+    "DESCRIPTION": "templating",
+    "GO_VERSION": "1.25.4",
+    "HOMEPAGE": "https://github.com/tacogips/ign",
+    "MODULE_PATH": "github.com/tacogips/ign",
+    "PROJECT_NAME": "ign"
+  }
+}

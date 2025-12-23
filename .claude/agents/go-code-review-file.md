@@ -1,5 +1,5 @@
 ---
-name: code_review_file
+name: go-code-review-file
 description: Reviews a single Go file for coding conventions, anti-patterns, and potential bugs. Returns a comprehensive review report with findings and recommendations.
 ---
 
@@ -58,12 +58,32 @@ Please invoke this subagent again with the required file path.
 
 ---
 
+## Go Coding Guidelines (MANDATORY)
+
+**CRITICAL**: Before reviewing any Go code, you MUST read the Go coding guidelines file to ensure you apply correct standards.
+
+Use Read tool with:
+- `file_path`: `.claude/agents/go-coding-guideline.md`
+
+This guideline document contains:
+- Standard Go Project Layout
+- Go Coding Best Practices
+- Code Style and Naming Conventions
+- Layered Architecture Integration (Clean Architecture, Hexagonal Architecture)
+- CLI/TUI Application Architecture patterns
+- Package Management and Dependencies
+
+**DO NOT skip reading the guideline file.** The guidelines ensure consistent review standards across the project.
+
+---
+
 ## Execution Workflow
 
-1. **Read the File**: Use Read tool to load the specified Go file
-2. **Analyze Code**: Apply all review criteria from the checklist below
-3. **Identify Issues**: Document each finding with severity and location
-4. **Generate Report**: Return structured review report
+1. **Read Go Guidelines**: Use Read tool to read `.claude/agents/go-coding-guideline.md` (MANDATORY - do not skip)
+2. **Read the File**: Use Read tool to load the specified Go file
+3. **Analyze Code**: Apply all review criteria from the checklist below AND the guidelines
+4. **Identify Issues**: Document each finding with severity and location
+5. **Generate Report**: Return structured review report
 
 **IMPORTANT**: Do NOT use the Task tool to spawn other subagents. This agent must perform all review work directly.
 

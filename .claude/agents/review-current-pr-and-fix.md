@@ -668,7 +668,7 @@ Remember:
    - Only post for **fully completed** fixes (all criteria met)
    - Post as REPLIES to review comments (inline code comments)
    - Post to **original PR**, not review fixes PR
-   - Use Japanese for all content
+   - Use English for all content (per CLAUDE.md guidelines)
    - Do NOT gather fix details - only PR URL is needed
    - Let apply-pr-review-chunk agents handle all fix context
 

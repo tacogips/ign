@@ -127,7 +127,7 @@ feat: implement user authentication system
 
 ## Project Overview
 
-This is a Golang project with Nix flake development environment support.
+This is ign - a Golang project with Nix flake development environment support.
 
 ## Development Environment
 - **Language**: Go
@@ -156,6 +156,11 @@ This is a Golang project with Nix flake development environment support.
 - Write clear, concise comments for exported functions
 - Keep functions focused and single-purpose
 - Avoid over-engineering - implement only what's requested
+
+### MANDATORY Rules
+
+- **Path hygiene** [MANDATORY]: Development machine-specific paths must NOT be included in code. When writing paths as examples in comments, use generalized paths (e.g., `/home/user/project` instead of `/home/john/my-project`). When referencing project-specific paths, always use relative paths (e.g., `./internal/service` instead of `/home/user/project/internal/service`)
+- **Credential and environment variable protection** [MANDATORY]: Environment variable values from the development environment must NEVER be included in code. If user instructions contain credential content or values, those must NEVER be included in any output. "Output" includes: source code, commit messages, GitHub comments (issues, PR body), and any other content that may be transmitted outside this machine.
 
 ## Go Code Development
 **IMPORTANT**: When writing Go code, you (the LLM model) MUST use the specialized go-coding sub agent located at `.claude/agents/go-coding.md`.
@@ -202,13 +207,13 @@ When invoking the go-coding subagent via Task tool, the `prompt` parameter MUST 
 Task tool parameters:
   subagent_type: go-coding
   prompt: |
-    Purpose: Implement the template variable parser for ign
-    Reference Document: /docs/spec.md (Section: Template Syntax)
-    Implementation Target: Create internal/parser/variable.go with ParseVariables function
+    Purpose: Implement the user service for ign
+    Reference Document: /docs/spec.md (Section: User Management)
+    Implementation Target: Create internal/usecase/user_service.go with CRUD operations
     Completion Criteria:
-      - ParseVariables extracts all {{variable}} patterns from input
-      - Returns []Variable with name, default value, and source location
-      - Unit tests cover edge cases (nested braces, escaped sequences)
+      - UserService implements all CRUD methods
+      - Returns appropriate errors for edge cases
+      - Unit tests cover main scenarios
       - go mod tidy runs without errors
 ```
 
@@ -249,9 +254,8 @@ Implementation progress is tracked per specification item in `docs/progress/`:
 ### Directory Structure
 ```
 docs/progress/
-├── template-provider.md         # TemplateProvider implementation status
-├── cli-commands.md              # CLI commands implementation status
-├── template-syntax.md           # Template syntax parser implementation status
+├── feature-a.md                 # Feature A implementation status
+├── feature-b.md                 # Feature B implementation status
 └── <feature-name>.md            # One file per major spec item
 ```
 

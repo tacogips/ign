@@ -214,4 +214,9 @@ When writing Go code:
 11. **Always run `go mod tidy` after adding or removing imports**
 12. **Ensure go.mod and go.sum are kept in sync with code changes**
 
+### MANDATORY Rules
+
+13. **Path hygiene** [MANDATORY]: Development machine-specific paths must NOT be included in code. When writing paths as examples in comments, use generalized paths (e.g., `/home/user/project` instead of `/home/john/my-project`). When referencing project-specific paths, always use relative paths (e.g., `./internal/service` instead of `/home/user/project/internal/service`)
+14. **Credential and environment variable protection** [MANDATORY]: Environment variable values from the development environment must NEVER be included in code. If user instructions contain credential content or values, those must NEVER be included in any output. "Output" includes: source code, commit messages, GitHub comments (issues, PR body), and any other content that may be transmitted outside this machine.
+
 Always prioritize clarity, simplicity, and maintainability over clever solutions.

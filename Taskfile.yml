@@ -1,64 +1,59 @@
 version: '3'
 
+vars:
+  BINARY_NAME: ign
+  CMD_PATH: ./cmd/ign
+
 tasks:
-  init:
-    desc: Initialize Go module (run once)
+  default:
+    desc: Show available tasks
     cmds:
-      - go mod init github.com/tacogips/ign
-    status:
-      - test -f go.mod
-
-  fmt:
-    desc: Format Go code and fix imports
-    preconditions:
-      - sh: test -f go.mod
-        msg: "go.mod not found. Run 'task init' first"
-    cmds:
-      - goimports -w .
-      - go fmt ./... || true
-
-  imports:
-    desc: Fix imports only (add missing, remove unused)
-    preconditions:
-      - sh: test -f go.mod
-        msg: "go.mod not found. Run 'task init' first"
-    cmds:
-      - goimports -w .
-
-  tidy:
-    desc: Tidy go.mod dependencies
-    cmds:
-      - go mod tidy
-
-  lint:
-    desc: Run golangci-lint
-    cmds:
-      - golangci-lint run
-
-  vet:
-    desc: Run go vet for static analysis
-    cmds:
-      - go vet ./...
-
-  check:
-    desc: Format, fix imports, vet, build check, and run linter
-    cmds:
-      - task: fmt
-      - task: vet
-      - go build -gcflags="-N -l" -o /dev/null ./...
-      - task: lint
+      - task --list
 
   build:
-    desc: Build the project
+    desc: Build the binary
     cmds:
-      - go build -v ./...
+      - go build -o {{.BINARY_NAME}} {{.CMD_PATH}}
+
+  run:
+    desc: Run the application
+    deps: [build]
+    cmds:
+      - ./{{.BINARY_NAME}}
 
   test:
     desc: Run tests
     cmds:
       - go test -v ./...
 
-  clean:
-    desc: Clean build artifacts and cache
+  test-coverage:
+    desc: Run tests with coverage
     cmds:
-      - go clean -cache -testcache -modcache
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+
+  lint:
+    desc: Run linter
+    cmds:
+      - golangci-lint run ./...
+
+  fmt:
+    desc: Format code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -f {{.BINARY_NAME}}
+      - rm -f coverage.out coverage.html
+
+  tidy:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
