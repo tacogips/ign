@@ -135,6 +135,9 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 }
 
 // scanTemplateFiles recursively scans files for variable directives.
+// Includes all files and dotfiles (e.g., .gitignore, .envrc, .claude/) except:
+//   - .git directory (version control metadata)
+//   - ign-template.json (template config file itself)
 func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, result *UpdateTemplateResult) error {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
@@ -463,7 +466,9 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 
 // CalculateTemplateHashFromDir calculates SHA256 hash of all template files in a directory.
 // Files are sorted by path to ensure deterministic hash generation.
-// Excludes ign-template.json itself from the hash calculation.
+//
+// Included: All files and dotfiles (e.g., .gitignore, .envrc, .claude/)
+// Excluded: .git directory (version control metadata) and ign-template.json (config file)
 func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 	var filePaths []string
 
