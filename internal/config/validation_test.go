@@ -128,8 +128,8 @@ func TestValidateVariables(t *testing.T) {
 				Type:        model.VarTypeInt,
 				Description: "Port",
 				Default:     8080,
-				Min:         intPtr(1024),
-				Max:         intPtr(65535),
+				Min:         floatPtr(1024),
+				Max:         floatPtr(65535),
 			},
 			"enable_feature": {
 				Type:        model.VarTypeBool,
@@ -230,17 +230,17 @@ func TestValidateVariables(t *testing.T) {
 		}
 	})
 
-	t.Run("min/max on non-int variable", func(t *testing.T) {
+	t.Run("min/max on non-numeric variable", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"name": {
 				Type:        model.VarTypeString,
 				Description: "Name",
-				Min:         intPtr(1),
-				Max:         intPtr(10),
+				Min:         floatPtr(1),
+				Max:         floatPtr(10),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for min/max on non-int variable")
+			t.Error("Expected error for min/max on non-numeric variable")
 		}
 	})
 
@@ -249,8 +249,8 @@ func TestValidateVariables(t *testing.T) {
 			"port": {
 				Type:        model.VarTypeInt,
 				Description: "Port",
-				Min:         intPtr(10000),
-				Max:         intPtr(1000),
+				Min:         floatPtr(10000),
+				Max:         floatPtr(1000),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
@@ -265,8 +265,8 @@ func TestValidateVariables(t *testing.T) {
 				Description: "Rate limit per second",
 				Default:     1.5,
 				Example:     2.5,
-				MinFloat:    floatPtr(0.1),
-				MaxFloat:    floatPtr(100.0),
+				Min:         floatPtr(0.1),
+				Max:         floatPtr(100.0),
 			},
 		}
 		if err := validateVariables(vars); err != nil {
@@ -274,115 +274,101 @@ func TestValidateVariables(t *testing.T) {
 		}
 	})
 
-	t.Run("min_float/max_float on non-number variable", func(t *testing.T) {
-		vars := map[string]model.VarDef{
-			"name": {
-				Type:        model.VarTypeString,
-				Description: "Name",
-				MinFloat:    floatPtr(1.0),
-				MaxFloat:    floatPtr(10.0),
-			},
-		}
-		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for min_float/max_float on non-number variable")
-		}
-	})
-
-	t.Run("min_float greater than max_float", func(t *testing.T) {
+	t.Run("min greater than max for number", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"rate": {
 				Type:        model.VarTypeNumber,
 				Description: "Rate",
-				MinFloat:    floatPtr(10.0),
-				MaxFloat:    floatPtr(1.0),
+				Min:         floatPtr(10.0),
+				Max:         floatPtr(1.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for min_float > max_float")
+			t.Error("Expected error for min > max")
 		}
 	})
 
-	t.Run("number default below min_float", func(t *testing.T) {
+	t.Run("number default below min", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"rate": {
 				Type:        model.VarTypeNumber,
 				Description: "Rate",
 				Default:     0.5,
-				MinFloat:    floatPtr(1.0),
+				Min:         floatPtr(1.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for default value below min_float")
+			t.Error("Expected error for default value below min")
 		}
 	})
 
-	t.Run("number default above max_float", func(t *testing.T) {
+	t.Run("number default above max", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"rate": {
 				Type:        model.VarTypeNumber,
 				Description: "Rate",
 				Default:     15.0,
-				MaxFloat:    floatPtr(10.0),
+				Max:         floatPtr(10.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for default value above max_float")
+			t.Error("Expected error for default value above max")
 		}
 	})
 
-	t.Run("number example below min_float", func(t *testing.T) {
+	t.Run("number example below min", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"rate": {
 				Type:        model.VarTypeNumber,
 				Description: "Rate",
 				Example:     0.5,
-				MinFloat:    floatPtr(1.0),
+				Min:         floatPtr(1.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for example value below min_float")
+			t.Error("Expected error for example value below min")
 		}
 	})
 
-	t.Run("number example above max_float", func(t *testing.T) {
+	t.Run("number example above max", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"rate": {
 				Type:        model.VarTypeNumber,
 				Description: "Rate",
 				Example:     15.0,
-				MaxFloat:    floatPtr(10.0),
+				Max:         floatPtr(10.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for example value above max_float")
+			t.Error("Expected error for example value above max")
 		}
 	})
 
-	t.Run("number variable with int default below min_float", func(t *testing.T) {
+	t.Run("number variable with int default below min", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"count": {
 				Type:        model.VarTypeNumber,
 				Description: "Count",
 				Default:     0,
-				MinFloat:    floatPtr(1.0),
+				Min:         floatPtr(1.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for int default value below min_float")
+			t.Error("Expected error for int default value below min")
 		}
 	})
 
-	t.Run("number variable with int default above max_float", func(t *testing.T) {
+	t.Run("number variable with int default above max", func(t *testing.T) {
 		vars := map[string]model.VarDef{
 			"count": {
 				Type:        model.VarTypeNumber,
 				Description: "Count",
 				Default:     100,
-				MaxFloat:    floatPtr(10.0),
+				Max:         floatPtr(10.0),
 			},
 		}
 		if err := validateVariables(vars); err == nil {
-			t.Error("Expected error for int default value above max_float")
+			t.Error("Expected error for int default value above max")
 		}
 	})
 
@@ -392,8 +378,8 @@ func TestValidateVariables(t *testing.T) {
 				Type:        model.VarTypeNumber,
 				Description: "Count",
 				Default:     5,
-				MinFloat:    floatPtr(1.0),
-				MaxFloat:    floatPtr(10.0),
+				Min:         floatPtr(1.0),
+				Max:         floatPtr(10.0),
 			},
 		}
 		if err := validateVariables(vars); err != nil {
@@ -408,8 +394,8 @@ func TestValidateVariables(t *testing.T) {
 				Description: "Rate limit per second",
 				Default:     1.5,
 				Example:     2.5,
-				MinFloat:    floatPtr(0.1),
-				MaxFloat:    floatPtr(100.0),
+				Min:         floatPtr(0.1),
+				Max:         floatPtr(100.0),
 			},
 		}
 		if err := validateVariables(vars); err != nil {

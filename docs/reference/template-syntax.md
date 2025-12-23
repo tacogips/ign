@@ -122,15 +122,15 @@ The `number` type is used for floating-point values, while `int` is for integer 
       "type": "number",
       "description": "Rate limit per second",
       "default": 1.5,
-      "min_float": 0.1,
-      "max_float": 100.0
+      "min": 0.1,
+      "max": 100.0
     },
     "percentage": {
       "type": "number",
       "description": "Success percentage threshold",
       "default": 0.95,
-      "min_float": 0.0,
-      "max_float": 1.0
+      "min": 0.0,
+      "max": 1.0
     }
   }
 }
@@ -1208,7 +1208,7 @@ ign validate
 |------|-----------|---------|-------|
 | `string` | `string` | `"hello"` | Any text, preserved as-is |
 | `int` | `number` | `8080` | Integer values only |
-| `number` | `number` | `1.5`, `3.14` | Floating-point values, validated with min_float/max_float |
+| `number` | `number` | `1.5`, `3.14` | Floating-point values, validated with min/max |
 | `bool` | `boolean` | `true`, `false` | Used in conditionals |
 
 ## Appendix C: Variable Syntax Quick Reference

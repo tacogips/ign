@@ -133,11 +133,11 @@ func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 	}
 	if varDef.Min != nil || varDef.Max != nil {
 		if varDef.Min != nil && varDef.Max != nil {
-			message += fmt.Sprintf(" [%d-%d]", *varDef.Min, *varDef.Max)
+			message += fmt.Sprintf(" [%d-%d]", int(*varDef.Min), int(*varDef.Max))
 		} else if varDef.Min != nil {
-			message += fmt.Sprintf(" [>=%d]", *varDef.Min)
+			message += fmt.Sprintf(" [>=%d]", int(*varDef.Min))
 		} else {
-			message += fmt.Sprintf(" [<=%d]", *varDef.Max)
+			message += fmt.Sprintf(" [<=%d]", int(*varDef.Max))
 		}
 	}
 
@@ -177,11 +177,11 @@ func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 			return fmt.Errorf("must be an integer")
 		}
 
-		if varDef.Min != nil && num < *varDef.Min {
-			return fmt.Errorf("must be >= %d", *varDef.Min)
+		if varDef.Min != nil && float64(num) < *varDef.Min {
+			return fmt.Errorf("must be >= %d", int(*varDef.Min))
 		}
-		if varDef.Max != nil && num > *varDef.Max {
-			return fmt.Errorf("must be <= %d", *varDef.Max)
+		if varDef.Max != nil && float64(num) > *varDef.Max {
+			return fmt.Errorf("must be <= %d", int(*varDef.Max))
 		}
 
 		return nil
@@ -210,13 +210,13 @@ func promptNumber(name string, varDef model.VarDef, help string) (float64, error
 	if varDef.Required {
 		message += " (required)"
 	}
-	if varDef.MinFloat != nil || varDef.MaxFloat != nil {
-		if varDef.MinFloat != nil && varDef.MaxFloat != nil {
-			message += fmt.Sprintf(" [%v-%v]", *varDef.MinFloat, *varDef.MaxFloat)
-		} else if varDef.MinFloat != nil {
-			message += fmt.Sprintf(" [>=%v]", *varDef.MinFloat)
+	if varDef.Min != nil || varDef.Max != nil {
+		if varDef.Min != nil && varDef.Max != nil {
+			message += fmt.Sprintf(" [%v-%v]", *varDef.Min, *varDef.Max)
+		} else if varDef.Min != nil {
+			message += fmt.Sprintf(" [>=%v]", *varDef.Min)
 		} else {
-			message += fmt.Sprintf(" [<=%v]", *varDef.MaxFloat)
+			message += fmt.Sprintf(" [<=%v]", *varDef.Max)
 		}
 	}
 
@@ -258,11 +258,11 @@ func promptNumber(name string, varDef model.VarDef, help string) (float64, error
 			return fmt.Errorf("must be a number")
 		}
 
-		if varDef.MinFloat != nil && num < *varDef.MinFloat {
-			return fmt.Errorf("must be >= %v", *varDef.MinFloat)
+		if varDef.Min != nil && num < *varDef.Min {
+			return fmt.Errorf("must be >= %v", *varDef.Min)
 		}
-		if varDef.MaxFloat != nil && num > *varDef.MaxFloat {
-			return fmt.Errorf("must be <= %v", *varDef.MaxFloat)
+		if varDef.Max != nil && num > *varDef.Max {
+			return fmt.Errorf("must be <= %v", *varDef.Max)
 		}
 
 		return nil

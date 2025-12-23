@@ -38,14 +38,10 @@ type VarDef struct {
 	Example interface{} `json:"example,omitempty"`
 	// Pattern is a regex validation pattern (for string variables only).
 	Pattern string `json:"pattern,omitempty"`
-	// Min is the minimum value (for integer variables only).
-	Min *int `json:"min,omitempty"`
-	// Max is the maximum value (for integer variables only).
-	Max *int `json:"max,omitempty"`
-	// MinFloat is the minimum value (for number variables only).
-	MinFloat *float64 `json:"min_float,omitempty"`
-	// MaxFloat is the maximum value (for number variables only).
-	MaxFloat *float64 `json:"max_float,omitempty"`
+	// Min is the minimum value (for int and number variables).
+	Min *float64 `json:"min,omitempty"`
+	// Max is the maximum value (for int and number variables).
+	Max *float64 `json:"max,omitempty"`
 }
 
 // TemplateSettings contains template-specific settings for generation.

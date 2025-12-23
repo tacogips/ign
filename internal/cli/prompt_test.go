@@ -67,8 +67,8 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "min boundary - valid",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MinFloat: floatPtr(1.0),
+				Type: model.VarTypeNumber,
+				Min:  floatPtr(1.0),
 			},
 			input:   "1.0",
 			wantErr: false,
@@ -76,8 +76,8 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "min boundary - invalid",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MinFloat: floatPtr(1.0),
+				Type: model.VarTypeNumber,
+				Min:  floatPtr(1.0),
 			},
 			input:   "0.5",
 			wantErr: true,
@@ -86,8 +86,8 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "max boundary - valid",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MaxFloat: floatPtr(10.0),
+				Type: model.VarTypeNumber,
+				Max:  floatPtr(10.0),
 			},
 			input:   "10.0",
 			wantErr: false,
@@ -95,8 +95,8 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "max boundary - invalid",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MaxFloat: floatPtr(10.0),
+				Type: model.VarTypeNumber,
+				Max:  floatPtr(10.0),
 			},
 			input:   "10.5",
 			wantErr: true,
@@ -105,9 +105,9 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "min and max boundary - valid",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MinFloat: floatPtr(1.0),
-				MaxFloat: floatPtr(10.0),
+				Type: model.VarTypeNumber,
+				Min:  floatPtr(1.0),
+				Max:  floatPtr(10.0),
 			},
 			input:   "5.5",
 			wantErr: false,
@@ -115,9 +115,9 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "min and max boundary - below min",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MinFloat: floatPtr(1.0),
-				MaxFloat: floatPtr(10.0),
+				Type: model.VarTypeNumber,
+				Min:  floatPtr(1.0),
+				Max:  floatPtr(10.0),
 			},
 			input:   "0.9",
 			wantErr: true,
@@ -126,9 +126,9 @@ func TestPromptNumber_Validator(t *testing.T) {
 		{
 			name: "min and max boundary - above max",
 			varDef: model.VarDef{
-				Type:     model.VarTypeNumber,
-				MinFloat: floatPtr(1.0),
-				MaxFloat: floatPtr(10.0),
+				Type: model.VarTypeNumber,
+				Min:  floatPtr(1.0),
+				Max:  floatPtr(10.0),
 			},
 			input:   "10.1",
 			wantErr: true,
@@ -202,11 +202,11 @@ func TestPromptNumber_Validator(t *testing.T) {
 					return fmt.Errorf("must be a number")
 				}
 
-				if tt.varDef.MinFloat != nil && num < *tt.varDef.MinFloat {
-					return fmt.Errorf("must be >= %v", *tt.varDef.MinFloat)
+				if tt.varDef.Min != nil && num < *tt.varDef.Min {
+					return fmt.Errorf("must be >= %v", *tt.varDef.Min)
 				}
-				if tt.varDef.MaxFloat != nil && num > *tt.varDef.MaxFloat {
-					return fmt.Errorf("must be <= %v", *tt.varDef.MaxFloat)
+				if tt.varDef.Max != nil && num > *tt.varDef.Max {
+					return fmt.Errorf("must be <= %v", *tt.varDef.Max)
 				}
 
 				return nil

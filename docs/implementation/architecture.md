@@ -484,10 +484,8 @@ type VarDef struct {
     Default     interface{} `json:"default,omitempty"`
     Example     interface{} `json:"example,omitempty"`
     Pattern     string      `json:"pattern,omitempty"`    // For strings
-    Min         *int        `json:"min,omitempty"`        // For ints
-    Max         *int        `json:"max,omitempty"`        // For ints
-    MinFloat    *float64    `json:"min_float,omitempty"`  // For numbers
-    MaxFloat    *float64    `json:"max_float,omitempty"`  // For numbers
+    Min         *float64    `json:"min,omitempty"`        // For int and number types
+    Max         *float64    `json:"max,omitempty"`        // For int and number types
 }
 
 // VarType represents variable type

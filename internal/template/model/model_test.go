@@ -77,8 +77,8 @@ func TestTemplateFile_Struct(t *testing.T) {
 }
 
 func TestIgnJson_MarshalUnmarshal(t *testing.T) {
-	minVal := 1024
-	maxVal := 65535
+	minVal := 1024.0
+	maxVal := 65535.0
 
 	original := IgnJson{
 		Name:        "go-rest-api",
@@ -165,10 +165,10 @@ func TestIgnJson_MarshalUnmarshal(t *testing.T) {
 		t.Fatal("port variable not found")
 	}
 	if port.Min == nil || *port.Min != minVal {
-		t.Errorf("port.Min: expected %d, got %v", minVal, port.Min)
+		t.Errorf("port.Min: expected %v, got %v", minVal, port.Min)
 	}
 	if port.Max == nil || *port.Max != maxVal {
-		t.Errorf("port.Max: expected %d, got %v", maxVal, port.Max)
+		t.Errorf("port.Max: expected %v, got %v", maxVal, port.Max)
 	}
 
 	// Verify settings
