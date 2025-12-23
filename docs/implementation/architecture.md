@@ -1,7 +1,5 @@
 # Implementation Architecture
 
-<!-- TODO: Remove cache-related sections (Cache interface, CacheManager, internal/cache package, cache diagram elements) - cache feature was removed -->
-
 This document describes the internal architecture, package structure, interfaces, and implementation details for the ign project.
 
 ---
@@ -21,11 +19,11 @@ This document describes the internal architecture, package structure, interfaces
 │  (build init, init workflows, orchestration)                    │
 └─┬──────────┬──────────┬──────────┬──────────┬──────────────────┘
   │          │          │          │          │
-  ▼          ▼          ▼          ▼          ▼
-┌────┐  ┌────────┐  ┌──────┐  ┌──────┐  ┌──────────┐
-│Tmpl│  │Template│  │ Var  │  │Cache │  │ Template │
-│Prov│  │ Parser │  │ Mgmt │  │ Mgmt │  │Generator │
-└────┘  └────────┘  └──────┘  └──────┘  └──────────┘
+  ▼          ▼          ▼          ▼
+┌────┐  ┌────────┐  ┌──────┐  ┌──────────┐
+│Tmpl│  │Template│  │ Var  │  │ Template │
+│Prov│  │ Parser │  │ Mgmt │  │Generator │
+└────┘  └────────┘  └──────┘  └──────────┘
   │          │          │          │          │
   │          │          │          │          │
 ┌─▼──────────▼──────────▼──────────▼──────────▼──────────────────┐
@@ -105,11 +103,6 @@ ign/
 │   │       ├── variable.go            # Variable definitions
 │   │       └── directive.go           # Directive models
 │   │
-│   ├── cache/
-│   │   ├── cache.go                   # Cache interface
-│   │   ├── filesystem.go              # Filesystem cache impl
-│   │   └── manager.go                 # Cache management
-│   │
 │   ├── vcs/
 │   │   ├── git.go                     # Git operations
 │   │   └── clone.go                   # Repository cloning
@@ -149,7 +142,6 @@ ign/
 | `internal/template/parser` | Template parsing | `Parser`, `Directive` |
 | `internal/template/generator` | Project generation | `Generator`, `Processor` |
 | `internal/template/model` | Domain models | `Template`, `Variable` |
-| `internal/cache` | Template caching | `Cache`, `Manager` |
 | `internal/vcs` | Version control operations | `Git`, `Clone` |
 | `internal/util` | Shared utilities | Helper functions |
 | `pkg/ignconfig` | Public API types | `IgnJson`, `IgnVarJson` |
@@ -302,52 +294,7 @@ type Processor interface {
 }
 ```
 
-### 3.4 Cache
-
-```go
-// Cache stores fetched templates
-type Cache interface {
-    // Get retrieves a cached template
-    Get(ctx context.Context, ref TemplateRef) (*Template, error)
-
-    // Put stores a template in cache
-    Put(ctx context.Context, ref TemplateRef, template *Template) error
-
-    // Has checks if a template is cached
-    Has(ctx context.Context, ref TemplateRef) bool
-
-    // Delete removes a template from cache
-    Delete(ctx context.Context, ref TemplateRef) error
-
-    // Clear removes all cached templates
-    Clear(ctx context.Context) error
-
-    // Size returns cache size in bytes
-    Size(ctx context.Context) (int64, error)
-}
-
-// CacheKey generates a unique key for a template reference
-type CacheKey string
-
-// CacheManager handles cache lifecycle
-type CacheManager interface {
-    // Clean removes expired or oversized cache entries
-    Clean(ctx context.Context) error
-
-    // Stats returns cache statistics
-    Stats(ctx context.Context) (CacheStats, error)
-}
-
-// CacheStats contains cache statistics
-type CacheStats struct {
-    Entries    int
-    SizeBytes  int64
-    HitRate    float64
-    OldestEntry time.Time
-}
-```
-
-### 3.5 Config Management
+### 3.4 Config Management
 
 ```go
 // ConfigLoader loads configuration files
@@ -364,7 +311,6 @@ type ConfigLoader interface {
 
 // Config represents global configuration
 type Config struct {
-    Cache     CacheConfig
     GitHub    GitHubConfig
     Templates TemplateConfig
     Output    OutputConfig
@@ -391,10 +337,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
 2. Application Layer (internal/app/build.go)
    ├─ Resolve URL to TemplateRef
    ├─ Get Provider from factory
-   ├─ Fetch template
-   │  ├─ Check cache
-   │  ├─ If not cached: provider.Fetch()
-   │  └─ Cache result
+   ├─ Fetch template (provider.Fetch())
    ├─ Parse ign.json
    ├─ Create .ign directory
    ├─ Generate ign-var.json
@@ -737,7 +680,6 @@ test/
 | Provider | Unit + Integration | Template fetching | `testing`, mocks, test server |
 | Parser | Unit | Directive processing | `testing`, table-driven |
 | Generator | Unit + Integration | File generation | `testing`, temp dirs |
-| Cache | Unit | Cache operations | `testing`, temp dirs |
 | VCS | Unit + Integration | Git operations | `testing`, mocks, test repos |
 
 ### 7.3 Test Utilities
@@ -909,7 +851,6 @@ task install  # Install to $GOPATH/bin
 
 | Area | Strategy |
 |------|----------|
-| **Template caching** | Cache fetched templates, validate with TTL |
 | **Parallel processing** | Process independent files concurrently |
 | **Lazy loading** | Load template files on demand |
 | **Streaming** | Stream large files instead of loading into memory |
@@ -921,8 +862,7 @@ task install  # Install to $GOPATH/bin
 | Operation | Target | Notes |
 |-----------|--------|-------|
 | `build init` | < 2s | Including network fetch |
-| `init` (cached) | < 1s | For typical template (50 files) |
-| `init` (uncached) | < 5s | Including download |
+| `init` | < 5s | For typical template (50 files) |
 | Directive parsing | > 1MB/s | Per file |
 | Memory usage | < 100MB | During typical generation |
 
@@ -1056,8 +996,6 @@ type InteractiveCollector interface {
 ```go
 // Template Management
 type Provider interface { ... }
-type Cache interface { ... }
-type CacheManager interface { ... }
 
 // Template Processing
 type Parser interface { ... }

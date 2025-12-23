@@ -1,7 +1,5 @@
 # CLI Commands Reference
 
-<!-- TODO: Remove cache-related sections (cache_dir, cache_ttl, IGN_CACHE_DIR, Cache Issues section) - cache feature was removed -->
-
 Complete reference for all ign command-line interface commands, flags, and behaviors.
 
 ---
@@ -597,10 +595,8 @@ Override default behaviors globally.
 **Example:**
 ```json
 {
-  "cache_dir": "~/.cache/ign",
   "default_ref": "main",
   "github_token": "",
-  "cache_ttl": 3600,
   "max_include_depth": 10,
   "color_output": true
 }
@@ -610,10 +606,8 @@ Override default behaviors globally.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `cache_dir` | string | `~/.cache/ign` | Template cache location |
 | `default_ref` | string | `main` | Default git ref if not specified |
 | `github_token` | string | `""` | GitHub personal access token (for private repos) |
-| `cache_ttl` | int | 3600 | Cache time-to-live in seconds |
 | `max_include_depth` | int | 10 | Max nested include depth |
 | `color_output` | bool | `true` | Enable colored terminal output |
 
@@ -629,7 +623,6 @@ Some settings can be configured via environment variables:
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `IGN_CONFIG` | Path to global config | `export IGN_CONFIG=~/my-config.json` |
-| `IGN_CACHE_DIR` | Cache directory | `export IGN_CACHE_DIR=/tmp/ign-cache` |
 | `GITHUB_TOKEN` | GitHub access token | `export GITHUB_TOKEN=ghp_xxx` |
 | `GH_TOKEN` | GitHub access token (alternative) | `export GH_TOKEN=ghp_xxx` |
 | `IGN_NO_COLOR` | Disable colors | `export IGN_NO_COLOR=1` |
@@ -821,22 +814,6 @@ ign init --log-level debug
 
 # Output to file
 ign init --verbose 2>&1 | tee ign-debug.log
-```
-
-### 8.3 Cache Issues
-
-**Clear template cache:**
-```bash
-# Remove all cached templates
-rm -rf ~/.cache/ign
-
-# Remove specific template cache
-rm -rf ~/.cache/ign/github.com/owner/repo
-```
-
-**Disable cache (future feature):**
-```bash
-ign init --no-cache
 ```
 
 ---

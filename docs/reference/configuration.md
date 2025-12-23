@@ -1,7 +1,5 @@
 # Configuration File Reference
 
-<!-- TODO: Remove cache-related sections (Cache Section, cache config examples, IGN_CACHE_DIR, Cache Directory Structure) - cache feature was removed -->
-
 Complete reference for all ign configuration file formats, schemas, and filesystem layouts.
 
 ---
@@ -533,12 +531,6 @@ Global settings for ign behavior across all projects.
 
 ```json
 {
-  "cache": {
-    "enabled": true,
-    "directory": "~/.cache/ign",
-    "ttl": 3600,
-    "max_size_mb": 500
-  },
   "github": {
     "token": "",
     "default_ref": "main",
@@ -561,16 +553,6 @@ Global settings for ign behavior across all projects.
 ```
 
 ### 3.3 Fields
-
-#### Cache Section
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | bool | `true` | Enable template caching |
-| `directory` | string | `~/.cache/ign` | Cache directory path |
-| `ttl` | int | `3600` | Cache time-to-live in seconds (0 = no expiration) |
-| `max_size_mb` | int | `500` | Maximum cache size in megabytes |
-| `auto_clean` | bool | `true` | Automatically clean old cache entries |
 
 #### GitHub Section
 
@@ -610,14 +592,6 @@ Global settings for ign behavior across all projects.
 
 ```json
 {
-  "cache": {
-    "enabled": true,
-    "directory": "/tmp/ign-cache",
-    "ttl": 7200,
-    "max_size_mb": 1000,
-    "auto_clean": true
-  },
-
   "github": {
     "token": "ghp_xxxxxxxxxxxxxxxxxxxx",
     "default_ref": "main",
@@ -660,7 +634,7 @@ Global settings for ign behavior across all projects.
 Configuration is resolved in this order (highest to lowest priority):
 
 1. **Command-line flags** (e.g., `--verbose`, `--no-color`)
-2. **Environment variables** (e.g., `IGN_CACHE_DIR`, `GITHUB_TOKEN`)
+2. **Environment variables** (e.g., `GITHUB_TOKEN`, `IGN_NO_COLOR`)
 3. **gh CLI authentication** (`gh auth token`)
 4. **Global config file** (`~/.config/ign/config.json`)
 5. **Built-in defaults**
@@ -669,7 +643,6 @@ Configuration is resolved in this order (highest to lowest priority):
 ```bash
 # All of these override the config file
 export GITHUB_TOKEN=ghp_xyz
-export IGN_CACHE_DIR=/custom/cache
 
 ign init --verbose --no-color
 ```
@@ -679,7 +652,6 @@ ign init --verbose --no-color
 | Variable | Config Path | Description |
 |----------|-------------|-------------|
 | `IGN_CONFIG` | (file path) | Path to config.json |
-| `IGN_CACHE_DIR` | `cache.directory` | Cache directory |
 | `GITHUB_TOKEN` | `github.token` | GitHub access token |
 | `GH_TOKEN` | `github.token` | GitHub access token (alternative) |
 | `IGN_NO_COLOR` | `output.color` | Disable colors (set to "1") |
@@ -698,7 +670,6 @@ If you have `gh` CLI installed and authenticated, no additional token configurat
 **Example:**
 ```bash
 export IGN_CONFIG=~/my-ign-config.json
-export IGN_CACHE_DIR=/tmp/cache
 export GITHUB_TOKEN=ghp_mytoken
 export IGN_NO_COLOR=1
 
@@ -817,51 +788,7 @@ my-workspace/
             └── handler.go
 ```
 
-### 4.3 Cache Directory Structure
-
-**Default cache location:** `~/.cache/ign/`
-
-```
-~/.cache/ign/
-├── github.com/
-│   ├── owner1/
-│   │   ├── repo1/
-│   │   │   ├── main/
-│   │   │   │   ├── ign.json
-│   │   │   │   └── ... (template files)
-│   │   │   ├── v1.0.0/
-│   │   │   │   └── ... (template files)
-│   │   │   └── abc123def/
-│   │   │       └── ... (template files)
-│   │   └── repo2/
-│   │       └── main/
-│   │           └── ... (template files)
-│   └── owner2/
-│       └── templates/
-│           ├── main/
-│           │   ├── go/
-│           │   │   └── basic/
-│           │   │       ├── ign.json
-│           │   │       └── ...
-│           │   └── python/
-│           │       └── basic/
-│           │           └── ...
-│           └── v2.0.0/
-│               └── ... (same structure)
-└── metadata.json             # Cache metadata (timestamps, sizes)
-```
-
-**Cache key format:**
-```
-<host>/<owner>/<repo>/<ref>/<path>
-```
-
-**Examples:**
-- `github.com/myorg/templates/main/`
-- `github.com/myorg/templates/v1.0.0/go/basic/`
-- `github.com/myorg/repo/abc123def/`
-
-### 4.4 Global Configuration Directory
+### 4.3 Global Configuration Directory
 
 **Default location:** `~/.config/ign/`
 
@@ -1080,14 +1007,6 @@ interface IgnVarJson {
 
 ```typescript
 interface ConfigJson {
-  cache?: {
-    enabled?: boolean;
-    directory?: string;
-    ttl?: number;
-    max_size_mb?: number;
-    auto_clean?: boolean;
-  };
-
   github?: {
     token?: string;
     default_ref?: string;
