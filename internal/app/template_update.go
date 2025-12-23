@@ -144,8 +144,9 @@ func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, resu
 	for _, entry := range entries {
 		fullPath := filepath.Join(dirPath, entry.Name())
 
-		// Skip hidden files and directories
-		if strings.HasPrefix(entry.Name(), ".") {
+		// Skip .git directory (version control metadata)
+		// Other dotfiles like .claude/, .gitignore, .envrc should be included
+		if entry.Name() == ".git" {
 			continue
 		}
 
@@ -474,15 +475,11 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 
 		// Skip directories
 		if info.IsDir() {
-			// Skip hidden directories
-			if strings.HasPrefix(info.Name(), ".") && path != dirPath {
+			// Skip .git directory (version control metadata)
+			// Other dotfiles like .claude/, .gitignore, .envrc should be included
+			if info.Name() == ".git" {
 				return filepath.SkipDir
 			}
-			return nil
-		}
-
-		// Skip hidden files
-		if strings.HasPrefix(info.Name(), ".") {
 			return nil
 		}
 
