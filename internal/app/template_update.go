@@ -17,8 +17,8 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-// CollectVarsOptions holds options for collecting variables from templates.
-type CollectVarsOptions struct {
+// UpdateTemplateOptions holds options for updating template ign.json.
+type UpdateTemplateOptions struct {
 	// Path is the template directory path.
 	Path string
 	// Recursive indicates whether to scan subdirectories.
@@ -45,8 +45,8 @@ type CollectedVar struct {
 	Sources []string
 }
 
-// CollectVarsResult holds the result of variable collection.
-type CollectVarsResult struct {
+// UpdateTemplateResult holds the result of template update.
+type UpdateTemplateResult struct {
 	// Variables is the map of collected variables.
 	Variables map[string]*CollectedVar
 	// FilesScanned is the number of files scanned.
@@ -69,9 +69,9 @@ var (
 	ifDirectivePattern = regexp.MustCompile(`@ign-if:([^@]+)@`)
 )
 
-// CollectVars scans template files and collects variable definitions.
-func CollectVars(ctx context.Context, opts CollectVarsOptions) (*CollectVarsResult, error) {
-	debug.DebugSection("[app] CollectVars workflow start")
+// UpdateTemplate scans template files and updates ign.json with variable definitions and hash.
+func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTemplateResult, error) {
+	debug.DebugSection("[app] UpdateTemplate workflow start")
 	debug.DebugValue("[app] Path", opts.Path)
 	debug.DebugValue("[app] Recursive", opts.Recursive)
 	debug.DebugValue("[app] DryRun", opts.DryRun)
@@ -95,7 +95,7 @@ func CollectVars(ctx context.Context, opts CollectVarsOptions) (*CollectVarsResu
 	// Check for ign.json
 	ignJsonPath := filepath.Join(absPath, "ign.json")
 
-	result := &CollectVarsResult{
+	result := &UpdateTemplateResult{
 		Variables:   make(map[string]*CollectedVar),
 		IgnJsonPath: ignJsonPath,
 	}
@@ -130,12 +130,12 @@ func CollectVars(ctx context.Context, opts CollectVarsOptions) (*CollectVarsResu
 		result.Updated = true
 	}
 
-	debug.Debug("[app] CollectVars workflow completed")
+	debug.Debug("[app] UpdateTemplate workflow completed")
 	return result, nil
 }
 
 // scanTemplateFiles recursively scans files for variable directives.
-func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, result *CollectVarsResult) error {
+func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, result *UpdateTemplateResult) error {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return NewValidationError(fmt.Sprintf("failed to read directory: %s", dirPath), err)
@@ -179,7 +179,7 @@ func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, resu
 }
 
 // scanFile extracts variables from a single file.
-func scanFile(ctx context.Context, filePath string, result *CollectVarsResult) error {
+func scanFile(ctx context.Context, filePath string, result *UpdateTemplateResult) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func scanFile(ctx context.Context, filePath string, result *CollectVarsResult) e
 }
 
 // addVarFromDirective parses a var directive and adds it to the result.
-func addVarFromDirective(args string, filePath string, result *CollectVarsResult) {
+func addVarFromDirective(args string, filePath string, result *UpdateTemplateResult) {
 	args = strings.TrimSpace(args)
 	if args == "" {
 		return
@@ -255,7 +255,7 @@ func addVarFromDirective(args string, filePath string, result *CollectVarsResult
 }
 
 // addConditionalVar adds a boolean variable from @ign-if directive.
-func addConditionalVar(varName string, filePath string, result *CollectVarsResult) {
+func addConditionalVar(varName string, filePath string, result *UpdateTemplateResult) {
 	if varName == "" {
 		return
 	}
@@ -385,7 +385,7 @@ func categorizeVars(collected map[string]*CollectedVar, existing *model.IgnJson,
 }
 
 // updateIgnJson updates or creates ign.json with collected variables.
-func updateIgnJson(path string, result *CollectVarsResult, existing *model.IgnJson, merge bool) error {
+func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.IgnJson, merge bool) error {
 	var ignJson *model.IgnJson
 
 	if existing != nil {

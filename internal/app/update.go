@@ -171,7 +171,7 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	debug.DebugValue("[app] Template version", template.Config.Version)
 
 	// Step 5: Get hash from template's ign.json and compare
-	// The hash is stored in the template's ign.json (calculated by collect-vars)
+	// The hash is stored in the template's ign.json (calculated by 'ign template update')
 	newHash := template.Config.Hash
 	debug.DebugValue("[app] Template hash from ign.json", newHash)
 

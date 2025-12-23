@@ -10,7 +10,7 @@ Complete reference for all ign command-line interface commands, flags, and behav
 |---------|---------|--------------|
 | `ign checkout` | Initialize and generate project from template | `--ref`, `--force`, `--dry-run` |
 | `ign update` | Update project when template changes | `--force`, `--dry-run` |
-| `ign template collect-vars` | Collect variables and update template hash | `--recursive`, `--dry-run`, `--merge` |
+| `ign template update` | Update ign.json with variables and template hash | `--recursive`, `--dry-run`, `--merge` |
 | `ign template check` | Validate template syntax | `--recursive`, `--verbose` |
 | `ign template new` | Create new template scaffold | `--type`, `--force` |
 | `ign version` | Show version information | `--short`, `--json` |

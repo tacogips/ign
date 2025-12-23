@@ -9,13 +9,13 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-func TestCollectVars(t *testing.T) {
+func TestUpdateTemplate(t *testing.T) {
 	tests := []struct {
 		name           string
 		setup          func(t *testing.T) string
-		opts           func(path string) CollectVarsOptions
+		opts           func(path string) UpdateTemplateOptions
 		wantErr        bool
-		validateResult func(t *testing.T, result *CollectVarsResult, path string)
+		validateResult func(t *testing.T, result *UpdateTemplateResult, path string)
 	}{
 		{
 			name: "collect variables from template files",
@@ -32,15 +32,15 @@ Debug mode enabled
 				}
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:      path,
 					Recursive: false,
 					DryRun:    true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.FilesScanned != 1 {
 					t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
 				}
@@ -96,15 +96,15 @@ Debug mode enabled
 
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:      path,
 					Recursive: true,
 					DryRun:    true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.FilesScanned != 2 {
 					t.Errorf("Expected 2 files scanned, got %d", result.FilesScanned)
 				}
@@ -138,15 +138,15 @@ Debug mode enabled
 
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:      path,
 					Recursive: false,
 					DryRun:    true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.FilesScanned != 1 {
 					t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
 				}
@@ -167,14 +167,14 @@ Debug mode enabled
 				}
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:   path,
 					DryRun: true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.Updated {
 					t.Error("Expected Updated to be false in dry-run mode")
 				}
@@ -194,14 +194,14 @@ Debug mode enabled
 				}
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:   path,
 					DryRun: false,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if !result.Updated {
 					t.Error("Expected Updated to be true")
 				}
@@ -216,8 +216,8 @@ Debug mode enabled
 			setup: func(t *testing.T) string {
 				return "/nonexistent/path/that/does/not/exist"
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path: path,
 				}
 			},
@@ -233,8 +233,8 @@ Debug mode enabled
 				}
 				return filePath
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path: path,
 				}
 			},
@@ -247,7 +247,7 @@ Debug mode enabled
 			path := tt.setup(t)
 			opts := tt.opts(path)
 
-			result, err := CollectVars(context.Background(), opts)
+			result, err := UpdateTemplate(context.Background(), opts)
 
 			if tt.wantErr {
 				if err == nil {
@@ -331,12 +331,12 @@ func TestMergeMode(t *testing.T) {
 	}
 
 	// Test merge mode
-	result, err := CollectVars(context.Background(), CollectVarsOptions{
+	result, err := UpdateTemplate(context.Background(), UpdateTemplateOptions{
 		Path:  dir,
 		Merge: true,
 	})
 	if err != nil {
-		t.Fatalf("CollectVars failed: %v", err)
+		t.Fatalf("UpdateTemplate failed: %v", err)
 	}
 
 	// Should have new_var in NewVars
