@@ -119,8 +119,9 @@ func checkDirectory(ctx context.Context, p parser.Parser, dirPath string, recurs
 	for _, entry := range entries {
 		fullPath := filepath.Join(dirPath, entry.Name())
 
-		// Skip hidden files and directories
-		if strings.HasPrefix(entry.Name(), ".") {
+		// Skip .git directory (version control metadata)
+		// Other dotfiles like .claude/, .gitignore, .envrc should be included
+		if entry.Name() == ".git" {
 			continue
 		}
 
