@@ -77,11 +77,12 @@ Variable with explicit type validation. The variable must be defined and must ma
 @ign-var:VARIABLE_NAME:TYPE@
 ```
 
-**Supported Types:** `string`, `int`, `bool`
+**Supported Types:** `string`, `int`, `number`, `bool`
 
 **Example Template:**
 ```go
 const Port = @ign-var:port:int@
+const RateLimit = @ign-var:rate_limit:number@
 const Debug = @ign-var:debug:bool@
 const Name = "@ign-var:name:string@"
 ```

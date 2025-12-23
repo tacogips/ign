@@ -24,7 +24,7 @@ type IgnJson struct {
 
 // VarDef defines a template variable with validation rules.
 type VarDef struct {
-	// Type is the variable type (string, int, or bool).
+	// Type is the variable type (string, int, number, or bool).
 	Type VarType `json:"type"`
 	// Description is a short description shown in the prompt by default.
 	Description string `json:"description"`
@@ -42,6 +42,10 @@ type VarDef struct {
 	Min *int `json:"min,omitempty"`
 	// Max is the maximum value (for integer variables only).
 	Max *int `json:"max,omitempty"`
+	// MinFloat is the minimum value (for number variables only).
+	MinFloat *float64 `json:"min_float,omitempty"`
+	// MaxFloat is the maximum value (for number variables only).
+	MaxFloat *float64 `json:"max_float,omitempty"`
 }
 
 // TemplateSettings contains template-specific settings for generation.

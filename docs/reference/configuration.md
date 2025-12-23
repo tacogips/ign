@@ -40,7 +40,7 @@ Defines template metadata, required variables, and template-specific settings.
   "repository": "https://github.com/owner/repo",
   "variables": {
     "variable_name": {
-      "type": "string|int|bool",
+      "type": "string|int|number|bool",
       "description": "Variable description",
       "default": "optional default value",
       "required": true,
@@ -86,6 +86,12 @@ Defines template metadata, required variables, and template-specific settings.
       "default": 8080,
       "required": false
     },
+    "rate_limit": {
+      "type": "number",
+      "description": "Rate limit per second",
+      "default": 1.5,
+      "required": false
+    },
     "enable_tls": {
       "type": "bool",
       "description": "Enable TLS/HTTPS",
@@ -100,7 +106,7 @@ Defines template metadata, required variables, and template-specific settings.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | Variable type: `string`, `int`, or `bool` |
+| `type` | string | Yes | Variable type: `string`, `int`, `number`, or `bool` |
 | `description` | string | Yes | Short description shown in the prompt by default |
 | `help` | string | No | Longer explanation shown when user types `?` during input |
 | `required` | bool | No | If true, must have value in ign-var.json (default: false) |
@@ -109,6 +115,8 @@ Defines template metadata, required variables, and template-specific settings.
 | `pattern` | string | No | Regex validation pattern (strings only) |
 | `min` | int | No | Minimum value (integers only) |
 | `max` | int | No | Maximum value (integers only) |
+| `min_float` | number | No | Minimum value (numbers only) |
+| `max_float` | number | No | Maximum value (numbers only) |
 
 **Prompt Display Behavior:**
 - The `description` is always displayed in the prompt message (e.g., `? VARIABLE_NAME - description`)
@@ -969,7 +977,7 @@ All configuration files are validated against JSON schemas:
 | Error | File | Fix |
 |-------|------|-----|
 | `Missing required field: name` | ign.json | Add `"name": "template-name"` |
-| `Invalid variable type: xyz` | ign.json | Use `string`, `int`, or `bool` |
+| `Invalid variable type: xyz` | ign.json | Use `string`, `int`, `number`, or `bool` |
 | `Variable name invalid: 123abc` | ign.json | Start with letter |
 | `Missing template.url` | ign-var.json | Add template URL |
 | `Type mismatch: expected int` | ign-var.json | Use number, not string |
@@ -1004,7 +1012,7 @@ interface IgnJson {
 
   variables: {
     [key: string]: {
-      type: "string" | "int" | "bool";  // Required
+      type: "string" | "int" | "number" | "bool";  // Required
       description: string;               // Required - short description shown in prompt
       help?: string;                     // Longer explanation shown on '?'
       required?: boolean;
@@ -1013,6 +1021,8 @@ interface IgnJson {
       pattern?: string;                  // For strings
       min?: number;                      // For ints
       max?: number;                      // For ints
+      min_float?: number;                // For numbers
+      max_float?: number;                // For numbers
     }
   };
 

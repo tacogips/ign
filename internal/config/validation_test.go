@@ -257,6 +257,77 @@ func TestValidateVariables(t *testing.T) {
 			t.Error("Expected error for min > max")
 		}
 	})
+
+	t.Run("valid number variable", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate_limit": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate limit per second",
+				Default:     1.5,
+				MinFloat:    floatPtr(0.1),
+				MaxFloat:    floatPtr(100.0),
+			},
+		}
+		if err := validateVariables(vars); err != nil {
+			t.Errorf("Valid number variable should pass validation: %v", err)
+		}
+	})
+
+	t.Run("min_float/max_float on non-number variable", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"name": {
+				Type:        model.VarTypeString,
+				Description: "Name",
+				MinFloat:    floatPtr(1.0),
+				MaxFloat:    floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for min_float/max_float on non-number variable")
+		}
+	})
+
+	t.Run("min_float greater than max_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate",
+				MinFloat:    floatPtr(10.0),
+				MaxFloat:    floatPtr(1.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for min_float > max_float")
+		}
+	})
+
+	t.Run("number default below min_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate",
+				Default:     0.5,
+				MinFloat:    floatPtr(1.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for default value below min_float")
+		}
+	})
+
+	t.Run("number default above max_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate",
+				Default:     15.0,
+				MaxFloat:    floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for default value above max_float")
+		}
+	})
 }
 
 func TestValidateIgnVarJson(t *testing.T) {
@@ -375,6 +446,7 @@ func TestValidateVarType(t *testing.T) {
 	}{
 		{"string type", model.VarTypeString, false},
 		{"int type", model.VarTypeInt, false},
+		{"number type", model.VarTypeNumber, false},
 		{"bool type", model.VarTypeBool, false},
 		{"invalid type", model.VarType("invalid"), true},
 		{"empty type", model.VarType(""), true},
@@ -401,9 +473,12 @@ func TestValidateValueType(t *testing.T) {
 		{"int match", 42, model.VarTypeInt, false},
 		{"float as int", 42.0, model.VarTypeInt, false},
 		{"bool match", true, model.VarTypeBool, false},
+		{"number match float64", 3.14, model.VarTypeNumber, false},
+		{"number match int", 42, model.VarTypeNumber, false},
 		{"string mismatch", "hello", model.VarTypeInt, true},
 		{"int mismatch", 42, model.VarTypeString, true},
 		{"bool mismatch", true, model.VarTypeString, true},
+		{"string as number mismatch", "3.14", model.VarTypeNumber, true},
 	}
 
 	for _, tt := range tests {
@@ -452,4 +527,9 @@ func TestConfigError(t *testing.T) {
 // Helper function to create int pointer
 func intPtr(i int) *int {
 	return &i
+}
+
+// Helper function to create float64 pointer
+func floatPtr(f float64) *float64 {
+	return &f
 }

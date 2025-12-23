@@ -493,6 +493,7 @@ type VarType string
 const (
     VarTypeString VarType = "string"
     VarTypeInt    VarType = "int"
+    VarTypeNumber VarType = "number"
     VarTypeBool   VarType = "bool"
 )
 

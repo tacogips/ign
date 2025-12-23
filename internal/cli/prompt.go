@@ -61,6 +61,8 @@ func promptForVariable(name string, varDef model.VarDef) (interface{}, error) {
 		return promptString(name, varDef, help)
 	case model.VarTypeInt:
 		return promptInt(name, varDef, help)
+	case model.VarTypeNumber:
+		return promptNumber(name, varDef, help)
 	case model.VarTypeBool:
 		return promptBool(name, varDef, help)
 	default:
@@ -194,6 +196,87 @@ func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 	}
 
 	return strconv.Atoi(result)
+}
+
+// promptNumber prompts for a floating-point number variable.
+func promptNumber(name string, varDef model.VarDef, help string) (float64, error) {
+	var result string
+
+	// Build message with description displayed by default
+	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
+	if varDef.Required {
+		message += " (required)"
+	}
+	if varDef.MinFloat != nil || varDef.MaxFloat != nil {
+		if varDef.MinFloat != nil && varDef.MaxFloat != nil {
+			message += fmt.Sprintf(" [%v-%v]", *varDef.MinFloat, *varDef.MaxFloat)
+		} else if varDef.MinFloat != nil {
+			message += fmt.Sprintf(" [>=%v]", *varDef.MinFloat)
+		} else {
+			message += fmt.Sprintf(" [<=%v]", *varDef.MaxFloat)
+		}
+	}
+
+	// Get default value
+	defaultVal := ""
+	if varDef.Default != nil {
+		switch v := varDef.Default.(type) {
+		case float64:
+			defaultVal = strconv.FormatFloat(v, 'f', -1, 64)
+		case float32:
+			defaultVal = strconv.FormatFloat(float64(v), 'f', -1, 64)
+		case int:
+			defaultVal = strconv.FormatFloat(float64(v), 'f', -1, 64)
+		}
+	}
+
+	prompt := &survey.Input{
+		Message: message,
+		Default: defaultVal,
+		Help:    help,
+	}
+
+	// Create validator for number
+	numberValidator := func(val interface{}) error {
+		str, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("expected string, got %T", val)
+		}
+
+		if str == "" {
+			if varDef.Required {
+				return fmt.Errorf("value is required")
+			}
+			return nil
+		}
+
+		num, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return fmt.Errorf("must be a number")
+		}
+
+		if varDef.MinFloat != nil && num < *varDef.MinFloat {
+			return fmt.Errorf("must be >= %v", *varDef.MinFloat)
+		}
+		if varDef.MaxFloat != nil && num > *varDef.MaxFloat {
+			return fmt.Errorf("must be <= %v", *varDef.MaxFloat)
+		}
+
+		return nil
+	}
+
+	if err := survey.AskOne(prompt, &result, survey.WithValidator(numberValidator)); err != nil {
+		return 0, err
+	}
+
+	if result == "" {
+		return 0, nil
+	}
+
+	return strconv.ParseFloat(result, 64)
 }
 
 // promptBool prompts for a boolean variable.
