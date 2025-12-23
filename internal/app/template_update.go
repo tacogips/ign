@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -463,8 +461,7 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 // Files are sorted by path to ensure deterministic hash generation.
 // Excludes ign.json itself from the hash calculation.
 func CalculateTemplateHashFromDir(dirPath string) (string, error) {
-	h := sha256.New()
-	var files []string
+	var filePaths []string
 
 	// Collect all file paths
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -497,7 +494,7 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 			return err
 		}
 
-		files = append(files, relPath)
+		filePaths = append(filePaths, relPath)
 		return nil
 	})
 	if err != nil {
@@ -505,22 +502,18 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 	}
 
 	// Sort files for deterministic hash
-	sort.Strings(files)
+	sort.Strings(filePaths)
 
-	// Hash each file's path and content
-	// Use null byte separators to prevent hash collisions between different file combinations
-	for _, relPath := range files {
+	// Read file contents and build HashableFile slice
+	hashableFiles := make([]HashableFile, 0, len(filePaths))
+	for _, relPath := range filePaths {
 		fullPath := filepath.Join(dirPath, relPath)
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read %s: %w", relPath, err)
 		}
-
-		h.Write([]byte(relPath))
-		h.Write([]byte("\x00")) // Separator between path and content
-		h.Write(content)
-		h.Write([]byte("\x00")) // Separator between files
+		hashableFiles = append(hashableFiles, HashableFile{Path: relPath, Content: content})
 	}
 
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return HashTemplateFiles(hashableFiles), nil
 }

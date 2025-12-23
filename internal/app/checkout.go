@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -110,8 +108,6 @@ func calculateTemplateHash(template *model.Template) string {
 		return ""
 	}
 
-	h := sha256.New()
-
 	// Sort files by path for deterministic hash
 	files := make([]model.TemplateFile, len(template.Files))
 	copy(files, template.Files)
@@ -119,16 +115,13 @@ func calculateTemplateHash(template *model.Template) string {
 		return files[i].Path < files[j].Path
 	})
 
-	// Hash each file's path and content
-	// Use null byte separators to prevent hash collisions between different file combinations
-	for _, file := range files {
-		h.Write([]byte(file.Path))
-		h.Write([]byte("\x00")) // Separator between path and content
-		h.Write(file.Content)
-		h.Write([]byte("\x00")) // Separator between files
+	// Convert to HashableFile slice for shared hash function
+	hashableFiles := make([]HashableFile, len(files))
+	for i, f := range files {
+		hashableFiles[i] = HashableFile{Path: f.Path, Content: f.Content}
 	}
 
-	return hex.EncodeToString(h.Sum(nil))
+	return HashTemplateFiles(hashableFiles)
 }
 
 // maxBackups is the maximum number of backup files allowed to prevent infinite loops
