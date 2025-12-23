@@ -34,9 +34,8 @@ Debug mode enabled
 			},
 			opts: func(path string) UpdateTemplateOptions {
 				return UpdateTemplateOptions{
-					Path:      path,
-					Recursive: false,
-					DryRun:    true,
+					Path:   path,
+					DryRun: true,
 				}
 			},
 			wantErr: false,
@@ -76,7 +75,7 @@ Debug mode enabled
 			},
 		},
 		{
-			name: "recursive scan",
+			name: "scans subdirectories",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				subdir := filepath.Join(dir, "subdir")
@@ -98,9 +97,8 @@ Debug mode enabled
 			},
 			opts: func(path string) UpdateTemplateOptions {
 				return UpdateTemplateOptions{
-					Path:      path,
-					Recursive: true,
-					DryRun:    true,
+					Path:   path,
+					DryRun: true,
 				}
 			},
 			wantErr: false,
@@ -116,45 +114,6 @@ Debug mode enabled
 				}
 				if _, ok := result.Variables["sub_var"]; !ok {
 					t.Error("Expected 'sub_var' variable")
-				}
-			},
-		},
-		{
-			name: "non-recursive does not scan subdirs",
-			setup: func(t *testing.T) string {
-				dir := t.TempDir()
-				subdir := filepath.Join(dir, "subdir")
-				if err := os.MkdirAll(subdir, 0755); err != nil {
-					t.Fatalf("Failed to create subdir: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(dir, "root.txt"), []byte("@ign-var:root_var@"), 0644); err != nil {
-					t.Fatalf("Failed to create root file: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte("@ign-var:sub_var@"), 0644); err != nil {
-					t.Fatalf("Failed to create sub file: %v", err)
-				}
-
-				return dir
-			},
-			opts: func(path string) UpdateTemplateOptions {
-				return UpdateTemplateOptions{
-					Path:      path,
-					Recursive: false,
-					DryRun:    true,
-				}
-			},
-			wantErr: false,
-			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
-				if result.FilesScanned != 1 {
-					t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
-				}
-				if len(result.Variables) != 1 {
-					t.Errorf("Expected 1 variable, got %d", len(result.Variables))
-				}
-				if _, ok := result.Variables["root_var"]; !ok {
-					t.Error("Expected 'root_var' variable")
 				}
 			},
 		},

@@ -12,11 +12,10 @@ import (
 )
 
 // CheckTemplateOptions holds options for template validation.
+// Subdirectories are always checked recursively to match hash calculation behavior.
 type CheckTemplateOptions struct {
 	// Path is the file or directory path to check.
 	Path string
-	// Recursive indicates whether to check subdirectories.
-	Recursive bool
 	// Verbose indicates whether to show detailed output.
 	Verbose bool
 }
@@ -56,10 +55,10 @@ var binaryFileExtensions = map[string]bool{
 }
 
 // CheckTemplate validates template files for syntax errors.
+// Subdirectories are always checked recursively to match hash calculation behavior.
 func CheckTemplate(ctx context.Context, opts CheckTemplateOptions) (*CheckResult, error) {
 	debug.DebugSection("[app] CheckTemplate workflow start")
 	debug.DebugValue("[app] Path to check", opts.Path)
-	debug.DebugValue("[app] Recursive", opts.Recursive)
 	debug.DebugValue("[app] Verbose", opts.Verbose)
 
 	result := &CheckResult{
@@ -87,10 +86,10 @@ func CheckTemplate(ctx context.Context, opts CheckTemplateOptions) (*CheckResult
 		return nil, NewValidationError(fmt.Sprintf("path not found: %s", absPath), err)
 	}
 
-	// Process based on file or directory
+	// Process based on file or directory (always recursive for directories)
 	if info.IsDir() {
-		debug.Debug("[app] Path is a directory, checking directory")
-		err = checkDirectory(ctx, p, absPath, opts.Recursive, result)
+		debug.Debug("[app] Path is a directory, checking directory recursively")
+		err = checkDirectory(ctx, p, absPath, result)
 	} else {
 		debug.Debug("[app] Path is a file, checking file")
 		err = checkFile(ctx, p, absPath, result)
@@ -110,7 +109,8 @@ func CheckTemplate(ctx context.Context, opts CheckTemplateOptions) (*CheckResult
 }
 
 // checkDirectory recursively checks all files in a directory.
-func checkDirectory(ctx context.Context, p parser.Parser, dirPath string, recursive bool, result *CheckResult) error {
+// Always scans recursively to match hash calculation behavior.
+func checkDirectory(ctx context.Context, p parser.Parser, dirPath string, result *CheckResult) error {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return NewValidationError(fmt.Sprintf("failed to read directory: %s", dirPath), err)
@@ -126,10 +126,8 @@ func checkDirectory(ctx context.Context, p parser.Parser, dirPath string, recurs
 		}
 
 		if entry.IsDir() {
-			if recursive {
-				if err := checkDirectory(ctx, p, fullPath, recursive, result); err != nil {
-					return err
-				}
+			if err := checkDirectory(ctx, p, fullPath, result); err != nil {
+				return err
 			}
 			continue
 		}

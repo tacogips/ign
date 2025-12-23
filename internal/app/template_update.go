@@ -18,11 +18,10 @@ import (
 
 // UpdateTemplateOptions holds options for updating template ign-template.json with variable definitions and hash.
 // The hash is calculated from all template files (excluding ign-template.json) to enable change detection.
+// Subdirectories are always scanned recursively to match hash calculation behavior.
 type UpdateTemplateOptions struct {
 	// Path is the template directory path.
 	Path string
-	// Recursive indicates whether to scan subdirectories.
-	Recursive bool
 	// DryRun shows what would be updated without writing.
 	DryRun bool
 	// Merge preserves existing variable definitions and only adds new ones.
@@ -70,10 +69,10 @@ var (
 )
 
 // UpdateTemplate scans template files and updates ign-template.json with variable definitions and hash.
+// Subdirectories are always scanned recursively to match hash calculation behavior.
 func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTemplateResult, error) {
 	debug.DebugSection("[app] UpdateTemplate workflow start")
 	debug.DebugValue("[app] Path", opts.Path)
-	debug.DebugValue("[app] Recursive", opts.Recursive)
 	debug.DebugValue("[app] DryRun", opts.DryRun)
 	debug.DebugValue("[app] Merge", opts.Merge)
 
@@ -100,8 +99,8 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 		IgnJsonPath: ignJsonPath,
 	}
 
-	// Scan template files
-	err = scanTemplateFiles(ctx, absPath, opts.Recursive, result)
+	// Scan template files (always recursive to match hash calculation behavior)
+	err = scanTemplateFiles(ctx, absPath, result)
 	if err != nil {
 		return nil, err
 	}
@@ -134,11 +133,13 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 	return result, nil
 }
 
-// scanTemplateFiles recursively scans files for variable directives.
+// scanTemplateFiles recursively scans all files for variable directives.
 // Includes all files and dotfiles (e.g., .gitignore, .envrc, .claude/) except:
 //   - .git directory (version control metadata)
 //   - ign-template.json (template config file itself)
-func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, result *UpdateTemplateResult) error {
+//
+// Always scans recursively to match hash calculation behavior.
+func scanTemplateFiles(ctx context.Context, dirPath string, result *UpdateTemplateResult) error {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return NewValidationError(fmt.Sprintf("failed to read directory: %s", dirPath), err)
@@ -159,10 +160,8 @@ func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, resu
 		}
 
 		if entry.IsDir() {
-			if recursive {
-				if err := scanTemplateFiles(ctx, fullPath, recursive, result); err != nil {
-					return err
-				}
+			if err := scanTemplateFiles(ctx, fullPath, result); err != nil {
+				return err
 			}
 			continue
 		}
