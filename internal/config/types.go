@@ -2,8 +2,6 @@ package config
 
 // Config represents the global ign configuration.
 type Config struct {
-	// Cache configuration for template caching.
-	Cache CacheConfig `json:"cache"`
 	// GitHub configuration for repository access.
 	GitHub GitHubConfig `json:"github"`
 	// Templates configuration for template processing.
@@ -12,20 +10,6 @@ type Config struct {
 	Output OutputConfig `json:"output"`
 	// Defaults configuration for default values.
 	Defaults DefaultsConfig `json:"defaults"`
-}
-
-// CacheConfig represents cache settings.
-type CacheConfig struct {
-	// Enabled indicates whether template caching is enabled.
-	Enabled bool `json:"enabled"`
-	// Directory is the cache directory path.
-	Directory string `json:"directory"`
-	// TTL is the cache time-to-live in seconds (0 = no expiration).
-	TTL int `json:"ttl"`
-	// MaxSizeMB is the maximum cache size in megabytes.
-	MaxSizeMB int `json:"max_size_mb"`
-	// AutoClean indicates whether to automatically clean old cache entries.
-	AutoClean bool `json:"auto_clean"`
 }
 
 // GitHubConfig represents GitHub-specific settings.

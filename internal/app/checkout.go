@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 
 	"github.com/tacogips/ign/internal/build"
@@ -91,37 +90,6 @@ type CheckoutResult struct {
 	DryRunFiles []DryRunFile
 	// Directories contains directories that would be created (dry-run only).
 	Directories []string
-}
-
-// calculateTemplateHash calculates SHA256 hash of template files content.
-// Files are sorted by path to ensure deterministic hash generation.
-// Returns empty string if template is nil or has no files.
-// This function uses the same algorithm as CalculateTemplateHashFromDir to ensure consistency.
-func calculateTemplateHash(template *model.Template) string {
-	// Defensive: handle nil template
-	if template == nil {
-		return ""
-	}
-
-	// Handle empty template (no files)
-	if len(template.Files) == 0 {
-		return ""
-	}
-
-	// Sort files by path for deterministic hash
-	files := make([]model.TemplateFile, len(template.Files))
-	copy(files, template.Files)
-	sort.Slice(files, func(i, j int) bool {
-		return files[i].Path < files[j].Path
-	})
-
-	// Convert to HashableFile slice for shared hash function
-	hashableFiles := make([]HashableFile, len(files))
-	for i, f := range files {
-		hashableFiles[i] = HashableFile{Path: f.Path, Content: f.Content}
-	}
-
-	return HashTemplateFiles(hashableFiles)
 }
 
 // maxBackups is the maximum number of backup files allowed to prevent infinite loops
@@ -296,16 +264,19 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {
-		// Always calculate hash from template content for consistency with config_init.go
-		// This ensures the hash represents the actual fetched template, not stale metadata
-		debug.Debug("[app] Calculating template hash from content")
-		templateHash := calculateTemplateHash(prep.Template)
-		debug.DebugValue("[app] Template hash", templateHash)
+		// Get hash from template's ign-template.json
+		// The hash must be present (calculated by 'ign template update' on the template side)
+		templateHash := prep.IgnJson.Hash
+		debug.DebugValue("[app] Template hash from ign-template.json", templateHash)
 
-		// Validate hash is not empty (should not happen if template is valid)
+		// Validate hash is present
 		if templateHash == "" {
-			debug.Debug("[app] Template hash is empty - template may be nil or have no files")
-			return nil, NewCheckoutError("failed to calculate template hash: template is empty or invalid", nil)
+			debug.Debug("[app] Template hash is missing in ign-template.json")
+			return nil, NewCheckoutError(
+				"template is missing hash in ign-template.json.\n"+
+					"The template author needs to run 'ign template update' to generate the hash.",
+				nil,
+			)
 		}
 
 		// Save ign.json (template source and hash)
@@ -555,11 +526,21 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	}
 	debug.Debug("[app] Template fetched successfully")
 
-	// Calculate and update template hash in ign.json (unless dry-run)
+	// Get and update template hash in ign.json (unless dry-run)
 	if !opts.DryRun {
-		debug.Debug("[app] Calculating template hash")
-		templateHash := calculateTemplateHash(template)
-		debug.DebugValue("[app] Template hash", templateHash)
+		// Get hash from template's ign-template.json
+		templateHash := template.Config.Hash
+		debug.DebugValue("[app] Template hash from ign-template.json", templateHash)
+
+		// Validate hash is present
+		if templateHash == "" {
+			debug.Debug("[app] Template hash is missing in ign-template.json")
+			return nil, NewCheckoutError(
+				"template is missing hash in ign-template.json.\n"+
+					"The template author needs to run 'ign template update' to generate the hash.",
+				nil,
+			)
+		}
 
 		// Load existing ign.json
 		existingConfig, err := config.LoadIgnConfig(ignConfigPath)

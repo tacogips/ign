@@ -1,5 +1,7 @@
 # Implementation Architecture
 
+<!-- TODO: Remove cache-related sections (Cache interface, CacheManager, internal/cache package, cache diagram elements) - cache feature was removed -->
+
 This document describes the internal architecture, package structure, interfaces, and implementation details for the ign project.
 
 ---

@@ -1,5 +1,7 @@
 # Configuration File Reference
 
+<!-- TODO: Remove cache-related sections (Cache Section, cache config examples, IGN_CACHE_DIR, Cache Directory Structure) - cache feature was removed -->
+
 Complete reference for all ign configuration file formats, schemas, and filesystem layouts.
 
 ---

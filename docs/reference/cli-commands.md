@@ -1,5 +1,7 @@
 # CLI Commands Reference
 
+<!-- TODO: Remove cache-related sections (cache_dir, cache_ttl, IGN_CACHE_DIR, Cache Issues section) - cache feature was removed -->
+
 Complete reference for all ign command-line interface commands, flags, and behaviors.
 
 ---

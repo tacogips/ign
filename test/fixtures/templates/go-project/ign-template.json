@@ -3,16 +3,16 @@
   "version": "1.0.0",
   "description": "Go project template",
   "variables": {
-    "module_name": {
-      "type": "string",
-      "description": "Go module name",
-      "required": true,
-      "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*$"
-    },
     "author": {
       "type": "string",
-      "description": "Author name",
+      "description": "Variable author",
+      "required": true
+    },
+    "module_name": {
+      "type": "string",
+      "description": "Variable module_name",
       "required": true
     }
-  }
+  },
+  "hash": "05823b3e58d52cd6a30a05c6337bd165ea872d6f93d214b42d616f7fc7a53a8b"
 }

@@ -183,6 +183,7 @@ func TestCheckout_ConditionalTemplate(t *testing.T) {
 			ignVar.Variables["project_name"] = "test-conditional"
 			ignVar.Variables["use_docker"] = tt.useDocker
 			ignVar.Variables["has_license"] = tt.hasLicense
+			ignVar.Variables["license"] = "MIT"
 
 			updatedData, err := json.MarshalIndent(ignVar, "", "  ")
 			if err != nil {

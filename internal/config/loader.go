@@ -65,12 +65,6 @@ func (l *FileLoader) LoadOrDefault(path string) (*Config, error) {
 
 // Validate validates the configuration.
 func (l *FileLoader) Validate(config *Config) error {
-	if config.Cache.TTL < 0 {
-		return NewConfigErrorWithField(ConfigValidationFailed, "", "cache.ttl", "TTL cannot be negative")
-	}
-	if config.Cache.MaxSizeMB < 0 {
-		return NewConfigErrorWithField(ConfigValidationFailed, "", "cache.max_size_mb", "max size cannot be negative")
-	}
 	if config.GitHub.Timeout < 0 {
 		return NewConfigErrorWithField(ConfigValidationFailed, "", "github.timeout", "timeout cannot be negative")
 	}
@@ -238,17 +232,6 @@ func SaveIgnConfig(path string, ignConfig *model.IgnConfig) error {
 
 // mergeConfig merges missing fields from defaults into cfg.
 func mergeConfig(cfg, defaults *Config) {
-	// Cache
-	if cfg.Cache.Directory == "" {
-		cfg.Cache.Directory = defaults.Cache.Directory
-	}
-	if cfg.Cache.TTL == 0 {
-		cfg.Cache.TTL = defaults.Cache.TTL
-	}
-	if cfg.Cache.MaxSizeMB == 0 {
-		cfg.Cache.MaxSizeMB = defaults.Cache.MaxSizeMB
-	}
-
 	// GitHub
 	if cfg.GitHub.DefaultRef == "" {
 		cfg.GitHub.DefaultRef = defaults.GitHub.DefaultRef

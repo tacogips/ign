@@ -10,7 +10,7 @@
 ## Implemented
 - [x] Configuration type definitions (`internal/config/types.go`)
   - Config struct for global configuration
-  - CacheConfig, GitHubConfig, TemplateConfig, OutputConfig, DefaultsConfig structs
+  - GitHubConfig, TemplateConfig, OutputConfig, DefaultsConfig structs
 - [x] Configuration file loading (`internal/config/loader.go`)
   - Loader interface with Load, LoadOrDefault, and Validate methods
   - FileLoader implementation
@@ -21,8 +21,6 @@
   - DefaultConfig function with sensible defaults
   - DefaultBinaryExtensions list (30+ extensions)
   - DefaultIgnorePatterns list
-  - Default cache settings (TTL: 3600s, max: 500MB)
-  - DefaultConfigPath function
 - [x] Configuration validation (`internal/config/validation.go`)
   - Validate function for global config
   - ValidateIgnJson for template configuration
@@ -67,7 +65,7 @@
 ### 4. Path Expansion
 - ExpandPath function handles ~ expansion to home directory
 - Converts relative paths to absolute paths
-- Used for cache directory, config paths, etc.
+- Used for config paths, etc.
 
 ### 5. Merge Strategy
 - Partial configs are merged with defaults
@@ -152,7 +150,6 @@ go test ./internal/config/... -v
 ### Used By
 - CLI commands (future: will load global config)
 - Template provider (future: will use GitHub config)
-- Cache manager (future: will use cache config)
 - Template generator (future: will use template config)
 
 ### Dependencies
@@ -171,7 +168,7 @@ go test ./internal/config/... -v
 
 ## Future Enhancements
 
-1. Environment variable overrides (IGN_CACHE_DIR, GITHUB_TOKEN, etc.)
+1. Environment variable overrides (GITHUB_TOKEN, etc.)
 2. Config validation command (ign validate)
 3. Config schema export (JSON Schema)
 4. Watch for config changes and reload
