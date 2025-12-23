@@ -139,16 +139,16 @@ func (p *LocalProvider) Validate(ctx context.Context, ref model.TemplateRef) err
 	}
 	debug.Debug("[local] Path is a directory")
 
-	// Check if ign.json exists
-	ignPath := filepath.Join(absPath, "ign.json")
-	debug.Debug("[local] Checking for ign.json at: %s", ignPath)
+	// Check if template config file exists
+	ignPath := filepath.Join(absPath, model.IgnTemplateConfigFile)
+	debug.Debug("[local] Checking for %s at: %s", model.IgnTemplateConfigFile, ignPath)
 	if _, err := os.Stat(ignPath); err != nil {
 		if os.IsNotExist(err) {
-			debug.Debug("[local] ign.json not found")
+			debug.Debug("[local] %s not found", model.IgnTemplateConfigFile)
 			return NewInvalidTemplateError(p.Name(), ref.Path,
-				"ign.json not found in template directory", nil)
+				model.IgnTemplateConfigFile+" not found in template directory", nil)
 		}
-		debug.Debug("[local] Failed to check ign.json: %v", err)
+		debug.Debug("[local] Failed to check %s: %v", model.IgnTemplateConfigFile, err)
 		return NewFetchError(p.Name(), ref.Path, err)
 	}
 
@@ -199,13 +199,13 @@ func (p *LocalProvider) Fetch(ctx context.Context, ref model.TemplateRef) (*mode
 			"path must be a directory", nil)
 	}
 
-	// Read and parse ign.json
-	debug.Debug("[local] Reading ign.json...")
+	// Read and parse template config file
+	debug.Debug("[local] Reading %s...", model.IgnTemplateConfigFile)
 	ignConfig, err := p.readIgnConfig(absPath)
 	if err != nil {
-		debug.Debug("[local] Failed to read ign.json: %v", err)
+		debug.Debug("[local] Failed to read %s: %v", model.IgnTemplateConfigFile, err)
 		return nil, NewInvalidTemplateError(p.Name(), ref.Path,
-			"failed to read ign.json", err)
+			"failed to read "+model.IgnTemplateConfigFile, err)
 	}
 	debug.Debug("[local] Template name: %s, version: %s", ignConfig.Name, ignConfig.Version)
 
@@ -289,33 +289,33 @@ func isSubPath(parent, child string) bool {
 	return !filepath.IsAbs(rel) && !strings.HasPrefix(rel, "..")
 }
 
-// readIgnConfig reads and parses the ign.json file.
+// readIgnConfig reads and parses the template config file.
 func (p *LocalProvider) readIgnConfig(templateRoot string) (*model.IgnJson, error) {
-	ignPath := filepath.Join(templateRoot, "ign.json")
+	ignPath := filepath.Join(templateRoot, model.IgnTemplateConfigFile)
 
 	data, err := os.ReadFile(ignPath)
 	if err != nil {
-		return nil, fmt.Errorf("ign.json not found in template root: %w", err)
+		return nil, fmt.Errorf("%s not found in template root: %w", model.IgnTemplateConfigFile, err)
 	}
 
 	var config model.IgnJson
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse ign.json: %w", err)
+		return nil, fmt.Errorf("failed to parse %s: %w", model.IgnTemplateConfigFile, err)
 	}
 
 	// Basic validation
 	if config.Name == "" {
-		return nil, fmt.Errorf("ign.json missing required field: name")
+		return nil, fmt.Errorf("%s missing required field: name", model.IgnTemplateConfigFile)
 	}
 	if config.Version == "" {
-		return nil, fmt.Errorf("ign.json missing required field: version")
+		return nil, fmt.Errorf("%s missing required field: version", model.IgnTemplateConfigFile)
 	}
 
 	return &config, nil
 }
 
 // collectFiles recursively collects all files in the template directory.
-// Excludes ign.json as it's not part of the template output.
+// Excludes template config file as it's not part of the template output.
 func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile, error) {
 	var files []model.TemplateFile
 	var totalBytes int64
@@ -330,8 +330,8 @@ func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile,
 			return nil
 		}
 
-		// Skip ign.json (config file, not template content)
-		if filepath.Base(path) == "ign.json" {
+		// Skip template config file (config file, not template content)
+		if filepath.Base(path) == model.IgnTemplateConfigFile {
 			return nil
 		}
 

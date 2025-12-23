@@ -25,7 +25,7 @@ var templateNewCmd = &cobra.Command{
 	Long: `Create a new template directory with scaffold files.
 
 The new command creates a template directory structure with:
-- ign.json: Template configuration with variable definitions
+- ign-template.json: Template configuration with variable definitions
 - README.md: Template documentation with ign directive examples
 - example.txt: Example file demonstrating ign directives
 
@@ -65,9 +65,9 @@ Examples:
 // templateUpdateCmd represents the template update command
 var templateUpdateCmd = &cobra.Command{
 	Use:   "update [PATH]",
-	Short: "Update ign.json with variables and template hash",
+	Short: "Update ign-template.json with variables and template hash",
 	Long: `Scan template files for @ign-var: and @ign-if: directives and
-automatically update ign.json with the collected variable definitions
+automatically update ign-template.json with the collected variable definitions
 and recalculate the template hash.
 
 This command is for TEMPLATE AUTHORS to maintain their template repositories.
@@ -77,7 +77,7 @@ generated a project and want to pull in updates from the template source. When
 project users run 'ign update', this hash is used to detect whether the template
 has changed since their last checkout or update.
 
-This command keeps ign.json in sync with template files and updates
+This command keeps ign-template.json in sync with template files and updates
 the hash field that 'ign update' uses to detect template changes.
 
 If PATH is not specified, the current directory is used.
@@ -129,8 +129,8 @@ func init() {
 	// Note: These flags control template metadata updates, which differs from
 	// 'ign update' flags that control project file generation
 	templateUpdateCmd.Flags().BoolVarP(&templateUpdateRecursive, "recursive", "r", false, "Recursively scan subdirectories for template files")
-	templateUpdateCmd.Flags().BoolVar(&templateUpdateDryRun, "dry-run", false, "Preview ign.json changes without writing the file")
-	templateUpdateCmd.Flags().BoolVar(&templateUpdateMerge, "merge", false, "Only add new variables to ign.json, preserve existing ones")
+	templateUpdateCmd.Flags().BoolVar(&templateUpdateDryRun, "dry-run", false, "Preview ign-template.json changes without writing the file")
+	templateUpdateCmd.Flags().BoolVar(&templateUpdateMerge, "merge", false, "Only add new variables to ign-template.json, preserve existing ones")
 }
 
 func runTemplateCheck(cmd *cobra.Command, args []string) error {
@@ -251,7 +251,7 @@ func runTemplateNew(cmd *cobra.Command, args []string) error {
 	printSeparator()
 	printInfo("Next steps:")
 	printInfo(fmt.Sprintf("  1. cd %s", path))
-	printInfo("  2. Edit ign.json to customize template variables")
+	printInfo("  2. Edit ign-template.json to customize template variables")
 	printInfo("  3. Add your template files with @ign- directives")
 	printInfo("  4. Run 'ign template check' to validate")
 

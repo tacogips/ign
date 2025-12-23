@@ -178,15 +178,15 @@ Debug mode enabled
 				if result.Updated {
 					t.Error("Expected Updated to be false in dry-run mode")
 				}
-				// ign.json should not exist
-				ignJsonPath := filepath.Join(path, "ign.json")
+				// ign-template.json should not exist
+				ignJsonPath := filepath.Join(path, model.IgnTemplateConfigFile)
 				if _, err := os.Stat(ignJsonPath); !os.IsNotExist(err) {
-					t.Error("Expected ign.json to not exist in dry-run mode")
+					t.Errorf("Expected %s to not exist in dry-run mode", model.IgnTemplateConfigFile)
 				}
 			},
 		},
 		{
-			name: "creates ign.json when not exists",
+			name: "creates ign-template.json when not exists",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				if err := os.WriteFile(filepath.Join(dir, "template.txt"), []byte("@ign-var:test@"), 0644); err != nil {
@@ -205,9 +205,9 @@ Debug mode enabled
 				if !result.Updated {
 					t.Error("Expected Updated to be true")
 				}
-				ignJsonPath := filepath.Join(path, "ign.json")
+				ignJsonPath := filepath.Join(path, model.IgnTemplateConfigFile)
 				if _, err := os.Stat(ignJsonPath); os.IsNotExist(err) {
-					t.Error("Expected ign.json to be created")
+					t.Errorf("Expected %s to be created", model.IgnTemplateConfigFile)
 				}
 			},
 		},
@@ -284,6 +284,13 @@ func TestParseVarArgs(t *testing.T) {
 		{"port:int=8080", "port", model.VarTypeInt, 8080, true},
 		{"debug:bool=true", "debug", model.VarTypeBool, true, true},
 		{"flag:bool=false", "flag", model.VarTypeBool, false, true},
+		// Version strings should remain strings, not be parsed as integers (issue #20)
+		{"GO_VERSION=1.25.4", "GO_VERSION", model.VarTypeString, "1.25.4", true},
+		{"version=2.0.0", "version", model.VarTypeString, "2.0.0", true},
+		{"node_version=18.17.0", "node_version", model.VarTypeString, "18.17.0", true},
+		// Plain integers should still work
+		{"count=42", "count", model.VarTypeInt, 42, true},
+		{"level=-5", "level", model.VarTypeInt, -5, true},
 	}
 
 	for _, tt := range tests {
@@ -321,8 +328,8 @@ func TestMergeMode(t *testing.T) {
     }
   }
 }`
-	if err := os.WriteFile(filepath.Join(dir, "ign.json"), []byte(existingIgnJson), 0644); err != nil {
-		t.Fatalf("Failed to create ign.json: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, model.IgnTemplateConfigFile), []byte(existingIgnJson), 0644); err != nil {
+		t.Fatalf("Failed to create %s: %v", model.IgnTemplateConfigFile, err)
 	}
 
 	// Create template file with new variable
@@ -436,29 +443,29 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 			},
 		},
 		{
-			name: "ign.json excluded from hash",
+			name: "ign-template.json excluded from hash",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				if err := os.WriteFile(filepath.Join(dir, "template.txt"), []byte("template content"), 0644); err != nil {
 					t.Fatalf("Failed to create template file: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(dir, "ign.json"), []byte(`{"name":"test"}`), 0644); err != nil {
-					t.Fatalf("Failed to create ign.json: %v", err)
+				if err := os.WriteFile(filepath.Join(dir, model.IgnTemplateConfigFile), []byte(`{"name":"test"}`), 0644); err != nil {
+					t.Fatalf("Failed to create %s: %v", model.IgnTemplateConfigFile, err)
 				}
 				return dir
 			},
 			wantErr: false,
 			validate: func(t *testing.T, hash1 string, dir string) {
-				// Modify ign.json
-				if err := os.WriteFile(filepath.Join(dir, "ign.json"), []byte(`{"name":"test","version":"2.0"}`), 0644); err != nil {
-					t.Fatalf("Failed to modify ign.json: %v", err)
+				// Modify ign-template.json
+				if err := os.WriteFile(filepath.Join(dir, model.IgnTemplateConfigFile), []byte(`{"name":"test","version":"2.0"}`), 0644); err != nil {
+					t.Fatalf("Failed to modify %s: %v", model.IgnTemplateConfigFile, err)
 				}
 				hash2, err := CalculateTemplateHashFromDir(dir)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
 				if hash1 != hash2 {
-					t.Error("Hash should not change when only ign.json is modified")
+					t.Errorf("Hash should not change when only %s is modified", model.IgnTemplateConfigFile)
 				}
 			},
 		},

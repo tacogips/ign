@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/tacogips/ign/internal/config"
@@ -15,8 +16,8 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-// UpdateTemplateOptions holds options for updating template ign.json with variable definitions and hash.
-// The hash is calculated from all template files (excluding ign.json) to enable change detection.
+// UpdateTemplateOptions holds options for updating template ign-template.json with variable definitions and hash.
+// The hash is calculated from all template files (excluding ign-template.json) to enable change detection.
 type UpdateTemplateOptions struct {
 	// Path is the template directory path.
 	Path string
@@ -50,9 +51,9 @@ type UpdateTemplateResult struct {
 	Variables map[string]*CollectedVar
 	// FilesScanned is the number of files scanned.
 	FilesScanned int
-	// IgnJsonPath is the path to the ign.json file.
+	// IgnJsonPath is the path to the ign-template.json file.
 	IgnJsonPath string
-	// Updated indicates if ign.json was updated.
+	// Updated indicates if ign-template.json was updated.
 	Updated bool
 	// NewVars lists newly added variable names.
 	NewVars []string
@@ -68,7 +69,7 @@ var (
 	ifDirectivePattern = regexp.MustCompile(`@ign-if:([^@]+)@`)
 )
 
-// UpdateTemplate scans template files and updates ign.json with variable definitions and hash.
+// UpdateTemplate scans template files and updates ign-template.json with variable definitions and hash.
 func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTemplateResult, error) {
 	debug.DebugSection("[app] UpdateTemplate workflow start")
 	debug.DebugValue("[app] Path", opts.Path)
@@ -91,8 +92,8 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 		return nil, NewValidationError(fmt.Sprintf("path is not a directory: %s", absPath), nil)
 	}
 
-	// Check for ign.json
-	ignJsonPath := filepath.Join(absPath, "ign.json")
+	// Check for template config file
+	ignJsonPath := filepath.Join(absPath, model.IgnTemplateConfigFile)
 
 	result := &UpdateTemplateResult{
 		Variables:   make(map[string]*CollectedVar),
@@ -108,19 +109,19 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 	debug.DebugValue("[app] Files scanned", result.FilesScanned)
 	debug.DebugValue("[app] Variables found", len(result.Variables))
 
-	// Load existing ign.json if it exists and merge mode is enabled
+	// Load existing ign-template.json if it exists and merge mode is enabled
 	var existingIgnJson *model.IgnJson
 	if _, err := os.Stat(ignJsonPath); err == nil {
 		existingIgnJson, err = config.LoadIgnJson(ignJsonPath)
 		if err != nil {
-			return nil, NewValidationError("failed to load existing ign.json", err)
+			return nil, NewValidationError("failed to load existing ign-template.json", err)
 		}
 	}
 
 	// Determine what's new and what's updated
 	result.NewVars, result.UpdatedVars = categorizeVars(result.Variables, existingIgnJson, opts.Merge)
 
-	// Update ign.json if not dry run
+	// Update ign-template.json if not dry run
 	if !opts.DryRun {
 		err = updateIgnJson(ignJsonPath, result, existingIgnJson, opts.Merge)
 		if err != nil {
@@ -148,8 +149,8 @@ func scanTemplateFiles(ctx context.Context, dirPath string, recursive bool, resu
 			continue
 		}
 
-		// Skip ign.json itself
-		if entry.Name() == "ign.json" {
+		// Skip template config file itself
+		if entry.Name() == model.IgnTemplateConfigFile {
 			continue
 		}
 
@@ -329,8 +330,9 @@ func parseDefaultValueStr(value string) interface{} {
 	}
 
 	// Try to parse as integer
-	var intVal int
-	if _, err := fmt.Sscanf(value, "%d", &intVal); err == nil {
+	// Use strconv.Atoi instead of fmt.Sscanf to ensure the entire string is parsed.
+	// fmt.Sscanf with %d would incorrectly parse "1.25.4" as 1.
+	if intVal, err := strconv.Atoi(value); err == nil {
 		return intVal
 	}
 
@@ -383,14 +385,14 @@ func categorizeVars(collected map[string]*CollectedVar, existing *model.IgnJson,
 	return
 }
 
-// updateIgnJson updates or creates ign.json with collected variables.
+// updateIgnJson updates or creates ign-template.json with collected variables.
 func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.IgnJson, merge bool) error {
 	var ignJson *model.IgnJson
 
 	if existing != nil {
 		ignJson = existing
 	} else {
-		// Create new ign.json with defaults
+		// Create new ign-template.json with defaults
 		ignJson = &model.IgnJson{
 			Name:        filepath.Base(filepath.Dir(path)),
 			Version:     "0.1.0",
@@ -445,14 +447,14 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 	ignJson.Hash = newHash
 	debug.DebugValue("[app] Template hash calculated", newHash)
 
-	// Write ign.json
+	// Write ign-template.json
 	data, err := json.MarshalIndent(ignJson, "", "  ")
 	if err != nil {
-		return NewValidationError("failed to marshal ign.json", err)
+		return NewValidationError("failed to marshal ign-template.json", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return NewValidationError("failed to write ign.json", err)
+		return NewValidationError("failed to write ign-template.json", err)
 	}
 
 	return nil
@@ -460,7 +462,7 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 
 // CalculateTemplateHashFromDir calculates SHA256 hash of all template files in a directory.
 // Files are sorted by path to ensure deterministic hash generation.
-// Excludes ign.json itself from the hash calculation.
+// Excludes ign-template.json itself from the hash calculation.
 func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 	var filePaths []string
 
@@ -484,8 +486,8 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 			return nil
 		}
 
-		// Skip ign.json (we're calculating hash for everything else)
-		if info.Name() == "ign.json" {
+		// Skip template config file (we're calculating hash for everything else)
+		if info.Name() == model.IgnTemplateConfigFile {
 			return nil
 		}
 
