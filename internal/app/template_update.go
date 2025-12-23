@@ -17,7 +17,7 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-// UpdateTemplateOptions holds options for updating template ign.json.
+// UpdateTemplateOptions holds options for updating template ign.json with variable definitions and hash.
 type UpdateTemplateOptions struct {
 	// Path is the template directory path.
 	Path string
@@ -433,15 +433,18 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 	}
 
 	// Calculate and update template hash
+	// Hash calculation is critical for 'ign update' to detect template changes
+	// Note: Hash is always recalculated and updated, even in merge mode.
+	// This ensures the hash reflects the current state of all template files,
+	// not just variable metadata changes.
 	templateDir := filepath.Dir(path)
 	newHash, err := CalculateTemplateHashFromDir(templateDir)
 	if err != nil {
-		debug.Debug("[app] Failed to calculate template hash: %v", err)
-		// Continue without hash if calculation fails
-	} else {
-		ignJson.Hash = newHash
-		debug.DebugValue("[app] Template hash calculated", newHash)
+		// Hash calculation failure is a critical error - return instead of silently continuing
+		return NewValidationError("failed to calculate template hash", err)
 	}
+	ignJson.Hash = newHash
+	debug.DebugValue("[app] Template hash calculated", newHash)
 
 	// Write ign.json
 	data, err := json.MarshalIndent(ignJson, "", "  ")
@@ -505,15 +508,18 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 	sort.Strings(files)
 
 	// Hash each file's path and content
+	// Use null byte separators to prevent hash collisions between different file combinations
 	for _, relPath := range files {
 		fullPath := filepath.Join(dirPath, relPath)
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to read %s: %w", relPath, err)
 		}
 
 		h.Write([]byte(relPath))
+		h.Write([]byte("\x00")) // Separator between path and content
 		h.Write(content)
+		h.Write([]byte("\x00")) // Separator between files
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil

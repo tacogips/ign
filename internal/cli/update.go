@@ -1,12 +1,9 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
-	"strings"
 
-	"github.com/AlecAivazis/survey/v2"
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
 	"github.com/tacogips/ign/internal/template/model"
@@ -18,6 +15,12 @@ var updateCmd = &cobra.Command{
 	Short: "Update project from template changes",
 	Long: `Update project files when the template has changed.
 
+This command is for PROJECT USERS who have generated a project using 'ign checkout'
+and want to pull in updates from the template source.
+
+Note: This is different from 'ign template update', which is for TEMPLATE AUTHORS
+to update the ign.json file within a template repository.
+
 This command checks if the template has been updated since the last checkout:
 1. Fetches the template from the stored URL in .ign/ign.json
 2. Compares the template hash to detect changes
@@ -27,6 +30,7 @@ This command checks if the template has been updated since the last checkout:
 Requirements:
   - .ign/ign.json must exist (created by 'ign checkout')
   - .ign/ign-var.json must exist (stores variable values)
+  - For private GitHub repositories, set GITHUB_TOKEN environment variable
 
 If the template has not changed (same hash), no action is taken.
 
@@ -48,9 +52,11 @@ var (
 
 func init() {
 	// Flags for update
-	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Overwrite existing files")
-	updateCmd.Flags().BoolVarP(&updateDryRun, "dry-run", "d", false, "Show what would be generated without writing files")
-	updateCmd.Flags().BoolVarP(&updateVerbose, "verbose", "v", false, "Show detailed processing information")
+	// Note: These flags control project file generation behavior, which differs from
+	// 'ign template update' flags that control template metadata updates
+	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Overwrite existing files in the generated project")
+	updateCmd.Flags().BoolVarP(&updateDryRun, "dry-run", "d", false, "Preview what files would be generated without writing them")
+	updateCmd.Flags().BoolVarP(&updateVerbose, "verbose", "v", false, "Show detailed processing information during project generation")
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
@@ -231,53 +237,12 @@ func PromptForNewVariables(varDefs map[string]model.VarDef) (map[string]interfac
 	return vars, nil
 }
 
-// PromptForVariablesSubset prompts for a subset of variables from IgnJson.
-func PromptForVariablesSubset(ignJson *model.IgnJson, varNames []string) (map[string]interface{}, error) {
-	vars := make(map[string]interface{})
-
-	if len(varNames) == 0 {
-		return vars, nil
-	}
-
-	// Sort for consistent ordering
-	sort.Strings(varNames)
-
-	fmt.Println()
-	fmt.Println("Please provide values for new template variables:")
-	fmt.Println()
-
-	for _, name := range varNames {
-		varDef, ok := ignJson.Variables[name]
-		if !ok {
-			continue // Skip if variable not found
-		}
-
-		value, err := promptForVariable(name, varDef)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prompt for variable %q: %w", name, err)
-		}
-
-		vars[name] = value
-	}
-
-	return vars, nil
-}
-
-// ConfirmUpdate prompts the user to confirm the update operation.
-func ConfirmUpdate(prepResult *app.PrepareUpdateResult) (bool, error) {
-	var confirm bool
-	prompt := &survey.Confirm{
-		Message: "Do you want to proceed with the update?",
-		Default: true,
-	}
-	if err := survey.AskOne(prompt, &confirm); err != nil {
-		return false, err
-	}
-	return confirm, nil
-}
-
 // printUpdateDryRunPatch outputs dry-run results in unified diff format.
 func printUpdateDryRunPatch(result *app.UpdateResult) {
+	if result == nil {
+		return
+	}
+
 	// Print summary header
 	fmt.Println("# DRY RUN - No files will be written")
 	fmt.Println("#")
@@ -315,72 +280,26 @@ func printUpdateDryRunPatch(result *app.UpdateResult) {
 	fmt.Println()
 
 	// Print each file in patch format
-	for _, f := range result.DryRunFiles {
-		if f.WouldSkip {
-			fmt.Printf("# SKIP: %s (file exists, use --force to overwrite)\n\n", f.Path)
+	for _, file := range result.DryRunFiles {
+		if file.WouldSkip {
+			fmt.Printf("# SKIP: %s (file exists, use --force to overwrite)\n\n", file.Path)
 			continue
 		}
 
-		if f.WouldOverwrite {
-			fmt.Printf("# OVERWRITE: %s\n", f.Path)
+		if file.WouldOverwrite {
+			fmt.Printf("# OVERWRITE: %s\n", file.Path)
 		}
 		fmt.Printf("--- /dev/null\n")
-		fmt.Printf("+++ %s\n", f.Path)
+		fmt.Printf("+++ %s\n", file.Path)
 
-		lines := countLinesForUpdate(f.Content)
+		lines := countLines(file.Content)
 		if lines == 0 {
 			fmt.Println("@@ -0,0 +0,0 @@")
 		} else {
 			fmt.Printf("@@ -0,0 +1,%d @@\n", lines)
 		}
 
-		printPatchContentForUpdate(f.Content)
+		printPatchContent(file.Content)
 		fmt.Println()
 	}
-}
-
-// countLinesForUpdate counts the number of lines in content.
-func countLinesForUpdate(content []byte) int {
-	if len(content) == 0 {
-		return 0
-	}
-	count := bytes.Count(content, []byte{'\n'})
-	if len(content) > 0 && content[len(content)-1] != '\n' {
-		count++
-	}
-	return count
-}
-
-// printPatchContentForUpdate prints file content with + prefix for each line.
-func printPatchContentForUpdate(content []byte) {
-	if len(content) == 0 {
-		return
-	}
-
-	if isBinaryContentForUpdate(content) {
-		fmt.Println("+[binary file]")
-		return
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for i, line := range lines {
-		if i == len(lines)-1 && line == "" {
-			continue
-		}
-		fmt.Printf("+%s\n", line)
-	}
-}
-
-// isBinaryContentForUpdate checks if content appears to be binary.
-func isBinaryContentForUpdate(content []byte) bool {
-	checkLen := len(content)
-	if checkLen > 512 {
-		checkLen = 512
-	}
-	for i := 0; i < checkLen; i++ {
-		if content[i] == 0 {
-			return true
-		}
-	}
-	return false
 }

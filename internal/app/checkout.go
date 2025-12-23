@@ -98,6 +98,7 @@ type CheckoutResult struct {
 // calculateTemplateHash calculates SHA256 hash of template files content.
 // Files are sorted by path to ensure deterministic hash generation.
 // Returns empty string if template is nil or has no files.
+// This function uses the same algorithm as CalculateTemplateHashFromDir to ensure consistency.
 func calculateTemplateHash(template *model.Template) string {
 	// Defensive: handle nil template
 	if template == nil {
@@ -119,9 +120,12 @@ func calculateTemplateHash(template *model.Template) string {
 	})
 
 	// Hash each file's path and content
+	// Use null byte separators to prevent hash collisions between different file combinations
 	for _, file := range files {
 		h.Write([]byte(file.Path))
+		h.Write([]byte("\x00")) // Separator between path and content
 		h.Write(file.Content)
+		h.Write([]byte("\x00")) // Separator between files
 	}
 
 	return hex.EncodeToString(h.Sum(nil))
@@ -299,12 +303,10 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {
-		// Get template hash from ign.json, or calculate if not present
-		templateHash := prep.IgnJson.Hash
-		if templateHash == "" {
-			debug.Debug("[app] Template has no hash in ign.json, calculating from content")
-			templateHash = calculateTemplateHash(prep.Template)
-		}
+		// Always calculate hash from template content for consistency with config_init.go
+		// This ensures the hash represents the actual fetched template, not stale metadata
+		debug.Debug("[app] Calculating template hash from content")
+		templateHash := calculateTemplateHash(prep.Template)
 		debug.DebugValue("[app] Template hash", templateHash)
 
 		// Validate hash is not empty (should not happen if template is valid)

@@ -70,8 +70,15 @@ var templateUpdateCmd = &cobra.Command{
 automatically update ign.json with the collected variable definitions
 and recalculate the template hash.
 
+This command is for TEMPLATE AUTHORS to maintain their template repositories.
+
+Note: This is different from 'ign update', which is for PROJECT USERS who have
+generated a project and want to pull in updates from the template source. When
+project users run 'ign update', this hash is used to detect whether the template
+has changed since their last checkout or update.
+
 This command keeps ign.json in sync with template files and updates
-the hash field used by 'ign update' to detect template changes.
+the hash field that 'ign update' uses to detect template changes.
 
 If PATH is not specified, the current directory is used.
 
@@ -119,9 +126,11 @@ func init() {
 	templateCheckCmd.Flags().BoolVarP(&templateCheckVerbose, "verbose", "v", false, "Show detailed validation info")
 
 	// Flags for template update
-	templateUpdateCmd.Flags().BoolVarP(&templateUpdateRecursive, "recursive", "r", false, "Recursively scan subdirectories")
-	templateUpdateCmd.Flags().BoolVar(&templateUpdateDryRun, "dry-run", false, "Preview changes without writing")
-	templateUpdateCmd.Flags().BoolVar(&templateUpdateMerge, "merge", false, "Only add new variables, preserve existing")
+	// Note: These flags control template metadata updates, which differs from
+	// 'ign update' flags that control project file generation
+	templateUpdateCmd.Flags().BoolVarP(&templateUpdateRecursive, "recursive", "r", false, "Recursively scan subdirectories for template files")
+	templateUpdateCmd.Flags().BoolVar(&templateUpdateDryRun, "dry-run", false, "Preview ign.json changes without writing the file")
+	templateUpdateCmd.Flags().BoolVar(&templateUpdateMerge, "merge", false, "Only add new variables to ign.json, preserve existing ones")
 }
 
 func runTemplateCheck(cmd *cobra.Command, args []string) error {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/tacogips/ign/internal/config"
@@ -176,6 +177,8 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	debug.DebugValue("[app] Template hash from ign.json", newHash)
 
 	// If template doesn't have a hash yet, calculate it from content
+	// This fallback handles templates created before hash support was added.
+	// Templates should always include hash in ign.json from 'ign template update' command.
 	if newHash == "" {
 		debug.Debug("[app] Template has no hash in ign.json, calculating from content")
 		newHash = calculateTemplateHash(template)
@@ -211,6 +214,7 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 // findVariableChanges compares existing variables with template variables.
 // Returns lists of new variables (in template but not in existing) and
 // removed variables (in existing but not in template).
+// Results are sorted alphabetically for consistent output.
 func findVariableChanges(existing map[string]interface{}, templateVars map[string]model.VarDef) (newVars, removedVars []string) {
 	// Find new variables (in template but not in existing)
 	for name := range templateVars {
@@ -225,6 +229,10 @@ func findVariableChanges(existing map[string]interface{}, templateVars map[strin
 			removedVars = append(removedVars, name)
 		}
 	}
+
+	// Sort for deterministic output
+	sort.Strings(newVars)
+	sort.Strings(removedVars)
 
 	return newVars, removedVars
 }
@@ -254,7 +262,10 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	prep := opts.PrepareResult
 	if prep == nil {
-		return nil, NewValidationError("prepare result cannot be nil", nil)
+		return nil, NewValidationError("update preparation result cannot be nil", nil)
+	}
+	if prep.IgnJson == nil {
+		return nil, NewValidationError("template configuration cannot be nil", nil)
 	}
 
 	// Validate output directory
@@ -267,12 +278,16 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	// Merge existing variables with new variables
 	mergedVars := make(map[string]interface{})
-	for name, value := range prep.ExistingVars {
-		// Skip removed variables
-		if _, exists := prep.IgnJson.Variables[name]; exists {
-			mergedVars[name] = value
+	// Check if template has variable definitions
+	if prep.IgnJson.Variables != nil {
+		for name, value := range prep.ExistingVars {
+			// Skip removed variables
+			if _, exists := prep.IgnJson.Variables[name]; exists {
+				mergedVars[name] = value
+			}
 		}
 	}
+	// If no variables defined in template, just use new variables
 	for name, value := range opts.NewVariables {
 		mergedVars[name] = value
 	}
@@ -390,6 +405,9 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 // GetNewVariableDefinitions returns VarDef for new variables that need prompting.
 func GetNewVariableDefinitions(prep *PrepareUpdateResult) map[string]model.VarDef {
 	result := make(map[string]model.VarDef)
+	if prep == nil || prep.IgnJson == nil || prep.IgnJson.Variables == nil {
+		return result
+	}
 	for _, name := range prep.NewVars {
 		if varDef, ok := prep.IgnJson.Variables[name]; ok {
 			result[name] = varDef
@@ -412,8 +430,11 @@ func FilterVariablesForPrompt(newVarDefs map[string]model.VarDef) map[string]mod
 }
 
 // ApplyDefaults fills in default values for optional variables with defaults.
+// The providedVars parameter can be nil, which is treated as an empty map.
+// Returns a new map containing provided variables plus defaults for any missing variables.
 func ApplyDefaults(newVarDefs map[string]model.VarDef, providedVars map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
+	// Copy provided variables (nil map iteration is safe in Go - no-op)
 	for name, value := range providedVars {
 		result[name] = value
 	}
