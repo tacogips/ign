@@ -4,14 +4,14 @@
 Implement the Project Generator layer responsible for generating project files from templates by processing template directives and writing output files.
 
 ## Reference Documents
-- /g/gits/tacogips/ign/docs/implementation/architecture.md (Section 3.3: Generator)
-- /g/gits/tacogips/ign/docs/reference/cli-commands.md (Section 2: Project Initialization, file handling rules)
+- docs/implementation/architecture.md (Section 3.3: Generator)
+- docs/reference/cli-commands.md (Section 2: Project Initialization, file handling rules)
 
 ## Architecture Context
 
 ### Dependencies
-- **Parser**: `/g/gits/tacogips/ign/internal/template/parser` - For template processing
-- **Model**: `/g/gits/tacogips/ign/internal/template/model` - For domain types
+- **Parser**: `internal/template/parser` - For template processing
+- **Model**: `internal/template/model` - For domain types
 - **Standard Library**: `os`, `path/filepath`, `io/fs`, etc.
 
 ### Key Interfaces from Architecture
