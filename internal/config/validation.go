@@ -265,8 +265,12 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if varDef.Default != nil && (varDef.Type == model.VarTypeInt || varDef.Type == model.VarTypeNumber) {
 			floatVal := toFloat64(varDef.Default)
 			if floatVal == nil {
-				// This should not happen if validateValueType is working correctly,
-				// but enforce strict validation to prevent silent constraint skipping
+				// Invariant: toFloat64 should never return nil for values that passed validateValueType.
+				// This check enforces strict validation to prevent silent constraint skipping in case
+				// of unexpected runtime type coercion failures (e.g., interface{} containing unsupported numeric types).
+				// If this error occurs, it indicates either:
+				// 1. A bug in validateValueType allowing non-numeric types for int/number variables, or
+				// 2. Runtime type corruption of the Default value after validation
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
 					"ign.json",
@@ -296,8 +300,12 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if varDef.Example != nil && (varDef.Type == model.VarTypeInt || varDef.Type == model.VarTypeNumber) {
 			floatVal := toFloat64(varDef.Example)
 			if floatVal == nil {
-				// This should not happen if validateValueType is working correctly,
-				// but enforce strict validation to prevent silent constraint skipping
+				// Invariant: toFloat64 should never return nil for values that passed validateValueType.
+				// This check enforces strict validation to prevent silent constraint skipping in case
+				// of unexpected runtime type coercion failures (e.g., interface{} containing unsupported numeric types).
+				// If this error occurs, it indicates either:
+				// 1. A bug in validateValueType allowing non-numeric types for int/number variables, or
+				// 2. Runtime type corruption of the Example value after validation
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
 					"ign.json",

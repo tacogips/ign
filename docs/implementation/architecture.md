@@ -483,7 +483,7 @@ type VarDef struct {
     Required    bool        `json:"required,omitempty"`
     Default     interface{} `json:"default,omitempty"`
     Example     interface{} `json:"example,omitempty"`
-    Pattern     string      `json:"pattern,omitempty"`    // For strings
+    Pattern     string      `json:"pattern,omitempty"`    // For string variables only
     Min         *float64    `json:"min,omitempty"`        // For int and number types
     Max         *float64    `json:"max,omitempty"`        // For int and number types
 }
