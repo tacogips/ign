@@ -270,7 +270,7 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	// Validate output directory
 	if opts.OutputDir == "" {
-		return nil, NewValidationError("output directory cannot be empty", nil)
+		return nil, NewValidationError("update output directory cannot be empty", nil)
 	}
 	if err := ValidateOutputDir(opts.OutputDir); err != nil {
 		return nil, NewValidationError("invalid output directory", err)
@@ -429,8 +429,8 @@ func FilterVariablesForPrompt(newVarDefs map[string]model.VarDef) map[string]mod
 	return result
 }
 
-// ApplyDefaults fills in default values for optional variables with defaults.
-// The providedVars parameter can be nil, which is treated as an empty map.
+// ApplyDefaults applies default values from newVarDefs to variables.
+// If providedVars is nil, it is treated as an empty map and only defaults are applied.
 // Returns a new map containing provided variables plus defaults for any missing variables.
 func ApplyDefaults(newVarDefs map[string]model.VarDef, providedVars map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})

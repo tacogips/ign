@@ -16,6 +16,7 @@ import (
 )
 
 // UpdateTemplateOptions holds options for updating template ign.json with variable definitions and hash.
+// The hash is calculated from all template files (excluding ign.json) to enable change detection.
 type UpdateTemplateOptions struct {
 	// Path is the template directory path.
 	Path string
@@ -432,9 +433,9 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 
 	// Calculate and update template hash
 	// Hash calculation is critical for 'ign update' to detect template changes
-	// Note: Hash is always recalculated and updated, even in merge mode.
-	// This ensures the hash reflects the current state of all template files,
-	// not just variable metadata changes.
+	// Note: Hash is always recalculated in merge mode because template files
+	// may have changed independently of variable definitions. The hash represents
+	// the current state of template files, not just metadata.
 	templateDir := filepath.Dir(path)
 	newHash, err := CalculateTemplateHashFromDir(templateDir)
 	if err != nil {
