@@ -182,7 +182,7 @@ See [CLI Reference](reference/cli-commands.md) for complete command documentatio
 | Conditional | `@ign-if:VAR@...@ign-endif@` | Conditional block |
 | Include | `@ign-include:PATH@` | Include another file |
 
-**Variable Types:** `string`, `int`, `bool`
+**Variable Types:** `string`, `int`, `number`, `bool`
 
 **Required vs Optional:** Variables without default value are required (must be in ign-var.json). Variables with default value are optional (use default if not provided).
 
@@ -215,7 +215,7 @@ See [Configuration Reference](reference/configuration.md) for complete file form
 |----------|----------|
 | Template syntax | `@ign-var:VAR@` with custom directives |
 | Template sources | GitHub URLs, local relative paths (no `..`, no absolute) |
-| Variable types | `string`, `int`, `bool` only |
+| Variable types | `string`, `int`, `number`, `bool` only |
 | File-based variables | `@file:` prefix, paths relative to `.ign/` |
 | Lock file | **Not used** (one-shot generation) |
 | Merge strategy | **None** (skip existing or explicit overwrite) |

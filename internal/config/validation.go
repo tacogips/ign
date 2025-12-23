@@ -241,13 +241,13 @@ func validateVariables(variables map[string]model.VarDef) error {
 			}
 		}
 
-		// Validate min/max for integer types
-		if (varDef.Min != nil || varDef.Max != nil) && varDef.Type != model.VarTypeInt {
+		// Validate min/max for integer and number types
+		if (varDef.Min != nil || varDef.Max != nil) && varDef.Type != model.VarTypeInt && varDef.Type != model.VarTypeNumber {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
 				"ign.json",
 				fmt.Sprintf("variables.%s", name),
-				"min/max can only be specified for integer variables",
+				"min/max can only be specified for integer and number variables",
 			)
 		}
 
@@ -257,51 +257,77 @@ func validateVariables(variables map[string]model.VarDef) error {
 				ConfigValidationFailed,
 				"ign.json",
 				fmt.Sprintf("variables.%s", name),
-				fmt.Sprintf("min (%d) cannot be greater than max (%d)", *varDef.Min, *varDef.Max),
+				fmt.Sprintf("min (%v) cannot be greater than max (%v)", *varDef.Min, *varDef.Max),
 			)
 		}
 
-		// Validate default value against min/max constraints
-		if varDef.Default != nil && varDef.Type == model.VarTypeInt {
-			if intVal, ok := varDef.Default.(int); ok {
-				if varDef.Min != nil && intVal < *varDef.Min {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.default", name),
-						fmt.Sprintf("default value %d is less than min %d", intVal, *varDef.Min),
-					)
-				}
-				if varDef.Max != nil && intVal > *varDef.Max {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.default", name),
-						fmt.Sprintf("default value %d is greater than max %d", intVal, *varDef.Max),
-					)
-				}
+		// Validate default value against min/max constraints for integers and numbers
+		if varDef.Default != nil && (varDef.Type == model.VarTypeInt || varDef.Type == model.VarTypeNumber) {
+			floatVal := toFloat64(varDef.Default)
+			if floatVal == nil {
+				// Invariant: toFloat64 should never return nil for values that passed validateValueType.
+				// This check enforces strict validation to prevent silent constraint skipping in case
+				// of unexpected runtime type coercion failures (e.g., interface{} containing unsupported numeric types).
+				// If this error occurs, it indicates either:
+				// 1. A bug in validateValueType allowing non-numeric types for int/number variables, or
+				// 2. Runtime type corruption of the Default value after validation
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.default", name),
+					fmt.Sprintf("default value cannot be converted to numeric type"),
+				)
+			}
+			if varDef.Min != nil && *floatVal < *varDef.Min {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.default", name),
+					fmt.Sprintf("default value %v is less than min %v", *floatVal, *varDef.Min),
+				)
+			}
+			if varDef.Max != nil && *floatVal > *varDef.Max {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.default", name),
+					fmt.Sprintf("default value %v is greater than max %v", *floatVal, *varDef.Max),
+				)
 			}
 		}
 
-		// Validate example value against min/max constraints
-		if varDef.Example != nil && varDef.Type == model.VarTypeInt {
-			if intVal, ok := varDef.Example.(int); ok {
-				if varDef.Min != nil && intVal < *varDef.Min {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.example", name),
-						fmt.Sprintf("example value %d is less than min %d", intVal, *varDef.Min),
-					)
-				}
-				if varDef.Max != nil && intVal > *varDef.Max {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.example", name),
-						fmt.Sprintf("example value %d is greater than max %d", intVal, *varDef.Max),
-					)
-				}
+		// Validate example value against min/max constraints for integers and numbers
+		if varDef.Example != nil && (varDef.Type == model.VarTypeInt || varDef.Type == model.VarTypeNumber) {
+			floatVal := toFloat64(varDef.Example)
+			if floatVal == nil {
+				// Invariant: toFloat64 should never return nil for values that passed validateValueType.
+				// This check enforces strict validation to prevent silent constraint skipping in case
+				// of unexpected runtime type coercion failures (e.g., interface{} containing unsupported numeric types).
+				// If this error occurs, it indicates either:
+				// 1. A bug in validateValueType allowing non-numeric types for int/number variables, or
+				// 2. Runtime type corruption of the Example value after validation
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.example", name),
+					fmt.Sprintf("example value cannot be converted to numeric type"),
+				)
+			}
+			if varDef.Min != nil && *floatVal < *varDef.Min {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.example", name),
+					fmt.Sprintf("example value %v is less than min %v", *floatVal, *varDef.Min),
+				)
+			}
+			if varDef.Max != nil && *floatVal > *varDef.Max {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.example", name),
+					fmt.Sprintf("example value %v is greater than max %v", *floatVal, *varDef.Max),
+				)
 			}
 		}
 	}
@@ -312,10 +338,10 @@ func validateVariables(variables map[string]model.VarDef) error {
 // validateVarType validates that a variable type is valid.
 func validateVarType(typ model.VarType) error {
 	switch typ {
-	case model.VarTypeString, model.VarTypeInt, model.VarTypeBool:
+	case model.VarTypeString, model.VarTypeInt, model.VarTypeNumber, model.VarTypeBool:
 		return nil
 	default:
-		return fmt.Errorf("invalid variable type: %s (must be string, int, or bool)", typ)
+		return fmt.Errorf("invalid variable type: %s (must be string, int, number, or bool)", typ)
 	}
 }
 
@@ -334,12 +360,42 @@ func validateValueType(value interface{}, expectedType model.VarType) error {
 		default:
 			return fmt.Errorf("expected int, got %T", v)
 		}
+	case model.VarTypeNumber:
+		// JSON unmarshals numbers as float64
+		switch v := value.(type) {
+		case float32, float64, int, int32, int64:
+			return nil
+		default:
+			return fmt.Errorf("expected number, got %T", v)
+		}
 	case model.VarTypeBool:
 		if _, ok := value.(bool); !ok {
 			return fmt.Errorf("expected bool, got %T", value)
 		}
 	}
 	return nil
+}
+
+// toFloat64 converts a value to float64 pointer if it's a numeric type.
+func toFloat64(value interface{}) *float64 {
+	switch v := value.(type) {
+	case float64:
+		return &v
+	case float32:
+		f := float64(v)
+		return &f
+	case int:
+		f := float64(v)
+		return &f
+	case int32:
+		f := float64(v)
+		return &f
+	case int64:
+		f := float64(v)
+		return &f
+	default:
+		return nil
+	}
 }
 
 // validateTemplateURL validates that a template URL is in a supported format.

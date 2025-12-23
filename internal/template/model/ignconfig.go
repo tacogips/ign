@@ -24,10 +24,12 @@ type IgnJson struct {
 
 // VarDef defines a template variable with validation rules.
 type VarDef struct {
-	// Type is the variable type (string, int, or bool).
+	// Type is the variable type (string, int, number, or bool).
 	Type VarType `json:"type"`
-	// Description is a human-readable description of the variable.
+	// Description is a short description shown in the prompt by default.
 	Description string `json:"description"`
+	// Help is a longer explanation shown when user types '?' during input.
+	Help string `json:"help,omitempty"`
 	// Required indicates if the variable must have a value.
 	Required bool `json:"required,omitempty"`
 	// Default is the default value if not provided (type must match).
@@ -36,10 +38,10 @@ type VarDef struct {
 	Example interface{} `json:"example,omitempty"`
 	// Pattern is a regex validation pattern (for string variables only).
 	Pattern string `json:"pattern,omitempty"`
-	// Min is the minimum value (for integer variables only).
-	Min *int `json:"min,omitempty"`
-	// Max is the maximum value (for integer variables only).
-	Max *int `json:"max,omitempty"`
+	// Min is the minimum value (for int and number variables).
+	Min *float64 `json:"min,omitempty"`
+	// Max is the maximum value (for int and number variables).
+	Max *float64 `json:"max,omitempty"`
 }
 
 // TemplateSettings contains template-specific settings for generation.

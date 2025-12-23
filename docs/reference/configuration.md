@@ -40,7 +40,7 @@ Defines template metadata, required variables, and template-specific settings.
   "repository": "https://github.com/owner/repo",
   "variables": {
     "variable_name": {
-      "type": "string|int|bool",
+      "type": "string|int|number|bool",
       "description": "Variable description",
       "default": "optional default value",
       "required": true,
@@ -86,6 +86,14 @@ Defines template metadata, required variables, and template-specific settings.
       "default": 8080,
       "required": false
     },
+    "rate_limit": {
+      "type": "number",
+      "description": "Rate limit per second",
+      "default": 1.5,
+      "required": false,
+      "min": 0.1,
+      "max": 100.0
+    },
     "enable_tls": {
       "type": "bool",
       "description": "Enable TLS/HTTPS",
@@ -100,14 +108,23 @@ Defines template metadata, required variables, and template-specific settings.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | Variable type: `string`, `int`, or `bool` |
-| `description` | string | Yes | Human-readable description |
+| `type` | `string` \| `int` \| `number` \| `bool` | Yes | Variable type |
+| `description` | string | Yes | Short description shown in the prompt by default |
+| `help` | string | No | Longer explanation shown when user types `?` during input |
 | `required` | bool | No | If true, must have value in ign-var.json (default: false) |
 | `default` | any | No | Default value (type must match) |
 | `example` | any | No | Example value for documentation |
 | `pattern` | string | No | Regex validation pattern (strings only) |
-| `min` | int | No | Minimum value (integers only) |
-| `max` | int | No | Maximum value (integers only) |
+| `min` | number | No | Minimum value (for int and number types) |
+| `max` | number | No | Maximum value (for int and number types) |
+
+**Prompt Display Behavior:**
+- The `description` is always displayed in the prompt message (e.g., `? VARIABLE_NAME - description`)
+- When user types `?`, the `help` text is shown (or `description` if `help` is not set)
+- If `example` is provided, it is appended to the help text
+- If `min`/`max` constraints are set for int variables, range is displayed as `[min-max]`, `[>=min]`, or `[<=max]`
+- For number (floating-point) variables, range is displayed using the same format with decimal values: `[0.0-10.0]`, `[>=1.0]`, or `[<=100.0]`
+- Validation errors show the constraint if user input is out of range
 
 #### Settings Section
 
@@ -158,6 +175,7 @@ Defines template metadata, required variables, and template-specific settings.
     "project_name": {
       "type": "string",
       "description": "Project name (lowercase, hyphens)",
+      "help": "The name of your project. Must be lowercase and may contain hyphens. This will be used as the directory name and in various configuration files.",
       "required": true,
       "example": "my-api-service",
       "pattern": "^[a-z][a-z0-9-]*$"
@@ -165,6 +183,7 @@ Defines template metadata, required variables, and template-specific settings.
     "go_module_path": {
       "type": "string",
       "description": "Go module import path",
+      "help": "The full Go module path for your project (e.g., github.com/username/project). This will be used in go.mod and all import statements throughout the codebase.",
       "required": true,
       "example": "github.com/username/my-api"
     },
@@ -961,7 +980,7 @@ All configuration files are validated against JSON schemas:
 | Error | File | Fix |
 |-------|------|-----|
 | `Missing required field: name` | ign.json | Add `"name": "template-name"` |
-| `Invalid variable type: xyz` | ign.json | Use `string`, `int`, or `bool` |
+| `Invalid variable type: xyz` | ign.json | Use `string`, `int`, `number`, or `bool` |
 | `Variable name invalid: 123abc` | ign.json | Start with letter |
 | `Missing template.url` | ign-var.json | Add template URL |
 | `Type mismatch: expected int` | ign-var.json | Use number, not string |
@@ -996,14 +1015,15 @@ interface IgnJson {
 
   variables: {
     [key: string]: {
-      type: "string" | "int" | "bool";  // Required
-      description: string;               // Required
+      type: "string" | "int" | "number" | "bool";  // Required
+      description: string;               // Required - short description shown in prompt
+      help?: string;                     // Longer explanation shown on '?'
       required?: boolean;
       default?: string | number | boolean;
       example?: string | number | boolean;
       pattern?: string;                  // For strings
-      min?: number;                      // For ints
-      max?: number;                      // For ints
+      min?: number;                      // For int and number types
+      max?: number;                      // For int and number types
     }
   };
 

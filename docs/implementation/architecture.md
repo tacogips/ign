@@ -479,12 +479,13 @@ type IgnJson struct {
 type VarDef struct {
     Type        VarType     `json:"type"`
     Description string      `json:"description"`
+    Help        string      `json:"help,omitempty"`       // Longer help text shown on '?'
     Required    bool        `json:"required,omitempty"`
     Default     interface{} `json:"default,omitempty"`
     Example     interface{} `json:"example,omitempty"`
-    Pattern     string      `json:"pattern,omitempty"`    // For strings
-    Min         *int        `json:"min,omitempty"`        // For ints
-    Max         *int        `json:"max,omitempty"`        // For ints
+    Pattern     string      `json:"pattern,omitempty"`    // For string variables only
+    Min         *float64    `json:"min,omitempty"`        // For int and number types
+    Max         *float64    `json:"max,omitempty"`        // For int and number types
 }
 
 // VarType represents variable type
@@ -493,6 +494,7 @@ type VarType string
 const (
     VarTypeString VarType = "string"
     VarTypeInt    VarType = "int"
+    VarTypeNumber VarType = "number"
     VarTypeBool   VarType = "bool"
 )
 

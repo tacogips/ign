@@ -10,6 +10,8 @@ const (
 	VarTypeString VarType = "string"
 	// VarTypeInt represents an integer variable type.
 	VarTypeInt VarType = "int"
+	// VarTypeNumber represents a floating-point number variable type (parsed as float64).
+	VarTypeNumber VarType = "number"
 	// VarTypeBool represents a boolean variable type.
 	VarTypeBool VarType = "bool"
 )

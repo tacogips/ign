@@ -46,8 +46,12 @@ func PromptForVariables(ignJson *model.IgnJson) (map[string]interface{}, error) 
 
 // promptForVariable prompts for a single variable based on its type.
 func promptForVariable(name string, varDef model.VarDef) (interface{}, error) {
-	// Build help text from description
-	help := varDef.Description
+	// Build help text for '?' display
+	// Use Help field if provided, otherwise fall back to Description
+	help := varDef.Help
+	if help == "" {
+		help = varDef.Description
+	}
 	if varDef.Example != nil {
 		help += fmt.Sprintf(" (example: %v)", varDef.Example)
 	}
@@ -57,6 +61,8 @@ func promptForVariable(name string, varDef model.VarDef) (interface{}, error) {
 		return promptString(name, varDef, help)
 	case model.VarTypeInt:
 		return promptInt(name, varDef, help)
+	case model.VarTypeNumber:
+		return promptNumber(name, varDef, help)
 	case model.VarTypeBool:
 		return promptBool(name, varDef, help)
 	default:
@@ -69,8 +75,11 @@ func promptForVariable(name string, varDef model.VarDef) (interface{}, error) {
 func promptString(name string, varDef model.VarDef, help string) (string, error) {
 	var result string
 
-	// Build message
+	// Build message with description displayed by default
 	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
 	if varDef.Required {
 		message += " (required)"
 	}
@@ -114,18 +123,21 @@ func promptString(name string, varDef model.VarDef, help string) (string, error)
 func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 	var result string
 
-	// Build message
+	// Build message with description displayed by default
 	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
 	if varDef.Required {
 		message += " (required)"
 	}
 	if varDef.Min != nil || varDef.Max != nil {
 		if varDef.Min != nil && varDef.Max != nil {
-			message += fmt.Sprintf(" [%d-%d]", *varDef.Min, *varDef.Max)
+			message += fmt.Sprintf(" [%d-%d]", int(*varDef.Min), int(*varDef.Max))
 		} else if varDef.Min != nil {
-			message += fmt.Sprintf(" [>=%d]", *varDef.Min)
+			message += fmt.Sprintf(" [>=%d]", int(*varDef.Min))
 		} else {
-			message += fmt.Sprintf(" [<=%d]", *varDef.Max)
+			message += fmt.Sprintf(" [<=%d]", int(*varDef.Max))
 		}
 	}
 
@@ -165,11 +177,11 @@ func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 			return fmt.Errorf("must be an integer")
 		}
 
-		if varDef.Min != nil && num < *varDef.Min {
-			return fmt.Errorf("must be >= %d", *varDef.Min)
+		if varDef.Min != nil && float64(num) < *varDef.Min {
+			return fmt.Errorf("must be >= %d", int(*varDef.Min))
 		}
-		if varDef.Max != nil && num > *varDef.Max {
-			return fmt.Errorf("must be <= %d", *varDef.Max)
+		if varDef.Max != nil && float64(num) > *varDef.Max {
+			return fmt.Errorf("must be <= %d", int(*varDef.Max))
 		}
 
 		return nil
@@ -186,9 +198,102 @@ func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 	return strconv.Atoi(result)
 }
 
+// promptNumber prompts for a floating-point number variable.
+func promptNumber(name string, varDef model.VarDef, help string) (float64, error) {
+	var result string
+
+	// Build message with description displayed by default
+	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
+	if varDef.Required {
+		message += " (required)"
+	}
+	if varDef.Min != nil || varDef.Max != nil {
+		if varDef.Min != nil && varDef.Max != nil {
+			message += fmt.Sprintf(" [%v-%v]", *varDef.Min, *varDef.Max)
+		} else if varDef.Min != nil {
+			message += fmt.Sprintf(" [>=%v]", *varDef.Min)
+		} else {
+			message += fmt.Sprintf(" [<=%v]", *varDef.Max)
+		}
+	}
+
+	// Get default value
+	defaultVal := ""
+	if varDef.Default != nil {
+		switch v := varDef.Default.(type) {
+		case float64:
+			defaultVal = strconv.FormatFloat(v, 'f', -1, 64)
+		case float32:
+			defaultVal = strconv.FormatFloat(float64(v), 'f', -1, 64)
+		case int:
+			defaultVal = strconv.FormatFloat(float64(v), 'f', -1, 64)
+		}
+	}
+
+	prompt := &survey.Input{
+		Message: message,
+		Default: defaultVal,
+		Help:    help,
+	}
+
+	// Create validator for number
+	numberValidator := func(val interface{}) error {
+		str, ok := val.(string)
+		if !ok {
+			return fmt.Errorf("expected string, got %T", val)
+		}
+
+		if str == "" {
+			if varDef.Required {
+				return fmt.Errorf("value is required")
+			}
+			return nil
+		}
+
+		num, err := strconv.ParseFloat(str, 64)
+		if err != nil {
+			return fmt.Errorf("must be a number")
+		}
+
+		if varDef.Min != nil && num < *varDef.Min {
+			return fmt.Errorf("must be >= %v", *varDef.Min)
+		}
+		if varDef.Max != nil && num > *varDef.Max {
+			return fmt.Errorf("must be <= %v", *varDef.Max)
+		}
+
+		return nil
+	}
+
+	if err := survey.AskOne(prompt, &result, survey.WithValidator(numberValidator)); err != nil {
+		return 0, err
+	}
+
+	// Note: For non-required number variables, empty input is treated as 0.
+	// This means we cannot distinguish between "user entered 0" and "user entered nothing".
+	// Both cases return 0. This is consistent with promptInt behavior.
+	if result == "" {
+		return 0, nil
+	}
+
+	return strconv.ParseFloat(result, 64)
+}
+
 // promptBool prompts for a boolean variable.
 func promptBool(name string, varDef model.VarDef, help string) (bool, error) {
 	var result bool
+
+	// Build message with description displayed by default
+	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
+	if varDef.Required {
+		message += " (required)"
+	}
 
 	// Get default value
 	defaultVal := false
@@ -199,7 +304,7 @@ func promptBool(name string, varDef model.VarDef, help string) (bool, error) {
 	}
 
 	prompt := &survey.Confirm{
-		Message: name,
+		Message: message,
 		Default: defaultVal,
 		Help:    help,
 	}

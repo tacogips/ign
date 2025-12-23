@@ -77,11 +77,13 @@ Variable with explicit type validation. The variable must be defined and must ma
 @ign-var:VARIABLE_NAME:TYPE@
 ```
 
-**Supported Types:** `string`, `int`, `bool`
+**Supported Types:** `string`, `int`, `number`, `bool`
 
 **Example Template:**
 ```go
 const Port = @ign-var:port:int@
+const RateLimit = @ign-var:rate_limit:number@
+const Percentage = @ign-var:percentage:number@
 const Debug = @ign-var:debug:bool@
 const Name = "@ign-var:name:string@"
 ```
@@ -91,8 +93,45 @@ const Name = "@ign-var:name:string@"
 {
   "variables": {
     "port": 8080,
+    "rate_limit": 1.5,
+    "percentage": 0.85,
     "debug": true,
     "name": "my-service"
+  }
+}
+```
+
+**Generated Output:**
+```go
+const Port = 8080
+const RateLimit = 1.5
+const Percentage = 0.85
+const Debug = true
+const Name = "my-service"
+```
+
+**Number Type Usage:**
+
+The `number` type is used for floating-point values, while `int` is for integer values only. Use `number` when you need decimal precision.
+
+**Example with Validation Constraints (in ign.json):**
+```json
+{
+  "variables": {
+    "rate_limit": {
+      "type": "number",
+      "description": "Rate limit per second",
+      "default": 1.5,
+      "min": 0.1,
+      "max": 100.0
+    },
+    "percentage": {
+      "type": "number",
+      "description": "Success percentage threshold",
+      "default": 0.95,
+      "min": 0.0,
+      "max": 1.0
+    }
   }
 }
 ```
@@ -162,14 +201,71 @@ const Author = "@ign-var:author:string=anonymous@"
 2. If variable does not exist, use default value
 3. Type validation applies to both provided and default values
 
-### 1.6 Variable Types
+### 1.6 Help Field for Variables
 
-Ign supports three primitive types:
+Variables can include a `help` field in the template's `ign.json` file to provide additional guidance to users during template generation.
+
+**Purpose:**
+- Provide detailed explanations beyond the short `description`
+- Show usage examples or valid value formats
+- Explain the impact of different variable values
+- Guide users on best practices for specific variables
+
+**Interactive Behavior:**
+- The `description` field is always shown in the prompt message
+- When the user types `?` during input, the full `help` text is displayed
+- If no `help` field is provided, the `description` is shown again
+- If an `example` field exists, it is appended to the help text
+
+**Best Practices:**
+- Use `description` for a concise, one-line explanation (shown by default)
+- Use `help` for detailed explanations, constraints, or usage guidance (shown on demand)
+- Keep `description` short (under 60 characters) for better prompt readability
+- Use `help` for longer explanations that would clutter the prompt
+
+**Example in ign.json:**
+```json
+{
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "description": "Project name (lowercase, hyphens)",
+      "help": "The name of your project. Must be lowercase and may contain hyphens. This will be used as the directory name and in various configuration files.",
+      "required": true,
+      "example": "my-api-service",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "go_module_path": {
+      "type": "string",
+      "description": "Go module import path",
+      "help": "The full Go module path for your project (e.g., github.com/username/project). This will be used in go.mod and all import statements throughout the codebase.",
+      "required": true,
+      "example": "github.com/username/my-api"
+    }
+  }
+}
+```
+
+**During Template Generation:**
+```
+? project_name - Project name (lowercase, hyphens): _
+[User types '?']
+
+Help: The name of your project. Must be lowercase and may contain hyphens.
+This will be used as the directory name and in various configuration files.
+
+Example: my-api-service
+```
+
+### 1.7 Variable Types
+
+Ign supports four primitive types:
 
 | Type | Example Value | JSON Type | Usage |
 |------|--------------|-----------|-------|
 | `string` | `"hello"` | `string` | Text values, names, paths |
-| `int` | `8080` | `number` | Ports, counts, numeric IDs |
+| `int` | `8080` | `number` | Ports, counts, numeric IDs (integers only) |
+| `number` | `1.5`, `3.14` | `number` | Floating-point values, rates, ratios, percentages |
 | `bool` | `true`, `false` | `boolean` | Feature flags, toggles |
 
 **Type Handling:**
@@ -1112,6 +1208,7 @@ ign validate
 |------|-----------|---------|-------|
 | `string` | `string` | `"hello"` | Any text, preserved as-is |
 | `int` | `number` | `8080` | Integer values only |
+| `number` | `number` | `1.5`, `3.14` | Floating-point values, validated with min/max |
 | `bool` | `boolean` | `true`, `false` | Used in conditionals |
 
 ## Appendix C: Variable Syntax Quick Reference

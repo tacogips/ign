@@ -144,7 +144,7 @@
         packages = {
           ign = pkgs.buildGoModule {
             pname = "ign";
-            version = "0.1.4";
+            version = "0.1.5";
 
             src = ./.;
 
