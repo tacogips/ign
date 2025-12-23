@@ -133,6 +133,10 @@
       nixpkgs,
       flake-utils,
     }:
+    let
+      # Single source of truth for version
+      version = builtins.replaceStrings [ "\n" ] [ "" ] (builtins.readFile ./internal/build/VERSION);
+    in
     flake-utils.lib.eachDefaultSystem (
       system:
       let
@@ -144,20 +148,15 @@
         packages = {
           ign = pkgs.buildGoModule {
             pname = "ign";
-            version = "0.1.6";
-
+            inherit version;
             src = ./.;
-
             vendorHash = "sha256-esmcKwW2KbmEXIukBKUZgN32qovcSiVld41ZqAxN+y4=";
-
             subPackages = [ "cmd/ign" ];
-
             ldflags = [
               "-s"
               "-w"
-              "-X main.version=${self.rev or "dev"}"
+              "-X github.com/tacogips/ign/internal/build.version=${version}"
             ];
-
             meta = with pkgs.lib; {
               description = "A template-based code generation CLI tool";
               homepage = "https://github.com/tacogips/ign";

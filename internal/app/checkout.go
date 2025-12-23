@@ -8,13 +8,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/tacogips/ign/internal/build"
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 	"github.com/tacogips/ign/internal/template/provider"
-	"github.com/tacogips/ign/internal/version"
 )
 
 // PrepareCheckoutOptions contains options for preparing checkout.
@@ -323,7 +323,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 				GeneratedBy:     "ign checkout",
 				TemplateName:    prep.IgnJson.Name,
 				TemplateVersion: prep.IgnJson.Version,
-				IgnVersion:      version.Version,
+				IgnVersion:      build.Version(),
 			},
 		}
 
@@ -336,7 +336,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 				GeneratedBy:     "ign checkout",
 				TemplateName:    prep.IgnJson.Name,
 				TemplateVersion: prep.IgnJson.Version,
-				IgnVersion:      version.Version,
+				IgnVersion:      build.Version(),
 			},
 		}
 

@@ -8,13 +8,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/tacogips/ign/internal/build"
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 	"github.com/tacogips/ign/internal/template/provider"
-	"github.com/tacogips/ign/internal/version"
 )
 
 // UpdateOptions contains options for the update command.
@@ -313,7 +313,7 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 			GeneratedBy:     "ign update",
 			TemplateName:    prep.IgnJson.Name,
 			TemplateVersion: prep.IgnJson.Version,
-			IgnVersion:      version.Version,
+			IgnVersion:      build.Version(),
 		}
 
 		if err := config.SaveIgnConfig(prep.IgnConfigPath, prep.IgnConfig); err != nil {
@@ -331,7 +331,7 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 				GeneratedBy:     "ign update",
 				TemplateName:    prep.IgnJson.Name,
 				TemplateVersion: prep.IgnJson.Version,
-				IgnVersion:      version.Version,
+				IgnVersion:      build.Version(),
 			},
 		}
 

@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/tacogips/ign/internal/build"
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
-	"github.com/tacogips/ign/internal/version"
 )
 
 // InitOptions contains options for configuration initialization.
@@ -85,7 +85,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,
 			TemplateVersion: prepResult.IgnJson.Version,
-			IgnVersion:      version.Version,
+			IgnVersion:      build.Version(),
 		},
 	}
 
@@ -98,7 +98,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,
 			TemplateVersion: prepResult.IgnJson.Version,
-			IgnVersion:      version.Version,
+			IgnVersion:      build.Version(),
 		},
 	}
 

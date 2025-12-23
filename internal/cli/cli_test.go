@@ -181,11 +181,6 @@ func TestValidateOutputPath(t *testing.T) {
 
 // TestVersionCommand tests version command output
 func TestVersionCommand(t *testing.T) {
-	// Set test version info
-	Version = "1.0.0-test"
-	GitCommit = "abc123"
-	BuildDate = "2025-12-09"
-
 	t.Run("normal output", func(t *testing.T) {
 		// Reset flags
 		versionShort = false

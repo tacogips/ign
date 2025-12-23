@@ -6,6 +6,7 @@ import (
 	"runtime"
 
 	"github.com/spf13/cobra"
+	"github.com/tacogips/ign/internal/build"
 	"github.com/tacogips/ign/internal/debug"
 )
 
@@ -38,8 +39,6 @@ func init() {
 type VersionInfo struct {
 	Version   string `json:"version"`
 	GoVersion string `json:"go_version"`
-	Commit    string `json:"commit"`
-	BuildDate string `json:"build_date"`
 	OS        string `json:"os"`
 	Arch      string `json:"arch"`
 }
@@ -50,10 +49,8 @@ func runVersion(cmd *cobra.Command, args []string) error {
 	debug.DebugValue("versionJSON", versionJSON)
 
 	info := VersionInfo{
-		Version:   Version,
+		Version:   build.Version(),
 		GoVersion: runtime.Version(),
-		Commit:    GitCommit,
-		BuildDate: BuildDate,
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
 	}
@@ -77,8 +74,6 @@ func runVersion(cmd *cobra.Command, args []string) error {
 	// Normal output
 	fmt.Printf("ign version %s\n", info.Version)
 	fmt.Printf("Built with: %s\n", info.GoVersion)
-	fmt.Printf("Commit: %s\n", info.Commit)
-	fmt.Printf("Build date: %s\n", info.BuildDate)
 	fmt.Printf("OS/Arch: %s/%s\n", info.OS, info.Arch)
 
 	return nil
