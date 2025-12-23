@@ -265,7 +265,7 @@ Ign supports four primitive types:
 |------|--------------|-----------|-------|
 | `string` | `"hello"` | `string` | Text values, names, paths |
 | `int` | `8080` | `number` | Ports, counts, numeric IDs (integers only) |
-| `number` | `1.5`, `3.14` | `number` | Floating-point values, rates, percentages, decimals |
+| `number` | `1.5`, `3.14` | `number` | Floating-point values, rates, ratios, percentages |
 | `bool` | `true`, `false` | `boolean` | Feature flags, toggles |
 
 **Type Handling:**

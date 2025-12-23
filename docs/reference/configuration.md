@@ -108,7 +108,7 @@ Defines template metadata, required variables, and template-specific settings.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `type` | string | Yes | Variable type: `string`, `int`, `number`, or `bool` |
+| `type` | `string` \| `int` \| `number` \| `bool` | Yes | Variable type |
 | `description` | string | Yes | Short description shown in the prompt by default |
 | `help` | string | No | Longer explanation shown when user types `?` during input |
 | `required` | bool | No | If true, must have value in ign-var.json (default: false) |
@@ -122,7 +122,8 @@ Defines template metadata, required variables, and template-specific settings.
 - The `description` is always displayed in the prompt message (e.g., `? VARIABLE_NAME - description`)
 - When user types `?`, the `help` text is shown (or `description` if `help` is not set)
 - If `example` is provided, it is appended to the help text
-- If `min`/`max` constraints are set for int or number variables, range is displayed as `[min-max]`, `[>=min]`, or `[<=max]`
+- If `min`/`max` constraints are set for int variables, range is displayed as `[min-max]`, `[>=min]`, or `[<=max]`
+- For number (floating-point) variables, range is displayed using the same format with decimal values: `[0.0-10.0]`, `[>=1.0]`, or `[<=100.0]`
 - Validation errors show the constraint if user input is out of range
 
 #### Settings Section

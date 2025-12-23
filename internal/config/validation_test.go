@@ -402,6 +402,78 @@ func TestValidateVariables(t *testing.T) {
 			t.Errorf("Valid number variable with both default and example should pass validation: %v", err)
 		}
 	})
+
+	// Test cases for int values validated against float constraints (toFloat64 type coercion)
+	t.Run("int variable with int default in float constraint range", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeInt,
+				Description: "Count with float constraints",
+				Default:     5,
+				Min:         floatPtr(1.0),
+				Max:         floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err != nil {
+			t.Errorf("Int variable with int default in float constraint range should pass validation: %v", err)
+		}
+	})
+
+	t.Run("int variable with int default below float min", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeInt,
+				Description: "Count with float constraints",
+				Default:     0,
+				Min:         floatPtr(1.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for int default below float min constraint")
+		}
+	})
+
+	t.Run("int variable with int default above float max", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeInt,
+				Description: "Count with float constraints",
+				Default:     100,
+				Max:         floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for int default above float max constraint")
+		}
+	})
+
+	t.Run("int variable with int example below float min", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeInt,
+				Description: "Count with float constraints",
+				Example:     0,
+				Min:         floatPtr(1.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for int example below float min constraint")
+		}
+	})
+
+	t.Run("int variable with int example above float max", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeInt,
+				Description: "Count with float constraints",
+				Example:     100,
+				Max:         floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for int example above float max constraint")
+		}
+	})
 }
 
 func TestValidateIgnVarJson(t *testing.T) {
