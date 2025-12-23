@@ -185,7 +185,9 @@ Nothing to fix.
 git checkout -b "$REVIEW_BRANCH"
 ```
 
-### Step 5: Build PR Comment URLs
+### Step 5: Build PR Comment URLs and Categorize
+
+**5.1: Build PR comment URLs**
 
 For each unresolved comment, build the PR comment URL:
 
@@ -193,39 +195,76 @@ For each unresolved comment, build the PR comment URL:
 https://github.com/{owner}/{repo}/pull/{pr_number}#discussion_r{comment_id}
 ```
 
-**Group URLs by package:**
+**5.2: Categorize comments by actionability**
+
+For each unresolved comment, assess actionability based on comment content:
+
+**ACTIONABLE** - Clear, specific instruction that can be implemented:
+- "Add error handling for this case"
+- "This variable should be named 'userID' instead of 'userId'"
+- "Missing validation for empty string"
+- "This function should return error instead of panic"
+
+**POSSIBLY NOT ACTIONABLE** - Vague or requires clarification:
+- "This could be better"
+- "Consider refactoring this"
+- "Performance concern" (without specific fix)
+
+**5.3: Group by package with context**
+
 - Extract package name from file path (e.g., `internal/{package_name}/`)
-- Group comment URLs by package
+- Group comments by package
+- Include actionability assessment for each comment
 
-### Step 6: Launch fix-unresolved-pr-comments Agent
+### Step 6: Launch apply-pr-review-chunk Agents by Package
 
-Use the Task tool with subagent_type='fix-unresolved-pr-comments' to process all unresolved comments:
+For each package with unresolved comments, use the Task tool with subagent_type='apply-pr-review-chunk':
+
+**6.1: For each package**, launch `apply-pr-review-chunk` agent:
 
 ```
-subagent_type: 'fix-unresolved-pr-comments'
+subagent_type: 'apply-pr-review-chunk'
 prompt: |
-  Fix all unresolved PR review comments for the current PR.
+  Implement fixes for unresolved PR review comments in package: {package_name}
 
   Context:
   - PR: #{pr_number} - {title}
   - Repository: {owner}/{repo}
-  - Original Branch: {original_branch}
-  - Review Branch: {review_branch}
+  - Package: {package_name}
+  - Number of comments: {comment_count}
 
-  Unresolved Review Comment URLs:
-  {list of comment URLs with file:line and body preview}
+  GitHub PR Comment URLs with fix instructions:
+  {for each comment in this package:}
+  ---
+  - URL: {comment_url}
+    File: {path}:{line}
+    Comment: "{truncated_body}"
+    Author: @{author}
+    Actionability: {ACTIONABLE | POSSIBLY NOT ACTIONABLE}
+  ---
 
   Task:
-  1. For each unresolved comment, fetch the comment content
-  2. Analyze the code at the commented location
-  3. Implement the fix requested in the review comment
-  4. Run compilation checks and tests
-  5. Report completion status for each comment
+  1. Fetch and process each PR comment URL to extract full modification instructions
+  2. For ACTIONABLE comments: Implement fixes
+  3. For POSSIBLY NOT ACTIONABLE comments: Evaluate if actionable after reading full context, skip if unclear
+  4. Run `go build` and `go vet` after changes
+  5. Run `go test` to verify all tests pass
+  6. Report completion status for each comment:
+     - FIXED: Successfully implemented
+     - SKIPPED: Not actionable or unclear instructions
+     - FAILED: Could not implement due to error
 
-  After all fixes are complete:
-  - Commit all changes with detailed message
-  - Report summary of fixed vs. remaining issues
+  Remember:
+  - Focus only on files within {package_path}/
+  - Follow CLAUDE.md guidelines
+  - Do not fix issues in other packages
+  - Stop if unrelated errors block progress
 ```
+
+**6.2: Collect agent responses:**
+- Fixes applied, files modified, compilation/test status, blockers
+- Track progress per package
+- Categorize results: FIXED, SKIPPED, FAILED
 
 ### Step 7: Commit Fixes
 

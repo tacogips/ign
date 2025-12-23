@@ -15,6 +15,7 @@ func TestVarType_Constants(t *testing.T) {
 	}{
 		{"string type", VarTypeString, "string"},
 		{"int type", VarTypeInt, "int"},
+		{"number type", VarTypeNumber, "number"},
 		{"bool type", VarTypeBool, "bool"},
 	}
 
