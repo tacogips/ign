@@ -306,23 +306,31 @@ func validateVariables(variables map[string]model.VarDef) error {
 		// Validate default value against min_float/max_float constraints for numbers
 		if varDef.Default != nil && varDef.Type == model.VarTypeNumber {
 			floatVal := toFloat64(varDef.Default)
-			if floatVal != nil {
-				if varDef.MinFloat != nil && *floatVal < *varDef.MinFloat {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.default", name),
-						fmt.Sprintf("default value %v is less than min_float %v", *floatVal, *varDef.MinFloat),
-					)
-				}
-				if varDef.MaxFloat != nil && *floatVal > *varDef.MaxFloat {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.default", name),
-						fmt.Sprintf("default value %v is greater than max_float %v", *floatVal, *varDef.MaxFloat),
-					)
-				}
+			if floatVal == nil {
+				// This should not happen if validateValueType is working correctly,
+				// but enforce strict validation to prevent silent constraint skipping
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.default", name),
+					fmt.Sprintf("default value cannot be converted to number type"),
+				)
+			}
+			if varDef.MinFloat != nil && *floatVal < *varDef.MinFloat {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.default", name),
+					fmt.Sprintf("default value %v is less than min_float %v", *floatVal, *varDef.MinFloat),
+				)
+			}
+			if varDef.MaxFloat != nil && *floatVal > *varDef.MaxFloat {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.default", name),
+					fmt.Sprintf("default value %v is greater than max_float %v", *floatVal, *varDef.MaxFloat),
+				)
 			}
 		}
 
@@ -351,23 +359,31 @@ func validateVariables(variables map[string]model.VarDef) error {
 		// Validate example value against min_float/max_float constraints for numbers
 		if varDef.Example != nil && varDef.Type == model.VarTypeNumber {
 			floatVal := toFloat64(varDef.Example)
-			if floatVal != nil {
-				if varDef.MinFloat != nil && *floatVal < *varDef.MinFloat {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.example", name),
-						fmt.Sprintf("example value %v is less than min_float %v", *floatVal, *varDef.MinFloat),
-					)
-				}
-				if varDef.MaxFloat != nil && *floatVal > *varDef.MaxFloat {
-					return NewConfigErrorWithField(
-						ConfigValidationFailed,
-						"ign.json",
-						fmt.Sprintf("variables.%s.example", name),
-						fmt.Sprintf("example value %v is greater than max_float %v", *floatVal, *varDef.MaxFloat),
-					)
-				}
+			if floatVal == nil {
+				// This should not happen if validateValueType is working correctly,
+				// but enforce strict validation to prevent silent constraint skipping
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.example", name),
+					fmt.Sprintf("example value cannot be converted to number type"),
+				)
+			}
+			if varDef.MinFloat != nil && *floatVal < *varDef.MinFloat {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.example", name),
+					fmt.Sprintf("example value %v is less than min_float %v", *floatVal, *varDef.MinFloat),
+				)
+			}
+			if varDef.MaxFloat != nil && *floatVal > *varDef.MaxFloat {
+				return NewConfigErrorWithField(
+					ConfigValidationFailed,
+					"ign.json",
+					fmt.Sprintf("variables.%s.example", name),
+					fmt.Sprintf("example value %v is greater than max_float %v", *floatVal, *varDef.MaxFloat),
+				)
 			}
 		}
 	}

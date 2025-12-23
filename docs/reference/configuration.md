@@ -90,7 +90,9 @@ Defines template metadata, required variables, and template-specific settings.
       "type": "number",
       "description": "Rate limit per second",
       "default": 1.5,
-      "required": false
+      "required": false,
+      "min_float": 0.1,
+      "max_float": 100.0
     },
     "enable_tls": {
       "type": "bool",
@@ -122,6 +124,9 @@ Defines template metadata, required variables, and template-specific settings.
 - The `description` is always displayed in the prompt message (e.g., `? VARIABLE_NAME - description`)
 - When user types `?`, the `help` text is shown (or `description` if `help` is not set)
 - If `example` is provided, it is appended to the help text
+- If `min`/`max` constraints are set for int variables, range is displayed as `[min-max]`, `[>=min]`, or `[<=max]`
+- If `min_float`/`max_float` constraints are set for number variables, range is displayed as `[min-max]`, `[>=min]`, or `[<=max]`
+- Validation errors show the constraint if user input is out of range
 
 #### Settings Section
 

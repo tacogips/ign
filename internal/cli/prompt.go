@@ -272,6 +272,9 @@ func promptNumber(name string, varDef model.VarDef, help string) (float64, error
 		return 0, err
 	}
 
+	// Note: For non-required number variables, empty input is treated as 0.
+	// This means we cannot distinguish between "user entered 0" and "user entered nothing".
+	// Both cases return 0. This is consistent with promptInt behavior.
 	if result == "" {
 		return 0, nil
 	}
@@ -287,6 +290,9 @@ func promptBool(name string, varDef model.VarDef, help string) (bool, error) {
 	message := name
 	if varDef.Description != "" {
 		message += " - " + varDef.Description
+	}
+	if varDef.Required {
+		message += " (required)"
 	}
 
 	// Get default value

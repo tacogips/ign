@@ -264,6 +264,7 @@ func TestValidateVariables(t *testing.T) {
 				Type:        model.VarTypeNumber,
 				Description: "Rate limit per second",
 				Default:     1.5,
+				Example:     2.5,
 				MinFloat:    floatPtr(0.1),
 				MaxFloat:    floatPtr(100.0),
 			},
@@ -326,6 +327,93 @@ func TestValidateVariables(t *testing.T) {
 		}
 		if err := validateVariables(vars); err == nil {
 			t.Error("Expected error for default value above max_float")
+		}
+	})
+
+	t.Run("number example below min_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate",
+				Example:     0.5,
+				MinFloat:    floatPtr(1.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for example value below min_float")
+		}
+	})
+
+	t.Run("number example above max_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate",
+				Example:     15.0,
+				MaxFloat:    floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for example value above max_float")
+		}
+	})
+
+	t.Run("number variable with int default below min_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeNumber,
+				Description: "Count",
+				Default:     0,
+				MinFloat:    floatPtr(1.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for int default value below min_float")
+		}
+	})
+
+	t.Run("number variable with int default above max_float", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeNumber,
+				Description: "Count",
+				Default:     100,
+				MaxFloat:    floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err == nil {
+			t.Error("Expected error for int default value above max_float")
+		}
+	})
+
+	t.Run("number variable with int default in valid range", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"count": {
+				Type:        model.VarTypeNumber,
+				Description: "Count",
+				Default:     5,
+				MinFloat:    floatPtr(1.0),
+				MaxFloat:    floatPtr(10.0),
+			},
+		}
+		if err := validateVariables(vars); err != nil {
+			t.Errorf("Valid int default value should pass validation: %v", err)
+		}
+	})
+
+	t.Run("number variable with both default and example in valid range", func(t *testing.T) {
+		vars := map[string]model.VarDef{
+			"rate_limit": {
+				Type:        model.VarTypeNumber,
+				Description: "Rate limit per second",
+				Default:     1.5,
+				Example:     2.5,
+				MinFloat:    floatPtr(0.1),
+				MaxFloat:    floatPtr(100.0),
+			},
+		}
+		if err := validateVariables(vars); err != nil {
+			t.Errorf("Valid number variable with both default and example should pass validation: %v", err)
 		}
 	})
 }
