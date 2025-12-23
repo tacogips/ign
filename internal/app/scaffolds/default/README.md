@@ -16,7 +16,7 @@ This template uses the following variables:
 
 ## Usage
 
-1. Edit `ign.json` to define your template variables
+1. Edit `ign-template.json` to define your template variables
 2. Add your template files with ign directives
 3. Test with `ign template check`
 

@@ -5,23 +5,24 @@ import (
 	"strings"
 
 	"github.com/tacogips/ign/internal/debug"
+	"github.com/tacogips/ign/internal/template/model"
 )
 
 // IsSpecialFile checks if a file is a special file that should be excluded from generation.
 // Returns true for:
-// - "ign.json" (template configuration file)
+// - ign-template.json (template configuration file)
 // - Paths starting with ".ign/" or exactly ".ign"
 func IsSpecialFile(path string) bool {
 	// Normalize path separators
 	path = filepath.ToSlash(path)
 
-	// Check for ign.json
-	if path == "ign.json" || strings.HasSuffix(path, "/ign.json") {
+	// Check for template config file
+	if path == model.IgnTemplateConfigFile || strings.HasSuffix(path, "/"+model.IgnTemplateConfigFile) {
 		return true
 	}
 
 	// Check for .ign directory
-	if path == ".ign" || strings.HasPrefix(path, ".ign/") {
+	if path == model.IgnConfigDir || strings.HasPrefix(path, model.IgnConfigDir+"/") {
 		return true
 	}
 
@@ -30,7 +31,7 @@ func IsSpecialFile(path string) bool {
 
 // ShouldIgnoreFile checks if a file should be ignored during generation based on ignore patterns.
 // Returns true if:
-// - File is a special file (ign.json, .ign/*)
+// - File is a special file (template config file, .ign/*)
 // - File matches any of the ignore patterns (glob matching)
 func ShouldIgnoreFile(path string, ignorePatterns []string) bool {
 	// First check if it's a special file

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/tacogips/ign/internal/template/model"
 )
 
 func TestAvailableScaffoldTypes(t *testing.T) {
@@ -57,10 +59,10 @@ func TestNewTemplate(t *testing.T) {
 					t.Errorf("Expected at least 1 file created, got %d", result.FilesCreated)
 				}
 
-				// Check ign.json exists
-				ignJsonPath := filepath.Join(path, "ign.json")
+				// Check ign-template.json exists
+				ignJsonPath := filepath.Join(path, model.IgnTemplateConfigFile)
 				if _, err := os.Stat(ignJsonPath); os.IsNotExist(err) {
-					t.Error("Expected ign.json to be created")
+					t.Errorf("Expected %s to be created", model.IgnTemplateConfigFile)
 				}
 
 				// Check README.md exists
@@ -219,14 +221,14 @@ func TestNewTemplateCreatesValidTemplate(t *testing.T) {
 		}
 	}
 
-	// Verify ign.json is valid JSON
-	ignJsonPath := filepath.Join(result.Path, "ign.json")
+	// Verify ign-template.json is valid JSON
+	ignJsonPath := filepath.Join(result.Path, model.IgnTemplateConfigFile)
 	content, err := os.ReadFile(ignJsonPath)
 	if err != nil {
-		t.Fatalf("Failed to read ign.json: %v", err)
+		t.Fatalf("Failed to read %s: %v", model.IgnTemplateConfigFile, err)
 	}
 	if len(content) == 0 {
-		t.Error("ign.json is empty")
+		t.Errorf("%s is empty", model.IgnTemplateConfigFile)
 	}
 
 	// Check it contains expected fields
@@ -234,7 +236,7 @@ func TestNewTemplateCreatesValidTemplate(t *testing.T) {
 	expectedFields := []string{"name", "version", "variables"}
 	for _, field := range expectedFields {
 		if !containsString(contentStr, field) {
-			t.Errorf("ign.json missing expected field: %s", field)
+			t.Errorf("%s missing expected field: %s", model.IgnTemplateConfigFile, field)
 		}
 	}
 }

@@ -144,13 +144,13 @@ func (p *GitHubProvider) Fetch(ctx context.Context, ref model.TemplateRef) (*mod
 	}
 	debug.Debug("[github] Template root: %s", templateRoot)
 
-	// Read and parse ign.json
-	debug.Debug("[github] Reading ign.json...")
+	// Read and parse template config file
+	debug.Debug("[github] Reading %s...", model.IgnTemplateConfigFile)
 	ignConfig, err := p.readIgnConfig(templateRoot)
 	if err != nil {
-		debug.Debug("[github] Failed to read ign.json: %v", err)
+		debug.Debug("[github] Failed to read %s: %v", model.IgnTemplateConfigFile, err)
 		return nil, NewInvalidTemplateError(p.Name(), p.formatURL(ref),
-			"failed to read ign.json", err)
+			"failed to read "+model.IgnTemplateConfigFile, err)
 	}
 	debug.Debug("[github] Template name: %s, version: %s", ignConfig.Name, ignConfig.Version)
 
@@ -346,33 +346,33 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 	return extractDir, nil
 }
 
-// readIgnConfig reads and parses the ign.json file.
+// readIgnConfig reads and parses the template config file.
 func (p *GitHubProvider) readIgnConfig(templateRoot string) (*model.IgnJson, error) {
-	ignPath := filepath.Join(templateRoot, "ign.json")
+	ignPath := filepath.Join(templateRoot, model.IgnTemplateConfigFile)
 
 	data, err := os.ReadFile(ignPath)
 	if err != nil {
-		return nil, fmt.Errorf("ign.json not found in template root: %w", err)
+		return nil, fmt.Errorf("%s not found in template root: %w", model.IgnTemplateConfigFile, err)
 	}
 
 	var config model.IgnJson
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse ign.json: %w", err)
+		return nil, fmt.Errorf("failed to parse %s: %w", model.IgnTemplateConfigFile, err)
 	}
 
 	// Basic validation
 	if config.Name == "" {
-		return nil, fmt.Errorf("ign.json missing required field: name")
+		return nil, fmt.Errorf("%s missing required field: name", model.IgnTemplateConfigFile)
 	}
 	if config.Version == "" {
-		return nil, fmt.Errorf("ign.json missing required field: version")
+		return nil, fmt.Errorf("%s missing required field: version", model.IgnTemplateConfigFile)
 	}
 
 	return &config, nil
 }
 
 // collectFiles recursively collects all files in the template directory.
-// Excludes ign.json as it's not part of the template output.
+// Excludes template config file as it's not part of the template output.
 func (p *GitHubProvider) collectFiles(templateRoot string) ([]model.TemplateFile, error) {
 	var files []model.TemplateFile
 	var totalBytes int64
@@ -387,8 +387,8 @@ func (p *GitHubProvider) collectFiles(templateRoot string) ([]model.TemplateFile
 			return nil
 		}
 
-		// Skip ign.json (config file, not template content)
-		if filepath.Base(path) == "ign.json" {
+		// Skip template config file (config file, not template content)
+		if filepath.Base(path) == model.IgnTemplateConfigFile {
 			return nil
 		}
 

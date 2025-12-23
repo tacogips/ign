@@ -2,6 +2,18 @@ package model
 
 import "os"
 
+// Special file and directory names used by ign.
+const (
+	// IgnTemplateConfigFile is the template configuration file name in template root.
+	IgnTemplateConfigFile = "ign-template.json"
+	// IgnConfigDir is the project configuration directory name.
+	IgnConfigDir = ".ign"
+	// IgnProjectConfigFile is the project configuration file name in .ign/ directory.
+	IgnProjectConfigFile = "ign.json"
+	// IgnVarFile is the project variables file name in .ign/ directory.
+	IgnVarFile = "ign-var.json"
+)
+
 // VarType represents the type of a template variable.
 type VarType string
 

@@ -15,18 +15,18 @@ func Validate(config *Config) error {
 	return loader.Validate(config)
 }
 
-// ValidateIgnJson validates template configuration (ign.json).
+// ValidateIgnJson validates template configuration (ign-template.json).
 func ValidateIgnJson(ign *model.IgnJson) error {
 	if ign == nil {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "", "ign.json cannot be nil")
+		return NewConfigErrorWithField(ConfigValidationFailed, model.IgnTemplateConfigFile, "", model.IgnTemplateConfigFile+" cannot be nil")
 	}
 
 	// Validate required fields
 	if ign.Name == "" {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "name", "template name is required")
+		return NewConfigErrorWithField(ConfigValidationFailed, model.IgnTemplateConfigFile, "name", "template name is required")
 	}
 	if ign.Version == "" {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign.json", "version", "template version is required")
+		return NewConfigErrorWithField(ConfigValidationFailed, model.IgnTemplateConfigFile, "version", "template version is required")
 	}
 
 	// Validate template name format (lowercase, hyphens, underscores, alphanumeric)
@@ -34,7 +34,7 @@ func ValidateIgnJson(ign *model.IgnJson) error {
 	if !namePattern.MatchString(ign.Name) {
 		return NewConfigErrorWithField(
 			ConfigValidationFailed,
-			"ign.json",
+			model.IgnTemplateConfigFile,
 			"name",
 			"template name must start with lowercase letter or digit and contain only lowercase letters, digits, hyphens, and underscores",
 		)
@@ -45,7 +45,7 @@ func ValidateIgnJson(ign *model.IgnJson) error {
 	if !versionPattern.MatchString(ign.Version) {
 		return NewConfigErrorWithField(
 			ConfigValidationFailed,
-			"ign.json",
+			model.IgnTemplateConfigFile,
 			"version",
 			fmt.Sprintf("invalid version format: %s (expected semantic version like 1.0.0)", ign.Version),
 		)
@@ -61,7 +61,7 @@ func ValidateIgnJson(ign *model.IgnJson) error {
 		if ign.Settings.MaxIncludeDepth < 0 {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				"settings.max_include_depth",
 				"max include depth cannot be negative",
 			)
@@ -115,7 +115,7 @@ func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
 	return nil
 }
 
-// validateVariables validates the variables section of ign.json.
+// validateVariables validates the variables section of template config file.
 func validateVariables(variables map[string]model.VarDef) error {
 	for name, varDef := range variables {
 		// Validate variable name format
@@ -123,7 +123,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if !namePattern.MatchString(name) {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				fmt.Sprintf("variables.%s", name),
 				"variable name must start with a letter and contain only letters, digits, underscores, and hyphens",
 			)
@@ -133,7 +133,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if err := validateVarType(varDef.Type); err != nil {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				fmt.Sprintf("variables.%s.type", name),
 				err.Error(),
 			)
@@ -143,7 +143,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if varDef.Description == "" {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				fmt.Sprintf("variables.%s.description", name),
 				"variable description is required",
 			)
@@ -154,7 +154,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if err := validateValueType(varDef.Default, varDef.Type); err != nil {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.default", name),
 					fmt.Sprintf("default value type mismatch: %v", err),
 				)
@@ -166,7 +166,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if err := validateValueType(varDef.Example, varDef.Type); err != nil {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.example", name),
 					fmt.Sprintf("example value type mismatch: %v", err),
 				)
@@ -177,7 +177,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if varDef.Pattern != "" && varDef.Type != model.VarTypeString {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				fmt.Sprintf("variables.%s.pattern", name),
 				"pattern can only be specified for string variables",
 			)
@@ -188,7 +188,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if _, err := regexp.Compile(varDef.Pattern); err != nil {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.pattern", name),
 					fmt.Sprintf("invalid regex pattern: %v", err),
 				)
@@ -201,7 +201,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 					if err != nil {
 						return NewConfigErrorWithField(
 							ConfigValidationFailed,
-							"ign.json",
+							model.IgnTemplateConfigFile,
 							fmt.Sprintf("variables.%s.pattern", name),
 							fmt.Sprintf("error matching pattern: %v", err),
 						)
@@ -209,7 +209,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 					if !matched {
 						return NewConfigErrorWithField(
 							ConfigValidationFailed,
-							"ign.json",
+							model.IgnTemplateConfigFile,
 							fmt.Sprintf("variables.%s.default", name),
 							fmt.Sprintf("default value %q does not match pattern %q", str, varDef.Pattern),
 						)
@@ -224,7 +224,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 					if err != nil {
 						return NewConfigErrorWithField(
 							ConfigValidationFailed,
-							"ign.json",
+							model.IgnTemplateConfigFile,
 							fmt.Sprintf("variables.%s.pattern", name),
 							fmt.Sprintf("error matching pattern: %v", err),
 						)
@@ -232,7 +232,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 					if !matched {
 						return NewConfigErrorWithField(
 							ConfigValidationFailed,
-							"ign.json",
+							model.IgnTemplateConfigFile,
 							fmt.Sprintf("variables.%s.example", name),
 							fmt.Sprintf("example value %q does not match pattern %q", str, varDef.Pattern),
 						)
@@ -245,7 +245,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if (varDef.Min != nil || varDef.Max != nil) && varDef.Type != model.VarTypeInt && varDef.Type != model.VarTypeNumber {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				fmt.Sprintf("variables.%s", name),
 				"min/max can only be specified for integer and number variables",
 			)
@@ -255,7 +255,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 		if varDef.Min != nil && varDef.Max != nil && *varDef.Min > *varDef.Max {
 			return NewConfigErrorWithField(
 				ConfigValidationFailed,
-				"ign.json",
+				model.IgnTemplateConfigFile,
 				fmt.Sprintf("variables.%s", name),
 				fmt.Sprintf("min (%v) cannot be greater than max (%v)", *varDef.Min, *varDef.Max),
 			)
@@ -273,7 +273,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 				// 2. Runtime type corruption of the Default value after validation
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.default", name),
 					fmt.Sprintf("default value cannot be converted to numeric type"),
 				)
@@ -281,7 +281,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if varDef.Min != nil && *floatVal < *varDef.Min {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.default", name),
 					fmt.Sprintf("default value %v is less than min %v", *floatVal, *varDef.Min),
 				)
@@ -289,7 +289,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if varDef.Max != nil && *floatVal > *varDef.Max {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.default", name),
 					fmt.Sprintf("default value %v is greater than max %v", *floatVal, *varDef.Max),
 				)
@@ -308,7 +308,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 				// 2. Runtime type corruption of the Example value after validation
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.example", name),
 					fmt.Sprintf("example value cannot be converted to numeric type"),
 				)
@@ -316,7 +316,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if varDef.Min != nil && *floatVal < *varDef.Min {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.example", name),
 					fmt.Sprintf("example value %v is less than min %v", *floatVal, *varDef.Min),
 				)
@@ -324,7 +324,7 @@ func validateVariables(variables map[string]model.VarDef) error {
 			if varDef.Max != nil && *floatVal > *varDef.Max {
 				return NewConfigErrorWithField(
 					ConfigValidationFailed,
-					"ign.json",
+					model.IgnTemplateConfigFile,
 					fmt.Sprintf("variables.%s.example", name),
 					fmt.Sprintf("example value %v is greater than max %v", *floatVal, *varDef.Max),
 				)
