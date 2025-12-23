@@ -7,17 +7,7 @@ import (
 
 // DefaultConfig returns the default configuration.
 func DefaultConfig() *Config {
-	homeDir, _ := os.UserHomeDir()
-	cacheDir := filepath.Join(homeDir, ".cache", "ign")
-
 	return &Config{
-		Cache: CacheConfig{
-			Enabled:   true,
-			Directory: cacheDir,
-			TTL:       3600, // 1 hour
-			MaxSizeMB: 500,
-			AutoClean: true,
-		},
 		GitHub: GitHubConfig{
 			Token:      "",
 			DefaultRef: "main",

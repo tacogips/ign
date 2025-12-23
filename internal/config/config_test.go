@@ -16,17 +16,6 @@ func TestDefaultConfig(t *testing.T) {
 		t.Fatal("DefaultConfig returned nil")
 	}
 
-	// Test cache defaults
-	if !cfg.Cache.Enabled {
-		t.Error("Cache should be enabled by default")
-	}
-	if cfg.Cache.TTL != 3600 {
-		t.Errorf("Expected TTL=3600, got %d", cfg.Cache.TTL)
-	}
-	if cfg.Cache.MaxSizeMB != 500 {
-		t.Errorf("Expected MaxSizeMB=500, got %d", cfg.Cache.MaxSizeMB)
-	}
-
 	// Test GitHub defaults
 	if cfg.GitHub.DefaultRef != "main" {
 		t.Errorf("Expected DefaultRef=main, got %s", cfg.GitHub.DefaultRef)
@@ -88,7 +77,6 @@ func TestLoadConfig(t *testing.T) {
 		cfgPath := filepath.Join(tmpDir, "config.json")
 
 		cfg := DefaultConfig()
-		cfg.Cache.TTL = 7200
 		cfg.GitHub.DefaultRef = "develop"
 
 		data, err := json.MarshalIndent(cfg, "", "  ")
@@ -105,9 +93,6 @@ func TestLoadConfig(t *testing.T) {
 			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		if loadedCfg.Cache.TTL != 7200 {
-			t.Errorf("Expected TTL=7200, got %d", loadedCfg.Cache.TTL)
-		}
 		if loadedCfg.GitHub.DefaultRef != "develop" {
 			t.Errorf("Expected DefaultRef=develop, got %s", loadedCfg.GitHub.DefaultRef)
 		}
@@ -165,8 +150,8 @@ func TestLoadOrDefault(t *testing.T) {
 		}
 
 		// Verify it's the default config
-		if cfg.Cache.TTL != 3600 {
-			t.Errorf("Expected default TTL=3600, got %d", cfg.Cache.TTL)
+		if cfg.GitHub.DefaultRef != "main" {
+			t.Errorf("Expected default DefaultRef=main, got %s", cfg.GitHub.DefaultRef)
 		}
 	})
 
@@ -175,7 +160,7 @@ func TestLoadOrDefault(t *testing.T) {
 		cfgPath := filepath.Join(tmpDir, "config.json")
 
 		cfg := DefaultConfig()
-		cfg.Cache.TTL = 7200
+		cfg.GitHub.DefaultRef = "develop"
 
 		data, err := json.MarshalIndent(cfg, "", "  ")
 		if err != nil {
@@ -191,8 +176,8 @@ func TestLoadOrDefault(t *testing.T) {
 			t.Fatalf("Failed to load config: %v", err)
 		}
 
-		if loadedCfg.Cache.TTL != 7200 {
-			t.Errorf("Expected TTL=7200, got %d", loadedCfg.Cache.TTL)
+		if loadedCfg.GitHub.DefaultRef != "develop" {
+			t.Errorf("Expected DefaultRef=develop, got %s", loadedCfg.GitHub.DefaultRef)
 		}
 	})
 }
@@ -204,22 +189,6 @@ func TestValidateConfig(t *testing.T) {
 		cfg := DefaultConfig()
 		if err := loader.Validate(cfg); err != nil {
 			t.Errorf("Valid config should pass validation: %v", err)
-		}
-	})
-
-	t.Run("negative TTL", func(t *testing.T) {
-		cfg := DefaultConfig()
-		cfg.Cache.TTL = -1
-		if err := loader.Validate(cfg); err == nil {
-			t.Error("Expected validation error for negative TTL")
-		}
-	})
-
-	t.Run("negative max size", func(t *testing.T) {
-		cfg := DefaultConfig()
-		cfg.Cache.MaxSizeMB = -1
-		if err := loader.Validate(cfg); err == nil {
-			t.Error("Expected validation error for negative max size")
 		}
 	})
 

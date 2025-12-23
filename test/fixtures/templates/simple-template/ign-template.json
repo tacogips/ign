@@ -3,22 +3,21 @@
   "version": "1.0.0",
   "description": "A simple test template",
   "variables": {
-    "project_name": {
+    "enable_feature": {
       "type": "string",
-      "description": "Project name",
+      "description": "Variable enable_feature",
       "required": true
     },
     "port": {
-      "type": "int",
-      "description": "Server port",
-      "required": false,
-      "default": 8080
+      "type": "string",
+      "description": "Variable port",
+      "required": true
     },
-    "enable_feature": {
-      "type": "bool",
-      "description": "Enable optional feature",
-      "required": false,
-      "default": false
+    "project_name": {
+      "type": "string",
+      "description": "Variable project_name",
+      "required": true
     }
-  }
+  },
+  "hash": "a9e214d0aa9831c3a09b72b408ae629f131253ca8e9a9e9ed000fec03437733e"
 }

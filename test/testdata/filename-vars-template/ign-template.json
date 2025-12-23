@@ -1,5 +1,23 @@
 {
   "name": "filename-vars-template",
+  "version": "1.0.0",
   "description": "Template demonstrating filename variable substitution",
-  "version": "1.0.0"
+  "variables": {
+    "app_name": {
+      "type": "string",
+      "description": "Variable app_name",
+      "required": true
+    },
+    "env": {
+      "type": "string",
+      "description": "Variable env",
+      "default": "dev"
+    },
+    "module_name": {
+      "type": "string",
+      "description": "Variable module_name",
+      "required": true
+    }
+  },
+  "hash": "db9c1684986d184fb6e23b2cdbaba74e2285c77b7ba292d6f4e4ae424915ce3d"
 }

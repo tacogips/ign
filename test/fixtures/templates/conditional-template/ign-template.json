@@ -3,28 +3,26 @@
   "version": "1.0.0",
   "description": "Template with conditional directives",
   "variables": {
+    "has_license": {
+      "type": "bool",
+      "description": "Variable has_license",
+      "required": true
+    },
+    "license": {
+      "type": "string",
+      "description": "Variable license",
+      "required": true
+    },
     "project_name": {
       "type": "string",
-      "description": "Project name",
+      "description": "Variable project_name",
       "required": true
     },
     "use_docker": {
       "type": "bool",
-      "description": "Include Docker configuration",
-      "required": false,
-      "default": false
-    },
-    "has_license": {
-      "type": "bool",
-      "description": "Include license section",
-      "required": false,
-      "default": false
-    },
-    "license": {
-      "type": "string",
-      "description": "License type",
-      "required": false,
-      "default": "MIT"
+      "description": "Variable use_docker",
+      "required": true
     }
-  }
+  },
+  "hash": "057656cc9b5f43da7179caef5c8cf73de812393a4abce7989dff0becca45a761"
 }

@@ -171,18 +171,19 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	debug.DebugValue("[app] Template name", template.Config.Name)
 	debug.DebugValue("[app] Template version", template.Config.Version)
 
-	// Step 5: Get hash from template's ign.json and compare
-	// The hash is stored in the template's ign.json (calculated by 'ign template update')
+	// Step 5: Get hash from template's ign-template.json and compare
+	// The hash must be present (calculated by 'ign template update' on the template side)
 	newHash := template.Config.Hash
-	debug.DebugValue("[app] Template hash from ign.json", newHash)
+	debug.DebugValue("[app] Template hash from ign-template.json", newHash)
 
-	// If template doesn't have a hash yet, calculate it from content
-	// This fallback handles templates created before hash support was added.
-	// Templates should always include hash in ign.json from 'ign template update' command.
+	// Validate hash is present
 	if newHash == "" {
-		debug.Debug("[app] Template has no hash in ign.json, calculating from content")
-		newHash = calculateTemplateHash(template)
-		debug.DebugValue("[app] Calculated template hash", newHash)
+		debug.Debug("[app] Template hash is missing in ign-template.json")
+		return nil, NewValidationError(
+			"template is missing hash in ign-template.json.\n"+
+				"The template author needs to run 'ign template update' to generate the hash.",
+			nil,
+		)
 	}
 
 	hashChanged := newHash != ignConfig.Hash

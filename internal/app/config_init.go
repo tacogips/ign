@@ -66,9 +66,20 @@ func Init(ctx context.Context, opts InitOptions) error {
 		return err
 	}
 
-	// Calculate template hash
-	templateHash := calculateTemplateHash(prepResult.Template)
-	debug.DebugValue("[app] Template hash", templateHash)
+	// Get hash from template's ign-template.json
+	// The hash must be present (calculated by 'ign template update' on the template side)
+	templateHash := prepResult.IgnJson.Hash
+	debug.DebugValue("[app] Template hash from ign-template.json", templateHash)
+
+	// Validate hash is present
+	if templateHash == "" {
+		debug.Debug("[app] Template hash is missing in ign-template.json")
+		return NewCheckoutError(
+			"template is missing hash in ign-template.json.\n"+
+				"The template author needs to run 'ign template update' to generate the hash.",
+			nil,
+		)
+	}
 
 	// Save ign.json (template source and hash)
 	ignConfigPath := filepath.Join(configDir, "ign.json")
