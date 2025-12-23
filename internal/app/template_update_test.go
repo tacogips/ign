@@ -284,6 +284,13 @@ func TestParseVarArgs(t *testing.T) {
 		{"port:int=8080", "port", model.VarTypeInt, 8080, true},
 		{"debug:bool=true", "debug", model.VarTypeBool, true, true},
 		{"flag:bool=false", "flag", model.VarTypeBool, false, true},
+		// Version strings should remain strings, not be parsed as integers (issue #20)
+		{"GO_VERSION=1.25.4", "GO_VERSION", model.VarTypeString, "1.25.4", true},
+		{"version=2.0.0", "version", model.VarTypeString, "2.0.0", true},
+		{"node_version=18.17.0", "node_version", model.VarTypeString, "18.17.0", true},
+		// Plain integers should still work
+		{"count=42", "count", model.VarTypeInt, 42, true},
+		{"level=-5", "level", model.VarTypeInt, -5, true},
 	}
 
 	for _, tt := range tests {

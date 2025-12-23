@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/tacogips/ign/internal/config"
@@ -329,8 +330,9 @@ func parseDefaultValueStr(value string) interface{} {
 	}
 
 	// Try to parse as integer
-	var intVal int
-	if _, err := fmt.Sscanf(value, "%d", &intVal); err == nil {
+	// Use strconv.Atoi instead of fmt.Sscanf to ensure the entire string is parsed.
+	// fmt.Sscanf with %d would incorrectly parse "1.25.4" as 1.
+	if intVal, err := strconv.Atoi(value); err == nil {
 		return intVal
 	}
 
