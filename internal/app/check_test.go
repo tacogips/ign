@@ -32,9 +32,8 @@ Debug mode enabled
 			},
 			opts: func(path string) CheckTemplateOptions {
 				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: false,
-					Verbose:   false,
+					Path:    path,
+					Verbose: false,
 				}
 			},
 			wantErr: false,
@@ -101,8 +100,7 @@ This is invalid`
 			},
 			opts: func(path string) CheckTemplateOptions {
 				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: false,
+					Path: path,
 				}
 			},
 			wantErr: false,
@@ -117,7 +115,7 @@ This is invalid`
 			},
 		},
 		{
-			name: "recursive directory scan",
+			name: "scans subdirectories",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				subdir := filepath.Join(dir, "subdir")
@@ -139,8 +137,7 @@ This is invalid`
 			},
 			opts: func(path string) CheckTemplateOptions {
 				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: true,
+					Path: path,
 				}
 			},
 			wantErr: false,
@@ -150,38 +147,6 @@ This is invalid`
 				}
 				if result.FilesWithErrors != 0 {
 					t.Errorf("Expected 0 files with errors, got %d", result.FilesWithErrors)
-				}
-			},
-		},
-		{
-			name: "non-recursive does not scan subdirs",
-			setup: func(t *testing.T) string {
-				dir := t.TempDir()
-				subdir := filepath.Join(dir, "subdir")
-				if err := os.MkdirAll(subdir, 0755); err != nil {
-					t.Fatalf("Failed to create subdir: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(dir, "root.txt"), []byte("@ign-var:root@"), 0644); err != nil {
-					t.Fatalf("Failed to create root file: %v", err)
-				}
-
-				if err := os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte("@ign-var:sub@"), 0644); err != nil {
-					t.Fatalf("Failed to create sub file: %v", err)
-				}
-
-				return dir
-			},
-			opts: func(path string) CheckTemplateOptions {
-				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: false,
-				}
-			},
-			wantErr: false,
-			validateResult: func(t *testing.T, result *CheckResult) {
-				if result.FilesChecked != 1 {
-					t.Errorf("Expected 1 file checked (non-recursive), got %d", result.FilesChecked)
 				}
 			},
 		},
@@ -204,8 +169,7 @@ This is invalid`
 			},
 			opts: func(path string) CheckTemplateOptions {
 				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: false,
+					Path: path,
 				}
 			},
 			wantErr: false,
@@ -271,8 +235,7 @@ This block is never closed`
 			},
 			opts: func(path string) CheckTemplateOptions {
 				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: false,
+					Path: path,
 				}
 			},
 			wantErr: false,
@@ -313,8 +276,7 @@ This block is never closed`
 			},
 			opts: func(path string) CheckTemplateOptions {
 				return CheckTemplateOptions{
-					Path:      path,
-					Recursive: true,
+					Path: path,
 				}
 			},
 			wantErr: false,

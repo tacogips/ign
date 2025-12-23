@@ -52,12 +52,13 @@ file paths and line numbers.
 
 If PATH is not specified, the current directory is checked.
 
+Subdirectories are always scanned recursively to match hash calculation behavior.
+
 Examples:
   ign template check
   ign template check ./templates
   ign template check template.txt
-  ign template check -r
-  ign template check -r -v`,
+  ign template check -v`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runTemplateCheck,
 }
@@ -82,10 +83,11 @@ the hash field that 'ign update' uses to detect template changes.
 
 If PATH is not specified, the current directory is used.
 
+Subdirectories are always scanned recursively to match hash calculation behavior.
+
 Examples:
   ign template update
   ign template update ./my-template
-  ign template update -r           # Recursive scan
   ign template update --dry-run    # Preview changes
   ign template update --merge      # Only add new variables`,
 	Args: cobra.MaximumNArgs(1),
@@ -100,15 +102,13 @@ var (
 
 // Template check command flags
 var (
-	templateCheckRecursive bool
-	templateCheckVerbose   bool
+	templateCheckVerbose bool
 )
 
 // Template update command flags
 var (
-	templateUpdateRecursive bool
-	templateUpdateDryRun    bool
-	templateUpdateMerge     bool
+	templateUpdateDryRun bool
+	templateUpdateMerge  bool
 )
 
 func init() {
@@ -122,13 +122,11 @@ func init() {
 	templateNewCmd.Flags().BoolVarP(&templateNewForce, "force", "f", false, "Overwrite existing files")
 
 	// Flags for template check
-	templateCheckCmd.Flags().BoolVarP(&templateCheckRecursive, "recursive", "r", false, "Recursively check subdirectories")
 	templateCheckCmd.Flags().BoolVarP(&templateCheckVerbose, "verbose", "v", false, "Show detailed validation info")
 
 	// Flags for template update
 	// Note: These flags control template metadata updates, which differs from
 	// 'ign update' flags that control project file generation
-	templateUpdateCmd.Flags().BoolVarP(&templateUpdateRecursive, "recursive", "r", false, "Recursively scan subdirectories for template files")
 	templateUpdateCmd.Flags().BoolVar(&templateUpdateDryRun, "dry-run", false, "Preview ign-template.json changes without writing the file")
 	templateUpdateCmd.Flags().BoolVar(&templateUpdateMerge, "merge", false, "Only add new variables to ign-template.json, preserve existing ones")
 }
@@ -141,19 +139,15 @@ func runTemplateCheck(cmd *cobra.Command, args []string) error {
 	}
 
 	printInfo(fmt.Sprintf("Checking templates in: %s", path))
-	if templateCheckRecursive {
-		printInfo("Mode: Recursive")
-	}
 	if templateCheckVerbose {
 		printInfo("Verbosity: Enabled")
 	}
 	printSeparator()
 
-	// Call app layer
+	// Call app layer (always scans recursively to match hash calculation behavior)
 	result, err := app.CheckTemplate(cmd.Context(), app.CheckTemplateOptions{
-		Path:      path,
-		Recursive: templateCheckRecursive,
-		Verbose:   templateCheckVerbose,
+		Path:    path,
+		Verbose: templateCheckVerbose,
 	})
 
 	if err != nil {
@@ -266,9 +260,6 @@ func runTemplateUpdate(cmd *cobra.Command, args []string) error {
 	}
 
 	printInfo(fmt.Sprintf("Scanning templates in: %s", path))
-	if templateUpdateRecursive {
-		printInfo("Mode: Recursive")
-	}
 	if templateUpdateDryRun {
 		printWarning("Dry-run mode: no files will be modified")
 	}
@@ -277,12 +268,11 @@ func runTemplateUpdate(cmd *cobra.Command, args []string) error {
 	}
 	printSeparator()
 
-	// Call app layer
+	// Call app layer (always scans recursively to match hash calculation behavior)
 	result, err := app.UpdateTemplate(cmd.Context(), app.UpdateTemplateOptions{
-		Path:      path,
-		Recursive: templateUpdateRecursive,
-		DryRun:    templateUpdateDryRun,
-		Merge:     templateUpdateMerge,
+		Path:   path,
+		DryRun: templateUpdateDryRun,
+		Merge:  templateUpdateMerge,
 	})
 
 	if err != nil {
