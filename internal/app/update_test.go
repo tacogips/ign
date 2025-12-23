@@ -535,9 +535,7 @@ func TestCompleteUpdate_ConfigurationFileUpdates(t *testing.T) {
 		t.Errorf("Expected var1 to be 'value1', got %v", val)
 	}
 
-	if loadedVar.Metadata == nil {
-		t.Error("Expected metadata to be set")
-	}
+	// Note: ign-var.json no longer contains metadata (it's only in ign.json)
 }
 
 func TestGetNewVariableDefinitions(t *testing.T) {

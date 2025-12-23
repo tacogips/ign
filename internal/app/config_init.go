@@ -89,17 +89,10 @@ func Init(ctx context.Context, opts InitOptions) error {
 		},
 	}
 
-	// Create ign-var.json with empty/default variables (not generating files)
+	// Create ign-var.json with empty/default variables (no metadata as it's already in ign.json)
 	debug.Debug("[app] Creating ign-var.json with default variables")
 	ignVarJson := &model.IgnVarJson{
 		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
-		Metadata: &model.FileMetadata{
-			GeneratedAt:     time.Now(),
-			GeneratedBy:     "ign init",
-			TemplateName:    prepResult.IgnJson.Name,
-			TemplateVersion: prepResult.IgnJson.Version,
-			IgnVersion:      build.Version(),
-		},
 	}
 
 	ignVarPath := filepath.Join(configDir, "ign-var.json")

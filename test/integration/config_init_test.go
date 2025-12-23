@@ -100,17 +100,7 @@ func TestInit_LocalProvider(t *testing.T) {
 		}
 	}
 
-	// Verify metadata
-	if ignVar.Metadata == nil {
-		t.Errorf("metadata is nil")
-	} else {
-		if ignVar.Metadata.TemplateName != "simple-template" {
-			t.Errorf("template name = %s, want simple-template", ignVar.Metadata.TemplateName)
-		}
-		if ignVar.Metadata.TemplateVersion != "1.0.0" {
-			t.Errorf("template version = %s, want 1.0.0", ignVar.Metadata.TemplateVersion)
-		}
-	}
+	// Note: ign-var.json no longer contains metadata (it's only in ign.json)
 }
 
 // TestInit_WithAbsolutePath tests that absolute paths now work for local provider

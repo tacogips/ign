@@ -16,16 +16,14 @@ type IgnConfig struct {
 // IgnVarJson represents the ign-var.json user variables file.
 // This file stores user-provided variable values used during template generation.
 // It is separate from ign.json to allow updating template source independently from variables.
+// Note: Metadata is intentionally not included here as it duplicates ign.json metadata.
 type IgnVarJson struct {
 	// Variables contains all user-provided variable values mapped by variable name.
 	Variables map[string]interface{} `json:"variables"`
-	// Metadata contains generation metadata (auto-generated, informational).
-	Metadata *FileMetadata `json:"metadata,omitempty"`
 }
 
 // FileMetadata contains metadata about configuration file generation.
-// This is used by both IgnConfig (ign.json) and IgnVarJson (ign-var.json) to track
-// when and how the files were generated.
+// This is used by IgnConfig (ign.json) to track when and how the file was generated.
 type FileMetadata struct {
 	// GeneratedAt is when the file was generated.
 	GeneratedAt time.Time `json:"generated_at,omitempty"`

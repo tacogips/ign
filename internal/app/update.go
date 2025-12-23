@@ -322,17 +322,10 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		}
 		debug.Debug("[app] ign.json updated successfully")
 
-		// Update ign-var.json with merged variables
+		// Update ign-var.json with merged variables (no metadata as it's already in ign.json)
 		debug.Debug("[app] Updating ign-var.json with merged variables")
 		ignVarJson := &model.IgnVarJson{
 			Variables: mergedVars,
-			Metadata: &model.FileMetadata{
-				GeneratedAt:     time.Now(),
-				GeneratedBy:     "ign update",
-				TemplateName:    prep.IgnJson.Name,
-				TemplateVersion: prep.IgnJson.Version,
-				IgnVersion:      build.Version(),
-			},
 		}
 
 		if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {

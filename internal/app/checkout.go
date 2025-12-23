@@ -327,17 +327,10 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 			},
 		}
 
-		// Save ign-var.json (variables only)
+		// Save ign-var.json (variables only, no metadata as it's already in ign.json)
 		debug.Debug("[app] Creating ign-var.json")
 		ignVarJson := &model.IgnVarJson{
 			Variables: opts.Variables,
-			Metadata: &model.FileMetadata{
-				GeneratedAt:     time.Now(),
-				GeneratedBy:     "ign checkout",
-				TemplateName:    prep.IgnJson.Name,
-				TemplateVersion: prep.IgnJson.Version,
-				IgnVersion:      build.Version(),
-			},
 		}
 
 		// Save both configuration files with rollback on failure.

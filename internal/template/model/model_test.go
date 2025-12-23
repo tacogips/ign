@@ -181,21 +181,12 @@ func TestIgnJson_MarshalUnmarshal(t *testing.T) {
 }
 
 func TestIgnVarJson_MarshalUnmarshal(t *testing.T) {
-	now := time.Now().UTC()
-
 	original := IgnVarJson{
 		Variables: map[string]interface{}{
 			"project_name": "user-service",
 			"port":         8080,
 			"enable_tls":   true,
 			"description":  "User management service",
-		},
-		Metadata: &FileMetadata{
-			GeneratedAt:     now,
-			GeneratedBy:     "ign build init v1.0.0",
-			TemplateName:    "go-rest-api",
-			TemplateVersion: "2.1.0",
-			IgnVersion:      "1.0.0",
 		},
 	}
 
@@ -229,14 +220,6 @@ func TestIgnVarJson_MarshalUnmarshal(t *testing.T) {
 	// Verify bool variable
 	if enableTLS, ok := decoded.Variables["enable_tls"].(bool); !ok || !enableTLS {
 		t.Errorf("enable_tls: expected true, got %v", decoded.Variables["enable_tls"])
-	}
-
-	// Verify metadata
-	if decoded.Metadata == nil {
-		t.Fatal("Metadata is nil")
-	}
-	if decoded.Metadata.TemplateName != "go-rest-api" {
-		t.Errorf("Metadata.TemplateName: expected 'go-rest-api', got %s", decoded.Metadata.TemplateName)
 	}
 }
 
@@ -408,13 +391,12 @@ func TestVarDef_WithFileMode(t *testing.T) {
 	}
 }
 
-func TestIgnVarJson_EmptyMetadata(t *testing.T) {
-	// Test that metadata can be nil
+func TestIgnVarJson_VariablesOnly(t *testing.T) {
+	// Test that IgnVarJson only contains variables (no metadata)
 	varConfig := IgnVarJson{
 		Variables: map[string]interface{}{
 			"name": "test",
 		},
-		Metadata: nil,
 	}
 
 	data, err := json.Marshal(varConfig)
@@ -427,9 +409,9 @@ func TestIgnVarJson_EmptyMetadata(t *testing.T) {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}
 
-	// Metadata should be nil (omitempty)
-	if decoded.Metadata != nil {
-		t.Errorf("Expected nil metadata, got %+v", decoded.Metadata)
+	// Verify variables are preserved
+	if decoded.Variables["name"] != "test" {
+		t.Errorf("Expected name to be 'test', got %v", decoded.Variables["name"])
 	}
 }
 

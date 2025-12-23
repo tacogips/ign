@@ -371,7 +371,7 @@ Stores user-provided variable values for template generation.
 
 **Created by:** `ign checkout` command
 
-**Edited by:** User (to customize variable values)
+**Note:** This file intentionally does not contain metadata (such as `generated_at`, `template_name`, etc.) because that information is already stored in `ign.json`. This avoids duplication and keeps `ign-var.json` focused solely on user-editable variable values.
 
 ### Schema
 
