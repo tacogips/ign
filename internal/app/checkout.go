@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -98,6 +96,7 @@ type CheckoutResult struct {
 // calculateTemplateHash calculates SHA256 hash of template files content.
 // Files are sorted by path to ensure deterministic hash generation.
 // Returns empty string if template is nil or has no files.
+// This function uses the same algorithm as CalculateTemplateHashFromDir to ensure consistency.
 func calculateTemplateHash(template *model.Template) string {
 	// Defensive: handle nil template
 	if template == nil {
@@ -109,8 +108,6 @@ func calculateTemplateHash(template *model.Template) string {
 		return ""
 	}
 
-	h := sha256.New()
-
 	// Sort files by path for deterministic hash
 	files := make([]model.TemplateFile, len(template.Files))
 	copy(files, template.Files)
@@ -118,13 +115,13 @@ func calculateTemplateHash(template *model.Template) string {
 		return files[i].Path < files[j].Path
 	})
 
-	// Hash each file's path and content
-	for _, file := range files {
-		h.Write([]byte(file.Path))
-		h.Write(file.Content)
+	// Convert to HashableFile slice for shared hash function
+	hashableFiles := make([]HashableFile, len(files))
+	for i, f := range files {
+		hashableFiles[i] = HashableFile{Path: f.Path, Content: f.Content}
 	}
 
-	return hex.EncodeToString(h.Sum(nil))
+	return HashTemplateFiles(hashableFiles)
 }
 
 // maxBackups is the maximum number of backup files allowed to prevent infinite loops
@@ -299,7 +296,9 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {
-		// Calculate template hash
+		// Always calculate hash from template content for consistency with config_init.go
+		// This ensures the hash represents the actual fetched template, not stale metadata
+		debug.Debug("[app] Calculating template hash from content")
 		templateHash := calculateTemplateHash(prep.Template)
 		debug.DebugValue("[app] Template hash", templateHash)
 

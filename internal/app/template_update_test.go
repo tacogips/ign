@@ -9,13 +9,13 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
-func TestCollectVars(t *testing.T) {
+func TestUpdateTemplate(t *testing.T) {
 	tests := []struct {
 		name           string
 		setup          func(t *testing.T) string
-		opts           func(path string) CollectVarsOptions
+		opts           func(path string) UpdateTemplateOptions
 		wantErr        bool
-		validateResult func(t *testing.T, result *CollectVarsResult, path string)
+		validateResult func(t *testing.T, result *UpdateTemplateResult, path string)
 	}{
 		{
 			name: "collect variables from template files",
@@ -32,15 +32,15 @@ Debug mode enabled
 				}
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:      path,
 					Recursive: false,
 					DryRun:    true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.FilesScanned != 1 {
 					t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
 				}
@@ -96,15 +96,15 @@ Debug mode enabled
 
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:      path,
 					Recursive: true,
 					DryRun:    true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.FilesScanned != 2 {
 					t.Errorf("Expected 2 files scanned, got %d", result.FilesScanned)
 				}
@@ -138,15 +138,15 @@ Debug mode enabled
 
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:      path,
 					Recursive: false,
 					DryRun:    true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.FilesScanned != 1 {
 					t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
 				}
@@ -167,14 +167,14 @@ Debug mode enabled
 				}
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:   path,
 					DryRun: true,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if result.Updated {
 					t.Error("Expected Updated to be false in dry-run mode")
 				}
@@ -194,14 +194,14 @@ Debug mode enabled
 				}
 				return dir
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path:   path,
 					DryRun: false,
 				}
 			},
 			wantErr: false,
-			validateResult: func(t *testing.T, result *CollectVarsResult, path string) {
+			validateResult: func(t *testing.T, result *UpdateTemplateResult, path string) {
 				if !result.Updated {
 					t.Error("Expected Updated to be true")
 				}
@@ -216,8 +216,8 @@ Debug mode enabled
 			setup: func(t *testing.T) string {
 				return "/nonexistent/path/that/does/not/exist"
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path: path,
 				}
 			},
@@ -233,8 +233,8 @@ Debug mode enabled
 				}
 				return filePath
 			},
-			opts: func(path string) CollectVarsOptions {
-				return CollectVarsOptions{
+			opts: func(path string) UpdateTemplateOptions {
+				return UpdateTemplateOptions{
 					Path: path,
 				}
 			},
@@ -247,7 +247,7 @@ Debug mode enabled
 			path := tt.setup(t)
 			opts := tt.opts(path)
 
-			result, err := CollectVars(context.Background(), opts)
+			result, err := UpdateTemplate(context.Background(), opts)
 
 			if tt.wantErr {
 				if err == nil {
@@ -331,12 +331,12 @@ func TestMergeMode(t *testing.T) {
 	}
 
 	// Test merge mode
-	result, err := CollectVars(context.Background(), CollectVarsOptions{
+	result, err := UpdateTemplate(context.Background(), UpdateTemplateOptions{
 		Path:  dir,
 		Merge: true,
 	})
 	if err != nil {
-		t.Fatalf("CollectVars failed: %v", err)
+		t.Fatalf("UpdateTemplate failed: %v", err)
 	}
 
 	// Should have new_var in NewVars
@@ -354,5 +354,231 @@ func TestMergeMode(t *testing.T) {
 	// UpdatedVars should be empty in merge mode
 	if len(result.UpdatedVars) != 0 {
 		t.Errorf("Expected empty UpdatedVars in merge mode, got %v", result.UpdatedVars)
+	}
+}
+
+func TestCalculateTemplateHashFromDir(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(t *testing.T) string
+		wantErr  bool
+		validate func(t *testing.T, hash string, dir string)
+	}{
+		{
+			name: "deterministic hash for same content",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "file1.txt"), []byte("content1"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "file2.txt"), []byte("content2"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash string, dir string) {
+				// Calculate again and verify same hash
+				hash2, err := CalculateTemplateHashFromDir(dir)
+				if err != nil {
+					t.Fatalf("Second hash calculation failed: %v", err)
+				}
+				if hash != hash2 {
+					t.Errorf("Hash not deterministic: got %s on first call, %s on second", hash, hash2)
+				}
+			},
+		},
+		{
+			name: "file order independence",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				// Create files in different order than they'll be sorted
+				if err := os.WriteFile(filepath.Join(dir, "zzz.txt"), []byte("last"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "aaa.txt"), []byte("first"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "mmm.txt"), []byte("middle"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash string, dir string) {
+				if hash == "" {
+					t.Error("Expected non-empty hash")
+				}
+			},
+		},
+		{
+			name: "different content produces different hash",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content_v1"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash1 string, dir string) {
+				// Modify file content
+				if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content_v2"), 0644); err != nil {
+					t.Fatalf("Failed to modify file: %v", err)
+				}
+				hash2, err := CalculateTemplateHashFromDir(dir)
+				if err != nil {
+					t.Fatalf("Second hash calculation failed: %v", err)
+				}
+				if hash1 == hash2 {
+					t.Error("Expected different hashes for different content")
+				}
+			},
+		},
+		{
+			name: "ign.json excluded from hash",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "template.txt"), []byte("template content"), 0644); err != nil {
+					t.Fatalf("Failed to create template file: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "ign.json"), []byte(`{"name":"test"}`), 0644); err != nil {
+					t.Fatalf("Failed to create ign.json: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash1 string, dir string) {
+				// Modify ign.json
+				if err := os.WriteFile(filepath.Join(dir, "ign.json"), []byte(`{"name":"test","version":"2.0"}`), 0644); err != nil {
+					t.Fatalf("Failed to modify ign.json: %v", err)
+				}
+				hash2, err := CalculateTemplateHashFromDir(dir)
+				if err != nil {
+					t.Fatalf("Second hash calculation failed: %v", err)
+				}
+				if hash1 != hash2 {
+					t.Error("Hash should not change when only ign.json is modified")
+				}
+			},
+		},
+		{
+			name: "empty directory",
+			setup: func(t *testing.T) string {
+				return t.TempDir()
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash string, dir string) {
+				// Empty directory returns empty hash
+				if hash != "" {
+					t.Errorf("Expected empty hash for empty directory, got %s", hash)
+				}
+			},
+		},
+		{
+			name: "single file",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "single.txt"), []byte("single file content"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash string, dir string) {
+				if hash == "" {
+					t.Error("Expected non-empty hash")
+				}
+			},
+		},
+		{
+			name: "hidden files excluded",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "visible.txt"), []byte("visible"), 0644); err != nil {
+					t.Fatalf("Failed to create visible file: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, ".hidden"), []byte("hidden"), 0644); err != nil {
+					t.Fatalf("Failed to create hidden file: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash1 string, dir string) {
+				// Remove hidden file
+				if err := os.Remove(filepath.Join(dir, ".hidden")); err != nil {
+					t.Fatalf("Failed to remove hidden file: %v", err)
+				}
+				hash2, err := CalculateTemplateHashFromDir(dir)
+				if err != nil {
+					t.Fatalf("Second hash calculation failed: %v", err)
+				}
+				if hash1 != hash2 {
+					t.Error("Hash should not change when hidden file is removed (not included in hash)")
+				}
+			},
+		},
+		{
+			name: "error on non-existent directory",
+			setup: func(t *testing.T) string {
+				return "/nonexistent/directory/path"
+			},
+			wantErr: true,
+		},
+		{
+			name: "subdirectories included",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				subdir := filepath.Join(dir, "subdir")
+				if err := os.MkdirAll(subdir, 0755); err != nil {
+					t.Fatalf("Failed to create subdir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(dir, "root.txt"), []byte("root"), 0644); err != nil {
+					t.Fatalf("Failed to create root file: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte("sub"), 0644); err != nil {
+					t.Fatalf("Failed to create sub file: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash1 string, dir string) {
+				// Modify subdirectory file
+				subdir := filepath.Join(dir, "subdir")
+				if err := os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte("modified"), 0644); err != nil {
+					t.Fatalf("Failed to modify sub file: %v", err)
+				}
+				hash2, err := CalculateTemplateHashFromDir(dir)
+				if err != nil {
+					t.Fatalf("Second hash calculation failed: %v", err)
+				}
+				if hash1 == hash2 {
+					t.Error("Hash should change when subdirectory file is modified")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := tt.setup(t)
+			hash, err := CalculateTemplateHashFromDir(dir)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if tt.validate != nil {
+				tt.validate(t, hash, dir)
+			}
+		})
 	}
 }

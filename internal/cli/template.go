@@ -62,26 +62,34 @@ Examples:
 	RunE: runTemplateCheck,
 }
 
-// templateCollectVarsCmd represents the template collect-vars command
-var templateCollectVarsCmd = &cobra.Command{
-	Use:   "collect-vars [PATH]",
-	Short: "Collect variables from templates and update ign.json",
+// templateUpdateCmd represents the template update command
+var templateUpdateCmd = &cobra.Command{
+	Use:   "update [PATH]",
+	Short: "Update ign.json with variables and template hash",
 	Long: `Scan template files for @ign-var: and @ign-if: directives and
-automatically update ign.json with the collected variable definitions.
+automatically update ign.json with the collected variable definitions
+and recalculate the template hash.
 
-This command helps keep ign.json in sync with the actual variables used
-in your template files.
+This command is for TEMPLATE AUTHORS to maintain their template repositories.
+
+Note: This is different from 'ign update', which is for PROJECT USERS who have
+generated a project and want to pull in updates from the template source. When
+project users run 'ign update', this hash is used to detect whether the template
+has changed since their last checkout or update.
+
+This command keeps ign.json in sync with template files and updates
+the hash field that 'ign update' uses to detect template changes.
 
 If PATH is not specified, the current directory is used.
 
 Examples:
-  ign template collect-vars
-  ign template collect-vars ./my-template
-  ign template collect-vars -r           # Recursive scan
-  ign template collect-vars --dry-run    # Preview changes
-  ign template collect-vars --merge      # Only add new variables`,
+  ign template update
+  ign template update ./my-template
+  ign template update -r           # Recursive scan
+  ign template update --dry-run    # Preview changes
+  ign template update --merge      # Only add new variables`,
 	Args: cobra.MaximumNArgs(1),
-	RunE: runTemplateCollectVars,
+	RunE: runTemplateUpdate,
 }
 
 // Template new command flags
@@ -96,18 +104,18 @@ var (
 	templateCheckVerbose   bool
 )
 
-// Template auto-collect-vars command flags
+// Template update command flags
 var (
-	templateCollectRecursive bool
-	templateCollectDryRun    bool
-	templateCollectMerge     bool
+	templateUpdateRecursive bool
+	templateUpdateDryRun    bool
+	templateUpdateMerge     bool
 )
 
 func init() {
 	// Add subcommands to template
 	templateCmd.AddCommand(templateNewCmd)
 	templateCmd.AddCommand(templateCheckCmd)
-	templateCmd.AddCommand(templateCollectVarsCmd)
+	templateCmd.AddCommand(templateUpdateCmd)
 
 	// Flags for template new
 	templateNewCmd.Flags().StringVarP(&templateNewType, "type", "t", "default", "Scaffold type to use (e.g., default, go, web)")
@@ -117,10 +125,12 @@ func init() {
 	templateCheckCmd.Flags().BoolVarP(&templateCheckRecursive, "recursive", "r", false, "Recursively check subdirectories")
 	templateCheckCmd.Flags().BoolVarP(&templateCheckVerbose, "verbose", "v", false, "Show detailed validation info")
 
-	// Flags for template collect-vars
-	templateCollectVarsCmd.Flags().BoolVarP(&templateCollectRecursive, "recursive", "r", false, "Recursively scan subdirectories")
-	templateCollectVarsCmd.Flags().BoolVar(&templateCollectDryRun, "dry-run", false, "Preview changes without writing")
-	templateCollectVarsCmd.Flags().BoolVar(&templateCollectMerge, "merge", false, "Only add new variables, preserve existing")
+	// Flags for template update
+	// Note: These flags control template metadata updates, which differs from
+	// 'ign update' flags that control project file generation
+	templateUpdateCmd.Flags().BoolVarP(&templateUpdateRecursive, "recursive", "r", false, "Recursively scan subdirectories for template files")
+	templateUpdateCmd.Flags().BoolVar(&templateUpdateDryRun, "dry-run", false, "Preview ign.json changes without writing the file")
+	templateUpdateCmd.Flags().BoolVar(&templateUpdateMerge, "merge", false, "Only add new variables to ign.json, preserve existing ones")
 }
 
 func runTemplateCheck(cmd *cobra.Command, args []string) error {
@@ -248,7 +258,7 @@ func runTemplateNew(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTemplateCollectVars(cmd *cobra.Command, args []string) error {
+func runTemplateUpdate(cmd *cobra.Command, args []string) error {
 	// Default to current directory if no path specified
 	path := "."
 	if len(args) > 0 {
@@ -256,27 +266,27 @@ func runTemplateCollectVars(cmd *cobra.Command, args []string) error {
 	}
 
 	printInfo(fmt.Sprintf("Scanning templates in: %s", path))
-	if templateCollectRecursive {
+	if templateUpdateRecursive {
 		printInfo("Mode: Recursive")
 	}
-	if templateCollectDryRun {
+	if templateUpdateDryRun {
 		printWarning("Dry-run mode: no files will be modified")
 	}
-	if templateCollectMerge {
+	if templateUpdateMerge {
 		printInfo("Merge mode: only adding new variables")
 	}
 	printSeparator()
 
 	// Call app layer
-	result, err := app.CollectVars(cmd.Context(), app.CollectVarsOptions{
+	result, err := app.UpdateTemplate(cmd.Context(), app.UpdateTemplateOptions{
 		Path:      path,
-		Recursive: templateCollectRecursive,
-		DryRun:    templateCollectDryRun,
-		Merge:     templateCollectMerge,
+		Recursive: templateUpdateRecursive,
+		DryRun:    templateUpdateDryRun,
+		Merge:     templateUpdateMerge,
 	})
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Failed to collect variables: %v", err))
+		printErrorMsg(fmt.Sprintf("Failed to update template: %v", err))
 		return err
 	}
 
@@ -323,7 +333,7 @@ func runTemplateCollectVars(cmd *cobra.Command, args []string) error {
 	}
 
 	printSeparator()
-	if templateCollectDryRun {
+	if templateUpdateDryRun {
 		printWarning(fmt.Sprintf("Would update: %s", result.IgnJsonPath))
 	} else if result.Updated {
 		printSuccess(fmt.Sprintf("Updated: %s", result.IgnJsonPath))
