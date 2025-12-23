@@ -309,7 +309,33 @@ The calling workflow will provide:
    - Check if the code change addresses the specific issue
    - Apply conservative judgment - only resolve if confident
 
-7. **If Resolvable, Execute Resolution**
+7. **If Resolvable, Post Reply Comment First**
+
+   Before resolving, add a reply to the thread that explains which commit and PR fixed the issue:
+
+   ```bash
+   # Add a reply comment to the review thread
+   gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+     -X POST \
+     -f body="Fixed in commit {fix_commit_sha} (PR #{pr_number})
+
+   Changes made:
+   - {brief_description_of_fix}
+
+   Resolving this thread."
+   ```
+
+   **Reply Format:**
+   ```
+   Fixed in commit {short_sha} (PR #{pr_number})
+
+   Changes made:
+   - {brief description of what was changed to address the feedback}
+
+   Resolving this thread.
+   ```
+
+8. **Then Execute Resolution**
    ```bash
    gh api graphql -f query='
    mutation {
@@ -356,7 +382,9 @@ Return a structured verification report:
     ```
     {current_code_snippet}
     ```
+  Fixed in: commit {short_sha} (PR #{pr_number})
   Resolution Reason: {why_this_was_resolved}
+  Reply Posted: Yes
   Resolution Status: SUCCESS
 
 ---
@@ -389,6 +417,15 @@ Return a structured verification report:
 ```
 
 ## Guidelines
+
+### Always Post Reply Before Resolving
+
+**IMPORTANT**: Before resolving any review thread, you MUST first post a reply comment that explains:
+- Which commit fixed the issue (commit SHA)
+- Which PR the fix is part of
+- Brief description of what was changed
+
+This ensures traceability - anyone looking at the resolved thread can see exactly which commit and PR addressed the feedback.
 
 ### Always Fetch Comments First
 
@@ -468,13 +505,27 @@ Comment: "Add validation for empty input"
 
 3. Analysis: The review asked for input validation, and validation code was added.
 
-4. Resolution: RESOLVED - Execute mutation to resolve thread
+4. Post reply comment:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/123/comments/{comment_id}/replies \
+     -X POST \
+     -f body="Fixed in commit def456 (PR #123)
 
-5. Output:
+   Changes made:
+   - Added input validation for empty input at line 38-40
+
+   Resolving this thread."
+   ```
+
+5. Resolution: RESOLVED - Execute mutation to resolve thread
+
+6. Output:
    ```
    [RESOLVED] src/parser/parser.go:42
      Comment: "Add validation for empty input"
+     Fixed in: commit def456 (PR #123)
      Resolution Reason: Input validation added at line 38-40 with empty string check
+     Reply Posted: Yes
      Resolution Status: SUCCESS
    ```
 
@@ -499,12 +550,25 @@ Comments in thread:
    - Keywords detected: "intentional"
    - Author verified: PR author
 
-3. Resolution: RESOLVED - No action needed acknowledged
+3. Post reply comment acknowledging the no-action decision:
+   ```bash
+   gh api repos/{owner}/{repo}/pulls/456/comments/{comment_id}/replies \
+     -X POST \
+     -f body="Acknowledged in PR #456
 
-4. Output:
+   No code changes needed - this is intentional per the interface contract as explained by the PR author.
+
+   Resolving this thread."
+   ```
+
+4. Resolution: RESOLVED - No action needed acknowledged
+
+5. Output:
    ```
    [RESOLVED] src/config/loader.go:55
      Comment: "Consider adding nil check here"
+     Fixed in: PR #456 (no code change needed)
      Resolution Reason: Acknowledged as no action needed: "This is intentional - the caller guarantees non-nil value per the interface contract"
+     Reply Posted: Yes
      Resolution Status: SUCCESS
    ```

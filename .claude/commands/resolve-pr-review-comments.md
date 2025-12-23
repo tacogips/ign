@@ -250,7 +250,44 @@ prompt: |
 
 For each comment marked as resolvable:
 
-**7.1: Resolve the thread using GraphQL mutation**
+**7.1: Add a reply comment explaining the fix**
+
+Before resolving, add a reply to the thread that explains which commit and PR fixed the issue:
+
+```bash
+# Add a reply comment to the review thread
+gh api repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+  -X POST \
+  -f body="Fixed in commit {fix_commit_sha} (PR #{pr_number})
+
+Changes made:
+- {brief_description_of_fix}
+
+Resolving this thread."
+```
+
+**Reply Format:**
+```
+Fixed in commit {short_sha} (PR #{pr_number})
+
+Changes made:
+- {brief description of what was changed to address the feedback}
+
+Resolving this thread.
+```
+
+**Example Reply:**
+```
+Fixed in commit a8e75b4 (PR #13)
+
+Changes made:
+- Added input validation for empty strings at line 38-40
+- Returns error with descriptive message when input is empty
+
+Resolving this thread.
+```
+
+**7.2: Resolve the thread using GraphQL mutation**
 
 ```bash
 gh api graphql -f query='
@@ -264,7 +301,7 @@ mutation {
 }'
 ```
 
-**7.2: Track resolution results**
+**7.3: Track resolution results**
 
 - Count successful resolutions
 - Log any failures with error details
@@ -290,7 +327,9 @@ mutation {
 {for each resolved comment:}
 [RESOLVED] {path}:{line}
     Comment: "{truncated_body}"
+    Fixed in: commit {short_sha} (PR #{pr_number})
     Reason: {resolution_reason}
+    Reply posted: Yes
 
 ### Failed Resolutions
 {for each failed:}
