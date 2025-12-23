@@ -196,7 +196,7 @@ func TestProcessFilename(t *testing.T) {
 				"name": "../etc/passwd",
 			},
 			wantErr: true,
-			errMsg:  "path traversal",
+			errMsg:  "forward slash", // Now caught at parser layer
 		},
 		{
 			name:     "empty variable value - filename only variable",
@@ -232,7 +232,7 @@ func TestProcessFilename(t *testing.T) {
 				"name": "dir/file",
 			},
 			wantErr: true,
-			errMsg:  "contains path separator",
+			errMsg:  "forward slash", // Now caught at parser layer
 		},
 		{
 			name:     "backslash in variable value (Windows path separator)",
@@ -241,7 +241,7 @@ func TestProcessFilename(t *testing.T) {
 				"name": "dir\\file",
 			},
 			wantErr: true,
-			errMsg:  "contains path separator",
+			errMsg:  "backslash", // Now caught at parser layer
 		},
 		{
 			name:     "dot-dot in variable value",
@@ -250,7 +250,7 @@ func TestProcessFilename(t *testing.T) {
 				"dir": "..",
 			},
 			wantErr: true,
-			errMsg:  "path traversal",
+			errMsg:  "parent directory", // Now caught at parser layer
 		},
 		{
 			name:     "type mismatch",
@@ -261,6 +261,206 @@ func TestProcessFilename(t *testing.T) {
 			wantErr: true,
 			errMsg:  "type mismatch",
 		},
+		{
+			name:     "null byte in variable value",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "file\x00name",
+			},
+			wantErr: true,
+			errMsg:  "null byte",
+		},
+		{
+			name:     "colon in variable value (Windows drive separator)",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "C:",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:     "colon in variable value (NTFS alternate data stream)",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "file:stream",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:     "Windows absolute path with drive and slash (C:/)",
+			filePath: "@ign-var:path@/file.txt",
+			variables: map[string]interface{}{
+				"path": "C:",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		{
+			name:     "Windows UNC path prefix (backslashes)",
+			filePath: "@ign-var:server@/share/file.txt",
+			variables: map[string]interface{}{
+				"server": "\\\\fileserver",
+			},
+			wantErr: true,
+			errMsg:  "backslash",
+		},
+		{
+			name:     "single dot in variable value (current directory)",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": ".",
+			},
+			wantErr: true,
+			errMsg:  "current directory",
+		},
+		{
+			name:     "path traversal with embedded dots at start",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "..hidden",
+			},
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		{
+			name:     "path traversal with embedded dots in middle",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "data..backup",
+			},
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		{
+			name:     "path traversal with embedded dots at end",
+			filePath: "@ign-var:name@.go",
+			variables: map[string]interface{}{
+				"name": "test..",
+			},
+			wantErr: true,
+			errMsg:  "path traversal",
+		},
+		// Edge case: whitespace in middle of filename component
+		{
+			name:     "whitespace in middle of filename",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "my file",
+			},
+			wantErr: false, // Spaces are allowed in filenames
+			want:    "my file.txt",
+		},
+		{
+			name:     "tab character in filename",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "handler\tname",
+			},
+			wantErr: false, // Tab is allowed (though unusual)
+			want:    "handler\tname.txt",
+		},
+		// Edge case: multiple path separators in sequence
+		{
+			name:     "multiple forward slashes",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "dir//file",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "multiple backslashes",
+			filePath: "@ign-var:name@.txt",
+			variables: map[string]interface{}{
+				"name": "path\\\\file",
+			},
+			wantErr: true,
+			errMsg:  "backslash",
+		},
+		// Edge case: mixed valid and invalid characters
+		{
+			name:     "null byte in middle of valid filename",
+			filePath: "@ign-var:name@.backup",
+			variables: map[string]interface{}{
+				"name": "handler\x00",
+			},
+			wantErr: true,
+			errMsg:  "null byte",
+		},
+		{
+			name:     "colon in middle of filename",
+			filePath: "@ign-var:name@.yaml",
+			variables: map[string]interface{}{
+				"name": "config:debug",
+			},
+			wantErr: true,
+			errMsg:  "colon",
+		},
+		// Integration tests: Multiple path components
+		{
+			name:     "multiple components - each valid individually",
+			filePath: "@ign-var:dir1@/@ign-var:dir2@/file.go",
+			variables: map[string]interface{}{
+				"dir1": "pkg",
+				"dir2": "handler",
+			},
+			wantErr: false,
+			want:    "pkg/handler/file.go",
+		},
+		{
+			name:     "multiple components - second component with path separator",
+			filePath: "@ign-var:dir1@/@ign-var:dir2@/file.go",
+			variables: map[string]interface{}{
+				"dir1": "pkg",
+				"dir2": "../etc",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "multiple components - second component with path in value",
+			filePath: "@ign-var:dir1@/@ign-var:dir2@",
+			variables: map[string]interface{}{
+				"dir1": "valid",
+				"dir2": "etc/passwd",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "three-level deep path with valid values",
+			filePath: "a/@ign-var:b@/c.go",
+			variables: map[string]interface{}{
+				"b": "middleware",
+			},
+			wantErr: false,
+			want:    "a/middleware/c.go",
+		},
+		{
+			name:     "three-level deep path with path separator in middle",
+			filePath: "a/@ign-var:b@/c.go",
+			variables: map[string]interface{}{
+				"b": "../secret",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		{
+			name:     "path with absolute path in variable value",
+			filePath: "@ign-var:dir@/@ign-var:file@",
+			variables: map[string]interface{}{
+				"dir":  "valid",
+				"file": "/etc/passwd",
+			},
+			wantErr: true,
+			errMsg:  "forward slash",
+		},
+		// Note: Directive syntax validation (e.g., @ign-var:name@ with colons) happens during parsing,
+		// not during filename generation. The parser validates directive syntax separately from
+		// variable value validation. See internal/template/parser/parser_test.go for directive syntax tests.
 	}
 
 	p := parser.NewParser()
@@ -355,6 +555,8 @@ func TestValidateFilenameComponent(t *testing.T) {
 			wantErr:   true,
 			errMsg:    "path separator",
 		},
+		// Note: null byte and colon validation is done in the parser layer
+		// during variable substitution, not in validateFilenameComponent
 	}
 
 	for _, tt := range tests {
@@ -420,6 +622,21 @@ func TestValidateProcessedPath(t *testing.T) {
 			wantErr:   true,
 			errMsg:    "current directory",
 		},
+		// Note: The following Windows absolute path tests document the expected behavior
+		// but filepath.IsAbs() is platform-specific, so these paths are only detected as
+		// absolute on Windows systems. On Unix/Linux, they appear as relative paths and
+		// won't trigger errors in validateProcessedPath.
+		//
+		// However, real protection happens at the parser level (validateFilenameVarValue)
+		// where these dangerous patterns are rejected:
+		// - C:/path  -> rejected due to ':' in "C:" variable value
+		// - D:\path  -> rejected due to '\' in "D:\Users" variable value
+		// - \\server -> rejected due to '\' in "\\server\share" variable value
+		//
+		// These test cases serve as documentation of the security model:
+		// 1. Parser validates variable values (rejects :, \, /)
+		// 2. Generator validates processed paths (defense-in-depth)
+		// 3. filepath.IsAbs() provides platform-specific absolute path detection
 	}
 
 	for _, tt := range tests {

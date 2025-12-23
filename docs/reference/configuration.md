@@ -9,8 +9,13 @@ Complete reference for all ign configuration file formats, schemas, and filesyst
 | File | Location | Purpose | Required |
 |------|----------|---------|----------|
 | `ign.json` | Template root | Template definition | Yes (in template) |
-| `ign-var.json` | `.ign-config/` | User variables and template reference | Yes (for init) |
+| `ign.json` | `.ign/` | Template reference and hash | Yes (for init) |
+| `ign-var.json` | `.ign/` | User variables | Yes (for init) |
 | `config.json` | `~/.config/ign/` | Global ign configuration | No |
+
+**Note:** There are two different `ign.json` files:
+1. **Template `ign.json`** - Located in the template repository root, defines template metadata and variable definitions
+2. **Project `ign.json`** - Located in `.ign/` directory, stores template source reference and content hash
 
 ---
 
@@ -230,19 +235,31 @@ Defines template metadata, required variables, and template-specific settings.
 
 ---
 
-## 2. Build Configuration (`ign-var.json`)
+## 2. Project Configuration Files (`.ign/`)
 
-### 2.1 Purpose
+The `.ign/` directory contains two configuration files that work together:
 
-User-created file that specifies template source and variable values for project generation.
+1. **`ign.json`** - Template source reference and content hash
+2. **`ign-var.json`** - User-provided variable values
 
-**Location:** `.ign-config/ign-var.json` (or custom path via `--config`)
+This separation allows:
+- Variables to be edited independently without affecting template reference
+- Template hash verification for integrity checking
+- Cleaner separation of concerns
 
-**Created by:** `ign build init` command
+---
 
-**Used by:** `ign init` command
+## 2.1 Project Template Reference (`ign.json`)
 
-### 2.2 Schema
+### Purpose
+
+Stores the template source reference and a hash of the downloaded template content for verification.
+
+**Location:** `.ign/ign.json`
+
+**Created by:** `ign checkout` command
+
+### Schema
 
 ```json
 {
@@ -251,21 +268,17 @@ User-created file that specifies template source and variable values for project
     "path": "templates/subdir",
     "ref": "v1.0.0"
   },
-  "variables": {
-    "variable_name": "value",
-    "another_var": 42,
-    "feature_flag": true,
-    "file_content": "@file:relative/path.txt"
-  },
+  "hash": "sha256:a1b2c3d4e5f6...",
   "metadata": {
     "generated_at": "2025-12-09T10:30:00Z",
-    "generated_by": "ign build init",
-    "template_version": "1.0.0"
+    "generated_by": "ign checkout",
+    "template_name": "go-rest-api",
+    "template_version": "2.1.0"
   }
 }
 ```
 
-### 2.3 Fields
+### Fields
 
 #### Template Section
 
@@ -284,23 +297,71 @@ User-created file that specifies template source and variable values for project
 }
 ```
 
-**Path Examples:**
+#### Hash Field
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `hash` | string | Yes | SHA256 hash of template content |
+
+The hash is calculated from all template file paths and contents, sorted deterministically. This allows verification that the template hasn't changed since checkout.
+
+#### Metadata Section
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `generated_at` | string | No | ISO 8601 timestamp |
+| `generated_by` | string | No | Command that generated the file |
+| `template_name` | string | No | Template name from template's ign.json |
+| `template_version` | string | No | Template version |
+
+### Complete Example
+
+**.ign/ign.json:**
 ```json
 {
-  "url": "github.com/owner/templates",
-  "path": "go/basic"
+  "template": {
+    "url": "github.com/myorg/templates",
+    "path": "go/rest-api",
+    "ref": "v2.1.0"
+  },
+  "hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "metadata": {
+    "generated_at": "2025-12-09T10:30:00Z",
+    "generated_by": "ign checkout",
+    "template_name": "go-rest-api",
+    "template_version": "2.1.0"
+  }
 }
 ```
 
-**Ref Examples:**
+---
+
+## 2.2 User Variables (`ign-var.json`)
+
+### Purpose
+
+Stores user-provided variable values for template generation.
+
+**Location:** `.ign/ign-var.json`
+
+**Created by:** `ign checkout` command
+
+**Edited by:** User (to customize variable values)
+
+### Schema
+
 ```json
 {
-  "ref": "main",
-  "ref": "v2.1.0",
-  "ref": "abc123def",
-  "ref": "feature/new-template"
+  "variables": {
+    "variable_name": "value",
+    "another_var": 42,
+    "feature_flag": true,
+    "file_content": "@file:relative/path.txt"
+  }
 }
 ```
+
+### Fields
 
 #### Variables Section
 
@@ -349,39 +410,17 @@ Contains all user-provided variable values:
 **File Reference Rules:**
 
 - Prefix: `@file:`
-- Path: Relative to `.ign-config/` directory
-- Example: `@file:license.txt` resolves to `.ign-config/license.txt`
+- Path: Relative to `.ign/` directory
+- Example: `@file:license.txt` resolves to `.ign/license.txt`
 - Can use subdirectories: `@file:templates/readme.md`
 - File must exist when `ign init` runs
 - Content is read as-is (including newlines)
 
-#### Metadata Section (Optional)
+### Complete Example
 
-Auto-generated by `ign build init`, informational only:
-
+**.ign/ign-var.json:**
 ```json
 {
-  "metadata": {
-    "generated_at": "2025-12-09T10:30:00Z",
-    "generated_by": "ign build init",
-    "template_name": "go-rest-api",
-    "template_version": "2.1.0",
-    "ign_version": "1.0.0"
-  }
-}
-```
-
-### 2.4 Complete Example
-
-**.ign-config/ign-var.json:**
-```json
-{
-  "template": {
-    "url": "github.com/myorg/templates",
-    "path": "go/rest-api",
-    "ref": "v2.1.0"
-  },
-
   "variables": {
     "project_name": "user-service",
     "go_module_path": "github.com/mycompany/user-service",
@@ -390,29 +429,25 @@ Auto-generated by `ign build init`, informational only:
     "enable_swagger": true,
     "enable_docker": true,
     "license_header": "@file:license-header.txt"
-  },
-
-  "metadata": {
-    "generated_at": "2025-12-09T10:30:00Z",
-    "generated_by": "ign build init v1.0.0",
-    "template_name": "go-rest-api",
-    "template_version": "2.1.0"
   }
 }
 ```
 
-**.ign-config/license-header.txt:**
+**.ign/license-header.txt:**
 ```
 Copyright (c) 2025 My Company, Inc.
 Licensed under the Apache License, Version 2.0
 ```
 
-### 2.5 Generation Process
+---
 
-**Step 1: `ign build init github.com/myorg/templates/go/rest-api`**
+## 2.3 Generation Process
 
-Creates `.ign-config/ign-var.json` with empty variable values:
+**Step 1: `ign checkout github.com/myorg/templates/go/rest-api`**
 
+Creates two files in `.ign/`:
+
+**.ign/ign.json:**
 ```json
 {
   "template": {
@@ -420,6 +455,19 @@ Creates `.ign-config/ign-var.json` with empty variable values:
     "path": "go/rest-api",
     "ref": "main"
   },
+  "hash": "sha256:...",
+  "metadata": {
+    "generated_at": "2025-12-09T10:30:00Z",
+    "generated_by": "ign checkout",
+    "template_name": "go-rest-api",
+    "template_version": "2.1.0"
+  }
+}
+```
+
+**.ign/ign-var.json:**
+```json
+{
   "variables": {
     "project_name": "",
     "go_module_path": "",
@@ -428,23 +476,17 @@ Creates `.ign-config/ign-var.json` with empty variable values:
     "enable_swagger": true,
     "enable_docker": true,
     "license_header": ""
-  },
-  "metadata": {
-    "generated_at": "2025-12-09T10:30:00Z",
-    "generated_by": "ign build init v1.0.0",
-    "template_name": "go-rest-api",
-    "template_version": "2.1.0"
   }
 }
 ```
 
-**Step 2: User edits file**
+**Step 2: User edits ign-var.json**
 
 User fills in required values and creates referenced files.
 
 **Step 3: `ign init --output ./my-project`**
 
-Reads configuration and generates project.
+Reads both configuration files and generates project.
 
 ---
 
@@ -486,7 +528,7 @@ Global settings for ign behavior across all projects.
     "verbose": false
   },
   "defaults": {
-    "build_dir": ".ign-config",
+    "build_dir": ".ign",
   }
 }
 ```
@@ -534,7 +576,7 @@ Global settings for ign behavior across all projects.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `build_dir` | string | `".ign-config"` | Default build directory name |
+| `build_dir` | string | `".ign"` | Default build directory name |
 | `output_dir` | string | `"."` | Default output directory for `ign init` |
 
 ### 3.4 Complete Example
@@ -580,7 +622,7 @@ Global settings for ign behavior across all projects.
   },
 
   "defaults": {
-    "build_dir": ".ign-config",
+    "build_dir": ".ign",
     "output_dir": "."
   }
 }
@@ -710,14 +752,14 @@ my-workspace/
 **After `ign build init`:**
 ```
 my-workspace/
-└── .ign-config/
+└── .ign/
     └── ign-var.json          # Generated build configuration
 ```
 
 **User adds files:**
 ```
 my-workspace/
-└── .ign-config/
+└── .ign/
     ├── ign-var.json          # Build configuration
     ├── license-header.txt    # For @file: references
     └── templates/
@@ -727,7 +769,7 @@ my-workspace/
 **After `ign init --output ./my-project`:**
 ```
 my-workspace/
-├── .ign-config/               # Build config (untouched)
+├── .ign/               # Build config (untouched)
 │   ├── ign-var.json
 │   ├── license-header.txt
 │   └── templates/
@@ -812,7 +854,7 @@ Ign automatically ignores these patterns (cannot be overridden):
 ```
 ign.json                      # Template config (not deployed)
 .git/                         # Git directory
-.ign-config/                   # Build configuration
+.ign/                   # Build configuration
 ```
 
 ### 5.2 Template-Specific Ignores
@@ -929,7 +971,7 @@ All configuration files are validated against JSON schemas:
 
 ```bash
 # Validate config files
-ign validate --config .ign-config/ign-var.json
+ign validate --config .ign/ign-var.json
 ign validate --template ./template/ign.json
 
 # Validate before generation
@@ -975,26 +1017,33 @@ interface IgnJson {
 }
 ```
 
-### ign-var.json Schema
+### Project ign.json Schema (`.ign/ign.json`)
 
 ```typescript
-interface IgnVarJson {
+interface IgnConfig {
   template: {
     url: string;                 // Required
     path?: string;
     ref?: string;
   };
 
-  variables: {
-    [key: string]: string | number | boolean;
-  };
+  hash: string;                  // Required - SHA256 hash of template
 
   metadata?: {
     generated_at?: string;
     generated_by?: string;
     template_name?: string;
     template_version?: string;
-    ign_version?: string;
+  };
+}
+```
+
+### ign-var.json Schema
+
+```typescript
+interface IgnVarJson {
+  variables: {
+    [key: string]: string | number | boolean;
   };
 }
 ```

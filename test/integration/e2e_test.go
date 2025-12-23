@@ -15,7 +15,7 @@ import (
 func TestE2E_CompleteWorkflow(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "my-project")
 
 	// Copy fixture to temp directory
@@ -29,7 +29,7 @@ func TestE2E_CompleteWorkflow(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Step 1: Init
 	t.Log("Step 1: Running init")
@@ -129,10 +129,10 @@ func TestE2E_CompleteWorkflow(t *testing.T) {
 		t.Errorf("ign.json should not be in output directory")
 	}
 
-	// Verify .ign-config NOT copied
-	ignConfigPath := filepath.Join(outputDir, ".ign-config")
+	// Verify .ign NOT copied
+	ignConfigPath := filepath.Join(outputDir, ".ign")
 	if _, err := os.Stat(ignConfigPath); !os.IsNotExist(err) {
-		t.Errorf(".ign-config should not be in output directory")
+		t.Errorf(".ign should not be in output directory")
 	}
 
 	t.Log("E2E test completed successfully")
@@ -174,7 +174,7 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create temp directory for this subtest
 			tempDir := t.TempDir()
-			configDir := filepath.Join(tempDir, ".ign-config")
+			configDir := filepath.Join(tempDir, ".ign")
 			outputDir := filepath.Join(tempDir, "output")
 
 			// Copy fixture to temp directory
@@ -188,7 +188,7 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 			if err := os.Chdir(tempDir); err != nil {
 				t.Fatalf("failed to change to temp directory: %v", err)
 			}
-			defer os.Chdir(origDir)
+			defer func() { _ = os.Chdir(origDir) }()
 
 			// Init
 			if err := app.Init(context.Background(), app.InitOptions{
@@ -247,7 +247,7 @@ func TestE2E_MultipleTemplates(t *testing.T) {
 func TestE2E_DryRun(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Copy fixture to temp directory
@@ -261,7 +261,7 @@ func TestE2E_DryRun(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Init
 	if err := app.Init(context.Background(), app.InitOptions{
@@ -331,7 +331,7 @@ func TestE2E_DryRun(t *testing.T) {
 func TestE2E_ErrorHandling(t *testing.T) {
 	t.Run("missing required variable", func(t *testing.T) {
 		tempDir := t.TempDir()
-		configDir := filepath.Join(tempDir, ".ign-config")
+		configDir := filepath.Join(tempDir, ".ign")
 		outputDir := filepath.Join(tempDir, "output")
 
 		// Copy fixture to temp directory
@@ -345,7 +345,7 @@ func TestE2E_ErrorHandling(t *testing.T) {
 		if err := os.Chdir(tempDir); err != nil {
 			t.Fatalf("failed to change to temp directory: %v", err)
 		}
-		defer os.Chdir(origDir)
+		defer func() { _ = os.Chdir(origDir) }()
 
 		// Init with simple template
 		if err := app.Init(context.Background(), app.InitOptions{
@@ -377,7 +377,7 @@ func TestE2E_ErrorHandling(t *testing.T) {
 		ignVar.Variables["enable_feature"] = false
 
 		updatedData, _ := json.MarshalIndent(ignVar, "", "  ")
-		os.WriteFile(ignVarPath, updatedData, 0644)
+		_ = os.WriteFile(ignVarPath, updatedData, 0644)
 
 		// Execute checkout
 		_, err = app.Checkout(context.Background(), app.CheckoutOptions{
@@ -393,16 +393,16 @@ func TestE2E_ErrorHandling(t *testing.T) {
 
 	t.Run("missing ign-var.json", func(t *testing.T) {
 		tempDir := t.TempDir()
-		configDir := filepath.Join(tempDir, ".ign-config")
+		configDir := filepath.Join(tempDir, ".ign")
 		outputDir := filepath.Join(tempDir, "output")
 
 		// Create config dir but no ign-var.json
-		os.MkdirAll(configDir, 0755)
+		_ = os.MkdirAll(configDir, 0755)
 
 		// Change directory
 		oldWd, _ := os.Getwd()
-		defer os.Chdir(oldWd)
-		os.Chdir(tempDir)
+		defer func() { _ = os.Chdir(oldWd) }()
+		_ = os.Chdir(tempDir)
 
 		// Execute checkout
 		_, err := app.Checkout(context.Background(), app.CheckoutOptions{
@@ -411,8 +411,8 @@ func TestE2E_ErrorHandling(t *testing.T) {
 
 		if err == nil {
 			t.Errorf("expected error but got nil")
-		} else if !contains(err.Error(), "ign-var.json") {
-			t.Errorf("error message does not contain expected substring: ign-var.json\nGot: %v", err)
+		} else if !contains(err.Error(), "ign.json") {
+			t.Errorf("error message does not contain expected substring: ign.json\nGot: %v", err)
 		}
 	})
 }

@@ -64,8 +64,14 @@ func ProcessFilename(ctx context.Context, filePath string, vars parser.Variables
 }
 
 // validateFilenameComponent validates a single processed filename component.
+// Note: Security validation for dangerous characters (null bytes, colons) in variable values
+// is performed during variable substitution in the parser layer.
+// This function validates the overall component structure after substitution.
 func validateFilenameComponent(processed, original string) error {
-	// Check for path traversal in component (must check before trimming)
+	// Check for path traversal in component (must check before trimming).
+	// Note: While the parser already rejects ".." as a complete variable value,
+	// this check catches cases like "data..backup" where ".." appears within the value.
+	// This provides defense-in-depth validation at the component level.
 	if strings.Contains(processed, "..") {
 		return fmt.Errorf("invalid filename component: %q contains path traversal (..) after variable substitution (original: %q)", processed, original)
 	}
@@ -91,7 +97,12 @@ func validateProcessedPath(processed, original string) error {
 		return fmt.Errorf("invalid filename: %q is absolute path after variable substitution (original: %q)", processed, original)
 	}
 
-	// Use filepath.Clean to normalize and check for path traversal
+	// Use filepath.Clean to normalize and check for path traversal.
+	// Note: While validateFilenameComponent already checks for ".." in individual components,
+	// this path-level validation serves as additional defense-in-depth by checking the
+	// complete normalized path. filepath.Clean resolves sequences like "a/../b" which
+	// wouldn't exist after component validation, but this check ensures no edge cases
+	// slip through in path construction logic.
 	cleaned := filepath.Clean(processed)
 
 	// After cleaning, if the path starts with "..", it's trying to escape

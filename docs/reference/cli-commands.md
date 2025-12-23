@@ -19,7 +19,7 @@ Complete reference for all ign command-line interface commands, flags, and behav
 
 ### 1.1 `ign build init`
 
-Create a new `.ign-config/` directory with `ign-var.json` for a template.
+Create a new `.ign/` directory with `ign-var.json` for a template.
 
 **Syntax:**
 ```bash
@@ -51,15 +51,15 @@ ign build init github.com/owner/repo --output ./my-config
 
 | Flag | Short | Type | Default | Description |
 |------|-------|------|---------|-------------|
-| `--output` | `-o` | string | `.ign-config` | Output directory for build config |
+| `--output` | `-o` | string | `.ign` | Output directory for build config |
 | `--ref` | `-r` | string | `main` | Git branch, tag, or commit SHA |
 | `--config` | `-c` | string | `~/.config/ign/config.json` | Path to global config file |
-| `--force` | `-f` | bool | `false` | Overwrite existing .ign-config directory |
+| `--force` | `-f` | bool | `false` | Overwrite existing .ign directory |
 
 **Behavior:**
 
 1. **Validate URL**: Check if URL is accessible and contains `ign.json`
-2. **Create directory**: Create output directory (default: `.ign-config/`)
+2. **Create directory**: Create output directory (default: `.ign/`)
 3. **Fetch template**: Clone or download template from GitHub
 4. **Read ign.json**: Parse template configuration
 5. **Generate ign-var.json**: Create variable file with:
@@ -73,10 +73,10 @@ ign build init github.com/owner/repo --output ./my-config
 Initializing build configuration...
 
 ✓ Template found: github.com/owner/repo/templates/go-basic@v1.2.0
-✓ Created: .ign-config/ign-var.json
+✓ Created: .ign/ign-var.json
 
 Next steps:
-1. Edit .ign-config/ign-var.json to set variable values
+1. Edit .ign/ign-var.json to set variable values
 2. Run: ign init --output ./my-project
 
 Variables to configure (5):
@@ -94,7 +94,7 @@ Variables to configure (5):
 | Template not found | URL doesn't exist or not accessible | 1 |
 | Missing ign.json | Repository doesn't have ign.json | 1 |
 | Invalid ign.json | Malformed JSON or schema error | 1 |
-| Directory exists | `.ign-config/` exists and `--force` not used | 1 |
+| Directory exists | `.ign/` exists and `--force` not used | 1 |
 | Network error | Cannot reach GitHub | 2 |
 
 ### 1.2 URL Formats
@@ -152,7 +152,7 @@ owner/repo/templates/go-basic
 
 ### 2.1 `ign init`
 
-Generate project files from template using `.ign-config/ign-var.json`.
+Generate project files from template using `.ign/ign-var.json`.
 
 **Syntax:**
 ```bash
@@ -183,7 +183,7 @@ ign init --dry-run
 |------|-------|------|---------|-------------|
 | `--output` | `-o` | string | `.` | Output directory for generated project |
 | `--overwrite` | `-w` | bool | `false` | Overwrite existing files |
-| `--config` | `-c` | string | `.ign-config/ign-var.json` | Path to variable config file |
+| `--config` | `-c` | string | `.ign/ign-var.json` | Path to variable config file |
 | `--dry-run` | `-d` | bool | `false` | Show what would be generated without writing files |
 | `--verbose` | `-v` | bool | `false` | Show detailed processing information |
 
@@ -191,7 +191,8 @@ ign init --dry-run
 
 ```
 1. Read Configuration
-   ├─ Load ign-var.json
+   ├─ Load ign.json (template source and hash)
+   ├─ Load ign-var.json (variables)
    ├─ Validate all required variables are set
    └─ Resolve @file: references
 
@@ -246,7 +247,7 @@ Project ready at: ./my-project
 ```bash
 $ ign init --output ./project --verbose
 
-[INFO] Reading config: .ign-config/ign-var.json
+[INFO] Reading config: .ign/ign-var.json
 [INFO] Variables loaded: 5
 [INFO] Fetching template: github.com/owner/repo@main
 [INFO] Template cached at: ~/.cache/ign/github.com/owner/repo/main
@@ -310,7 +311,7 @@ No files written (dry run).
 - Other permissions use system defaults
 
 **Special Files:**
-- `.ign-config/`: Never touched during `ign init`
+- `.ign/`: Never touched during `ign init`
 - `ign.json`: Never copied to output (template config only)
 - Hidden files (`.file`): Processed normally
 - Binary files: Copied as-is (no template processing)
@@ -335,7 +336,7 @@ Output (if dir1/ exists with file1.txt):
 ### 2.3 Error Handling
 
 **Fatal Errors (exit immediately):**
-- Missing `.ign-config/ign-var.json`
+- Missing `.ign/ign.json` or `.ign/ign-var.json`
 - Invalid JSON in config file
 - Missing required variables
 - Template fetch failure
@@ -351,11 +352,11 @@ Output (if dir1/ exists with file1.txt):
 ```
 Error: Missing required variable
 
-File: .ign-config/ign-var.json
+File: .ign/ign-var.json
 Variable: "database_url" (string)
 
 Template requires this variable but no value was provided.
-Please edit .ign-config/ign-var.json and set a value.
+Please edit .ign/ign-var.json and set a value.
 
 Exit code: 1
 ```
@@ -567,9 +568,9 @@ TEMPLATES=(
 
 for template in "${TEMPLATES[@]}"; do
   name=$(basename $template)
-  ign build init $template --output .ign-config-$name
+  ign build init $template --output .ign-$name
   # Edit variables...
-  ign init --config .ign-config-$name/ign-var.json --output ./$name
+  ign init --config .ign-$name/ign-var.json --output ./$name
 done
 ```
 
@@ -670,11 +671,11 @@ Solutions:
 ```
 Error: Required variable not set
 Variable: project_name (string)
-File: .ign-config/ign-var.json
+File: .ign/ign-var.json
 ```
 
 Solutions:
-- Edit `.ign-config/ign-var.json`
+- Edit `.ign/ign-var.json`
 - Set value for the variable
 - Remove the variable if optional (check template ign.json)
 
@@ -776,7 +777,7 @@ ign help [command]
 **New Project:**
 ```bash
 ign build init github.com/owner/template
-vim .ign-config/ign-var.json
+vim .ign/ign-var.json
 ign init --output ./my-project
 ```
 
@@ -789,7 +790,7 @@ ign init --overwrite
 **Different Template Version:**
 ```bash
 ign build init github.com/owner/template --ref v2.0.0 --force
-vim .ign-config/ign-var.json
+vim .ign/ign-var.json
 ign init --output ./my-project-v2
 ```
 

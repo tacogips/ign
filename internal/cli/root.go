@@ -6,13 +6,14 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/debug"
+	"github.com/tacogips/ign/internal/version"
 )
 
+// Alias version variables for compatibility
 var (
-	// Build-time variables set via ldflags
-	Version   = "dev"
-	GitCommit = "unknown"
-	BuildDate = "unknown"
+	Version   = version.Version
+	GitCommit = version.GitCommit
+	BuildDate = version.BuildDate
 )
 
 // Global flags
@@ -29,7 +30,7 @@ var rootCmd = &cobra.Command{
 	Long: `ign is a CLI tool for initializing projects from templates.
 
 Use "ign checkout <url> [output-path]" to:
-  1. Create .ign-config directory with configuration
+  1. Create .ign directory with configuration
   2. Interactively prompt for template variables
   3. Generate project files from the template
 

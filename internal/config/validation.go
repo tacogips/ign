@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
+	"strings"
 
 	"github.com/tacogips/ign/internal/template/model"
 )
@@ -70,17 +72,46 @@ func ValidateIgnJson(ign *model.IgnJson) error {
 }
 
 // ValidateIgnVarJson validates build configuration (ign-var.json).
+// ign-var.json now contains only variables, which are validated against
+// the template's ign.json during generation, so this is a simple nil check.
 func ValidateIgnVarJson(ignVar *model.IgnVarJson) error {
 	if ignVar == nil {
 		return NewConfigErrorWithField(ConfigValidationFailed, "ign-var.json", "", "ign-var.json cannot be nil")
 	}
 
-	// Validate template source
-	if ignVar.Template.URL == "" {
-		return NewConfigErrorWithField(ConfigValidationFailed, "ign-var.json", "template.url", "template URL is required")
+	// Variables can be empty (will be validated against template's ign.json during generation)
+	return nil
+}
+
+// ValidateIgnConfig validates user project configuration file (.ign/ign.json).
+// This validates the project's configuration file which contains template source information,
+// NOT the template's own ign.json metadata file. For template metadata validation, see ValidateIgnJson.
+func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
+	if ignConfig == nil {
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "", "project configuration (.ign/ign.json) cannot be nil")
 	}
 
-	// Variables can be empty (will be validated against ign.json during generation)
+	// Validate template source
+	if ignConfig.Template.URL == "" {
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "template.url", "template URL is required")
+	}
+
+	// Validate URL format
+	if err := validateTemplateURL(ignConfig.Template.URL); err != nil {
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "template.url", err.Error())
+	}
+
+	// Hash should be present (calculated during checkout)
+	if ignConfig.Hash == "" {
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "hash", "template hash is required")
+	}
+
+	// Validate hash format (must be valid SHA256: 64 hexadecimal characters)
+	if !isValidSHA256Hash(ignConfig.Hash) {
+		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "hash",
+			"hash must be a valid SHA256 string (64 hexadecimal characters)")
+	}
+
 	return nil
 }
 
@@ -162,6 +193,52 @@ func validateVariables(variables map[string]model.VarDef) error {
 					fmt.Sprintf("invalid regex pattern: %v", err),
 				)
 			}
+
+			// Validate default value against pattern
+			if varDef.Default != nil {
+				if str, ok := varDef.Default.(string); ok {
+					matched, err := regexp.MatchString(varDef.Pattern, str)
+					if err != nil {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.pattern", name),
+							fmt.Sprintf("error matching pattern: %v", err),
+						)
+					}
+					if !matched {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.default", name),
+							fmt.Sprintf("default value %q does not match pattern %q", str, varDef.Pattern),
+						)
+					}
+				}
+			}
+
+			// Validate example value against pattern
+			if varDef.Example != nil {
+				if str, ok := varDef.Example.(string); ok {
+					matched, err := regexp.MatchString(varDef.Pattern, str)
+					if err != nil {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.pattern", name),
+							fmt.Sprintf("error matching pattern: %v", err),
+						)
+					}
+					if !matched {
+						return NewConfigErrorWithField(
+							ConfigValidationFailed,
+							"ign.json",
+							fmt.Sprintf("variables.%s.example", name),
+							fmt.Sprintf("example value %q does not match pattern %q", str, varDef.Pattern),
+						)
+					}
+				}
+			}
 		}
 
 		// Validate min/max for integer types
@@ -182,6 +259,50 @@ func validateVariables(variables map[string]model.VarDef) error {
 				fmt.Sprintf("variables.%s", name),
 				fmt.Sprintf("min (%d) cannot be greater than max (%d)", *varDef.Min, *varDef.Max),
 			)
+		}
+
+		// Validate default value against min/max constraints
+		if varDef.Default != nil && varDef.Type == model.VarTypeInt {
+			if intVal, ok := varDef.Default.(int); ok {
+				if varDef.Min != nil && intVal < *varDef.Min {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.default", name),
+						fmt.Sprintf("default value %d is less than min %d", intVal, *varDef.Min),
+					)
+				}
+				if varDef.Max != nil && intVal > *varDef.Max {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.default", name),
+						fmt.Sprintf("default value %d is greater than max %d", intVal, *varDef.Max),
+					)
+				}
+			}
+		}
+
+		// Validate example value against min/max constraints
+		if varDef.Example != nil && varDef.Type == model.VarTypeInt {
+			if intVal, ok := varDef.Example.(int); ok {
+				if varDef.Min != nil && intVal < *varDef.Min {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.example", name),
+						fmt.Sprintf("example value %d is less than min %d", intVal, *varDef.Min),
+					)
+				}
+				if varDef.Max != nil && intVal > *varDef.Max {
+					return NewConfigErrorWithField(
+						ConfigValidationFailed,
+						"ign.json",
+						fmt.Sprintf("variables.%s.example", name),
+						fmt.Sprintf("example value %d is greater than max %d", intVal, *varDef.Max),
+					)
+				}
+			}
 		}
 	}
 
@@ -218,5 +339,55 @@ func validateValueType(value interface{}, expectedType model.VarType) error {
 			return fmt.Errorf("expected bool, got %T", value)
 		}
 	}
+	return nil
+}
+
+// validateTemplateURL validates that a template URL is in a supported format.
+// Supports:
+//   - Full URLs: https://github.com/owner/repo, git@github.com:owner/repo.git
+//   - GitHub shorthand: github.com/owner/repo, github:owner/repo
+//   - Local paths: /path/to/template, ./relative/path
+func validateTemplateURL(templateURL string) error {
+	templateURL = strings.TrimSpace(templateURL)
+	if templateURL == "" {
+		return fmt.Errorf("template URL cannot be empty")
+	}
+
+	// Check for github: shorthand
+	if strings.HasPrefix(templateURL, "github:") {
+		// Format: github:owner/repo
+		return nil
+	}
+
+	// Check for git@ SSH format
+	if strings.HasPrefix(templateURL, "git@") {
+		// Format: git@github.com:owner/repo.git
+		return nil
+	}
+
+	// Check for local filesystem path
+	if strings.HasPrefix(templateURL, "/") || strings.HasPrefix(templateURL, "./") || strings.HasPrefix(templateURL, "../") {
+		// Local path (absolute or relative)
+		return nil
+	}
+
+	// Check for github.com shorthand (without scheme)
+	if strings.HasPrefix(templateURL, "github.com/") {
+		// Format: github.com/owner/repo
+		return nil
+	}
+
+	// Try parsing as URL
+	parsedURL, err := url.Parse(templateURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %v", err)
+	}
+
+	// Check for valid scheme
+	if parsedURL.Scheme != "" && parsedURL.Scheme != "https" && parsedURL.Scheme != "http" {
+		return fmt.Errorf("unsupported URL scheme %q (supported: https, http, git@, github:, or local path)", parsedURL.Scheme)
+	}
+
+	// If we got here, it's either a valid URL or a format we recognize
 	return nil
 }

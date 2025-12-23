@@ -17,10 +17,10 @@ var checkoutCmd = &cobra.Command{
 	Long: `Initialize configuration and generate project files from a template.
 
 This command combines initialization and checkout into a single step:
-1. If .ign-config doesn't exist, creates it and prompts for variables interactively
+1. If .ign doesn't exist, creates it and prompts for variables interactively
 2. Fetches the template and generates project files
 
-If .ign-config already exists, the command will error unless --force is specified.
+If .ign already exists, the command will error unless --force is specified.
 With --force, existing configuration is backed up and reinitialized.
 
 URL Formats:
@@ -67,14 +67,14 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		outputPath = args[1]
 	}
 
-	configDir := ".ign-config"
+	configDir := ".ign"
 	configExists := false
 
-	// Check if .ign-config already exists
+	// Check if .ign already exists
 	if _, err := os.Stat(configDir); err == nil {
 		configExists = true
 		if !checkoutForce {
-			printInfo("Configuration already exists at .ign-config")
+			printInfo("Configuration already exists at .ign")
 			printInfo("(use --force to backup and reinitialize)")
 			return nil
 		}
@@ -158,7 +158,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		}
 
 		printInfo("")
-		printInfo("Configuration saved to: .ign-config/ign-var.json")
+		printInfo("Configuration saved to: .ign/ign-var.json")
 		printInfo(fmt.Sprintf("Project ready at: %s", outputPath))
 	}
 

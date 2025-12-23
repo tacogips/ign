@@ -215,20 +215,20 @@ Load variable value from a file (useful for large content like license headers, 
 ```
 
 **Rules:**
-- Paths are relative to `.ign-config/` directory
+- Paths are relative to `.ign/` directory
 - File content is read as-is (preserves whitespace, newlines)
 - Files are read during `ign init` execution
 - Missing files cause an error
 
 **Example:**
 
-`.ign-config/license-header.txt`:
+`.ign/license-header.txt`:
 ```
 Copyright (c) 2025 My Company
 Licensed under MIT License
 ```
 
-`.ign-config/ign-var.json`:
+`.ign/ign-var.json`:
 ```json
 {
   "variables": {

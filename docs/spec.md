@@ -80,16 +80,21 @@ An **Ign Root** is a GitHub repository (or repository + subdirectory path) that 
 +-- flake.nix            # Template file (deployed)
 ```
 
-### 2.2 Build Directory (`.ign-config/`)
+### 2.2 Build Directory (`.ign/`)
 
 User-created directory containing build configuration:
 
 ```
 <working-dir>/
-+-- .ign-config/
-    |-- ign-var.json           # Template reference + variables
++-- .ign/
+    |-- ign.json               # Template reference + hash
+    |-- ign-var.json           # User variables
     +-- license-header.txt     # Files for @file: references (optional)
 ```
+
+**Note:** The configuration is split into two files:
+- `ign.json` - Template source (URL, path, ref) and content hash for verification
+- `ign-var.json` - User-provided variable values only
 
 ### 2.3 Template Sources
 
@@ -135,12 +140,12 @@ The implementation uses an abstraction layer (interface) via the TemplateProvide
 Step 1: Initialize build configuration
 +------------------------------------------------------------------+
 $ ign build init github.com/owner/templates/go-basic
-  -> Creates .ign-config/ign-var.json
+  -> Creates .ign/ign-var.json
 
 Step 2: Edit variables
 +------------------------------------------------------------------+
-$ vim .ign-config/ign-var.json
-$ vim .ign-config/license-header.txt  (if using @file:)
+$ vim .ign/ign-var.json
+$ vim .ign/license-header.txt  (if using @file:)
 
 Step 3: Generate project
 +------------------------------------------------------------------+
@@ -152,8 +157,8 @@ $ ign init --output ./my-project
 
 | Command | Purpose | Example |
 |---------|---------|---------|
-| `ign build init <source>` | Create `.ign-config/` with `ign-var.json` | `ign build init github.com/owner/repo`<br>`ign build init ./my-template` |
-| `ign init` | Generate project from `.ign-config/ign-var.json` | `ign init --output ./my-project` |
+| `ign build init <source>` | Create `.ign/` with `ign-var.json` | `ign build init github.com/owner/repo`<br>`ign build init ./my-template` |
+| `ign init` | Generate project from `.ign/ign-var.json` | `ign init --output ./my-project` |
 | `ign init --overwrite` | Regenerate, overwriting existing files | `ign init --overwrite` |
 
 **Template sources:**
@@ -194,7 +199,8 @@ See [Template Syntax Reference](reference/template-syntax.md) for detailed synta
 | File | Location | Purpose |
 |------|----------|---------|
 | `ign.json` | Template root | Template definition (not deployed) |
-| `ign-var.json` | `.ign-config/` | User variables and template reference |
+| `ign.json` | `.ign/` | Template reference and content hash |
+| `ign-var.json` | `.ign/` | User-provided variable values |
 | `config.json` | `~/.config/ign/` | Global ign configuration |
 
 See [Configuration Reference](reference/configuration.md) for complete file format documentation.
@@ -210,7 +216,7 @@ See [Configuration Reference](reference/configuration.md) for complete file form
 | Template syntax | `@ign-var:VAR@` with custom directives |
 | Template sources | GitHub URLs, local relative paths (no `..`, no absolute) |
 | Variable types | `string`, `int`, `bool` only |
-| File-based variables | `@file:` prefix, paths relative to `.ign-config/` |
+| File-based variables | `@file:` prefix, paths relative to `.ign/` |
 | Lock file | **Not used** (one-shot generation) |
 | Merge strategy | **None** (skip existing or explicit overwrite) |
 | Config override | `--config` flag |

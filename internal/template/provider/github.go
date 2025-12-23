@@ -86,7 +86,7 @@ func (p *GitHubProvider) Validate(ctx context.Context, ref model.TemplateRef) er
 		debug.Debug("[github] Validation request failed: %v", err)
 		return NewFetchError(p.Name(), p.formatURL(ref), err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	debug.Debug("[github] Validation response status: %d", resp.StatusCode)
 
@@ -118,7 +118,7 @@ func (p *GitHubProvider) Fetch(ctx context.Context, ref model.TemplateRef) (*mod
 		debug.Debug("[github] Archive download failed: %v", err)
 		return nil, err
 	}
-	defer os.Remove(archivePath) // Clean up archive after extraction
+	defer func() { _ = os.Remove(archivePath) }() // Clean up archive after extraction
 	debug.Debug("[github] Archive downloaded to: %s", archivePath)
 
 	// Extract archive to temporary directory
@@ -198,7 +198,7 @@ func (p *GitHubProvider) downloadArchive(ctx context.Context, ref model.Template
 		debug.Debug("[github] Download request failed: %v", err)
 		return "", NewFetchError(p.Name(), p.formatURL(ref), err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	debug.Debug("[github] Download response status: %d", resp.StatusCode)
 
@@ -224,12 +224,12 @@ func (p *GitHubProvider) downloadArchive(ctx context.Context, ref model.Template
 		return "", NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("failed to create temp file: %w", err))
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	// Download to temp file
 	bytesWritten, err := io.Copy(tmpFile, resp.Body)
 	if err != nil {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		debug.Debug("[github] Failed to write archive: %v", err)
 		return "", NewFetchError(p.Name(), p.formatURL(ref),
 			fmt.Errorf("failed to download archive: %w", err))
@@ -256,20 +256,20 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 	// Open archive file
 	file, err := os.Open(archivePath)
 	if err != nil {
-		os.RemoveAll(extractDir)
+		_ = os.RemoveAll(extractDir)
 		debug.Debug("[github] Failed to open archive: %v", err)
 		return "", fmt.Errorf("failed to open archive: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Create gzip reader
 	gzr, err := gzip.NewReader(file)
 	if err != nil {
-		os.RemoveAll(extractDir)
+		_ = os.RemoveAll(extractDir)
 		debug.Debug("[github] Failed to create gzip reader: %v", err)
 		return "", fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gzr.Close()
+	defer func() { _ = gzr.Close() }()
 
 	// Create tar reader
 	tr := tar.NewReader(gzr)
@@ -284,7 +284,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			break
 		}
 		if err != nil {
-			os.RemoveAll(extractDir)
+			_ = os.RemoveAll(extractDir)
 			debug.Debug("[github] Failed to read tar entry: %v", err)
 			return "", fmt.Errorf("failed to read tar entry: %w", err)
 		}
@@ -309,7 +309,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 		case tar.TypeDir:
 			// Create directory
 			if err := os.MkdirAll(target, os.FileMode(header.Mode)); err != nil {
-				os.RemoveAll(extractDir)
+				_ = os.RemoveAll(extractDir)
 				debug.Debug("[github] Failed to create directory %s: %v", target, err)
 				return "", fmt.Errorf("failed to create directory %s: %w", target, err)
 			}
@@ -317,7 +317,7 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 		case tar.TypeReg:
 			// Create parent directory if needed
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-				os.RemoveAll(extractDir)
+				_ = os.RemoveAll(extractDir)
 				debug.Debug("[github] Failed to create parent directory: %v", err)
 				return "", fmt.Errorf("failed to create parent directory: %w", err)
 			}
@@ -325,19 +325,19 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			// Create file
 			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
 			if err != nil {
-				os.RemoveAll(extractDir)
+				_ = os.RemoveAll(extractDir)
 				debug.Debug("[github] Failed to create file %s: %v", target, err)
 				return "", fmt.Errorf("failed to create file %s: %w", target, err)
 			}
 
 			// Copy content
 			if _, err := io.Copy(outFile, tr); err != nil {
-				outFile.Close()
-				os.RemoveAll(extractDir)
+				_ = outFile.Close()
+				_ = os.RemoveAll(extractDir)
 				debug.Debug("[github] Failed to write file %s: %v", target, err)
 				return "", fmt.Errorf("failed to write file %s: %w", target, err)
 			}
-			outFile.Close()
+			_ = outFile.Close()
 			fileCount++
 		}
 	}

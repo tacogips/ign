@@ -7,7 +7,7 @@ Refactor the CLI command structure from the current two-step workflow (`ign buil
 ## Current Workflow (Before)
 
 ```bash
-# Step 1: Create .ign-config/ign-var.json
+# Step 1: Create .ign/ign-var.json
 ign build init github.com/owner/repo
 
 # Step 2: Generate project
@@ -17,12 +17,32 @@ ign init --output ./my-project
 ## New Workflow (After)
 
 ```bash
-# Step 1: Create .ign-config/ign-var.json
+# Step 1: Create .ign/ign.json and .ign/ign-var.json
 ign init github.com/owner/repo
 
 # Step 2: Generate project
 ign checkout ./my-project
 ```
+
+## Configuration File Split
+
+The `.ign/` directory now contains two separate configuration files:
+
+1. **`ign.json`** - Template source reference and content hash
+   ```json
+   {
+     "template": { "url": "...", "path": "...", "ref": "..." },
+     "hash": "sha256:...",
+     "metadata": { ... }
+   }
+   ```
+
+2. **`ign-var.json`** - User-provided variable values only
+   ```json
+   {
+     "variables": { "key": "value", ... }
+   }
+   ```
 
 ## Changes Required
 
@@ -33,8 +53,8 @@ ign checkout ./my-project
 
 ### 2. Refactor `internal/cli/init.go`
 
-**Current behavior**: Generates project files from `.ign-config/ign-var.json`
-**New behavior**: Creates `.ign-config/ign-var.json` from template URL
+**Current behavior**: Generates project files from `.ign/ign-var.json`
+**New behavior**: Creates `.ign/ign-var.json` from template URL
 
 **Changes**:
 - Command signature: `init [URL]` (requires 1 argument)
@@ -44,22 +64,22 @@ ign checkout ./my-project
   - Remove: `--output`, `--overwrite`, `--config`, `--dry-run`, `--verbose`
 - Logic:
   - Call `app.Init()` instead of current logic
-  - Check if `.ign-config/` exists:
+  - Check if `.ign/` exists:
     - If exists and no `--force`: print message and exit
     - If exists and `--force`: backup `ign-var.json` and reinitialize
-    - If not exists: create `.ign-config/ign-var.json`
+    - If not exists: create `.ign/ign-var.json`
 - Success message:
   ```
-  Created: .ign-config/ign-var.json
+  Created: .ign/ign-var.json
 
   Next steps:
-    1. Edit .ign-config/ign-var.json to set variable values
+    1. Edit .ign/ign-var.json to set variable values
     2. Run: ign checkout ./my-project
   ```
 
 ### 3. Create `internal/cli/checkout.go`
 
-**Purpose**: Generate project files using existing `.ign-config/ign-var.json`
+**Purpose**: Generate project files using existing `.ign/ign-var.json`
 
 **Command**: `checkout <path>` (requires 1 argument)
 **Flags**:
@@ -68,7 +88,7 @@ ign checkout ./my-project
 - `--verbose, -v` (detailed output)
 
 **Logic**:
-- Verify `.ign-config/ign-var.json` exists
+- Verify `.ign/ign-var.json` exists
   - If not: error "Configuration not found. Run 'ign init <url>' first."
 - Call `app.Checkout()` with path from argument
 - Display generation summary (files created/skipped/overwritten)
@@ -93,12 +113,12 @@ Project ready at: ./my-project
 - `BuildInitOptions` → `InitOptions`
 - Update struct fields:
   - Remove: `IgnVersion` (not needed for init)
-  - `OutputDir` → always `.ign-config` (hardcoded)
+  - `OutputDir` → always `.ign` (hardcoded)
   - Keep: `URL`, `Ref`, `Force`, `Config`, `GitHubToken`
 
 **Force flag behavior**:
-When `Force = true` and `.ign-config/` exists:
-1. Check if `.ign-config/ign-var.json` exists
+When `Force = true` and `.ign/` exists:
+1. Check if `.ign/ign-var.json` exists
 2. Find next available backup number (bk1, bk2, bk3, etc.)
 3. Rename `ign-var.json` to `ign-var.json.bk{N}`
 4. Proceed with initialization
@@ -128,19 +148,19 @@ func findNextBackupNumber(dir string) int {
 - `InitResult` → `CheckoutResult`
 
 **Update struct fields**:
-- Remove: `ConfigPath` (always `.ign-config/ign-var.json`)
+- Remove: `ConfigPath` (always `.ign/ign-var.json`)
 - Keep: `OutputDir`, `Overwrite`, `DryRun`, `Verbose`, `GitHubToken`
 
 **Logic changes**:
-- Hardcode config path to `.ign-config/ign-var.json`
-- Build directory is always `.ign-config`
+- Hardcode config path to `.ign/ign-var.json`
+- Build directory is always `.ign`
 
 ### 6. Update `internal/config/defaults.go`
 
 **Change**:
 ```go
 // Line 40
-BuildDir: ".ign-config",  // was: ".ign-config"
+BuildDir: ".ign",  // was: ".ign"
 ```
 
 ### 7. Update `internal/cli/root.go`
@@ -155,7 +175,7 @@ BuildDir: ".ign-config",  // was: ".ign-config"
     2. "ign checkout <path>" - Generates project files using the configuration
   ```
 
-### 8. Replace All `.ign-config` References
+### 8. Replace All `.ign` References
 
 **Files to update** (found via grep):
 - `examples/README.md`
@@ -174,7 +194,7 @@ BuildDir: ".ign-config",  // was: ".ign-config"
 - `internal/template/generator/IMPLEMENTATION_SPEC.md`
 - `internal/config/config_test.go`
 
-**Replacement**: `.ign-config` → `.ign-config`
+**Replacement**: `.ign` → `.ign`
 
 ### 9. Update Test Files
 
@@ -197,22 +217,22 @@ BuildDir: ".ign-config",  // was: ".ign-config"
 6. Refactor `internal/cli/init.go`
 7. Delete `internal/cli/build.go`
 8. Update `internal/cli/root.go`
-9. Replace all `.ign-config` → `.ign-config` in docs/examples
+9. Replace all `.ign` → `.ign` in docs/examples
 10. Update test files
 11. Run `go mod tidy`, `go build`, `go test`
 
 ## Verification Checklist
 
-- [ ] `ign init github.com/owner/repo` creates `.ign-config/ign-var.json`
+- [ ] `ign init github.com/owner/repo` creates `.ign/ign-var.json`
 - [ ] `ign init` without args shows error (requires URL)
-- [ ] `ign init` with existing `.ign-config/` skips (no --force)
+- [ ] `ign init` with existing `.ign/` skips (no --force)
 - [ ] `ign init --force` backs up existing config
-- [ ] Backup creates `.ign-config/ign-var.json.bk1`, `.bk2`, etc.
+- [ ] Backup creates `.ign/ign-var.json.bk1`, `.bk2`, etc.
 - [ ] `ign checkout .` generates to current directory
 - [ ] `ign checkout ./my-project` generates to specified path
 - [ ] `ign checkout` without args shows error (requires path)
-- [ ] `ign checkout` without `.ign-config/` shows error
+- [ ] `ign checkout` without `.ign/` shows error
 - [ ] All tests pass
 - [ ] `go build ./...` succeeds
-- [ ] No references to `.ign-config` remain
+- [ ] No references to `.ign` remain
 - [ ] No references to `ign build` command remain

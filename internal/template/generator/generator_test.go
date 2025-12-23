@@ -19,9 +19,9 @@ func TestIsSpecialFile(t *testing.T) {
 	}{
 		{"ign.json root", "ign.json", true},
 		{"ign.json in subdir", "subdir/ign.json", true},
-		{".ign-config exact", ".ign-config", true},
-		{".ign-config with slash", ".ign-config/", true},
-		{".ign-config subpath", ".ign-config/ign-var.json", true},
+		{".ign exact", ".ign", true},
+		{".ign with slash", ".ign/", true},
+		{".ign subpath", ".ign/ign-var.json", true},
 		{"regular file", "main.go", false},
 		{"regular subdir file", "src/main.go", false},
 		{"similar name", "ign.json.bak", false},
@@ -74,7 +74,7 @@ func TestShouldIgnoreFile(t *testing.T) {
 		expected       bool
 	}{
 		{"special file ign.json", "ign.json", []string{}, true},
-		{"special file .ign-config", ".ign-config/ign-var.json", []string{}, true},
+		{"special file .ign", ".ign/ign-var.json", []string{}, true},
 		{"ignored by pattern", "test.log", []string{"*.log"}, true},
 		{"not ignored", "main.go", []string{"*.txt"}, false},
 		{"multiple patterns match", "temp.tmp", []string{"*.log", "*.tmp"}, true},
@@ -353,7 +353,7 @@ func TestGenerator_GenerateWithOverwrite(t *testing.T) {
 
 	// Create existing file
 	existingPath := filepath.Join(tmpDir, "existing.txt")
-	os.WriteFile(existingPath, []byte("old content"), 0644)
+	_ = os.WriteFile(existingPath, []byte("old content"), 0644)
 
 	template := &model.Template{
 		Ref: model.TemplateRef{},
@@ -484,7 +484,7 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 				IsBinary: false,
 			},
 			{
-				Path:     ".ign-config/ign-var.json",
+				Path:     ".ign/ign-var.json",
 				Content:  []byte("{}"),
 				Mode:     0644,
 				IsBinary: false,
@@ -513,7 +513,7 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
-	// Should only create main.go (not ign.json or .ign-config/ign-var.json)
+	// Should only create main.go (not ign.json or .ign/ign-var.json)
 	if result.FilesCreated != 1 {
 		t.Errorf("FilesCreated = %d, want 1 (only main.go)", result.FilesCreated)
 	}
@@ -522,7 +522,7 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(tmpDir, "ign.json")); !os.IsNotExist(err) {
 		t.Error("ign.json was created when it should be filtered")
 	}
-	if _, err := os.Stat(filepath.Join(tmpDir, ".ign-config/ign-var.json")); !os.IsNotExist(err) {
-		t.Error(".ign-config/ign-var.json was created when it should be filtered")
+	if _, err := os.Stat(filepath.Join(tmpDir, ".ign/ign-var.json")); !os.IsNotExist(err) {
+		t.Error(".ign/ign-var.json was created when it should be filtered")
 	}
 }

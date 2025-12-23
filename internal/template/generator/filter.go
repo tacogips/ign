@@ -10,7 +10,7 @@ import (
 // IsSpecialFile checks if a file is a special file that should be excluded from generation.
 // Returns true for:
 // - "ign.json" (template configuration file)
-// - Paths starting with ".ign-config/" or exactly ".ign-config"
+// - Paths starting with ".ign/" or exactly ".ign"
 func IsSpecialFile(path string) bool {
 	// Normalize path separators
 	path = filepath.ToSlash(path)
@@ -20,8 +20,8 @@ func IsSpecialFile(path string) bool {
 		return true
 	}
 
-	// Check for .ign-config directory
-	if path == ".ign-config" || strings.HasPrefix(path, ".ign-config/") {
+	// Check for .ign directory
+	if path == ".ign" || strings.HasPrefix(path, ".ign/") {
 		return true
 	}
 
@@ -30,7 +30,7 @@ func IsSpecialFile(path string) bool {
 
 // ShouldIgnoreFile checks if a file should be ignored during generation based on ignore patterns.
 // Returns true if:
-// - File is a special file (ign.json, .ign-config/*)
+// - File is a special file (ign.json, .ign/*)
 // - File matches any of the ignore patterns (glob matching)
 func ShouldIgnoreFile(path string, ignorePatterns []string) bool {
 	// First check if it's a special file

@@ -17,7 +17,7 @@ Go web server template with configurable variables.
 **Features demonstrated:**
 - `@ign-var:` directive for variable substitution
 - Variables in `ign.json` definition
-- `ign-var.json` user configuration
+- Split configuration: `ign.json` (template source + hash) and `ign-var.json` (user variables)
 - String, int variable types
 
 ### 03-conditionals
@@ -86,7 +86,7 @@ This convention prevents syntax errors from linters and IDEs that expect valid s
 ign init github.com/example/ign-templates/02-with-variables
 
 # Edit variables
-vim .ign-config/ign-var.json
+vim .ign/ign-var.json
 
 # Generate files
 ign checkout .

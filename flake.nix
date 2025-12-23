@@ -144,7 +144,7 @@
         packages = {
           ign = pkgs.buildGoModule {
             pname = "ign";
-            version = "0.1.3";
+            version = "0.1.4";
 
             src = ./.;
 
@@ -188,7 +188,12 @@
           ];
 
           shellHook = ''
+            export GOPATH="$HOME/.cache/go/tacogips/ign"
+            export GOMODCACHE="$HOME/.cache/go/mod"
+            mkdir -p "$GOPATH" "$GOMODCACHE"
             echo "Go development environment ready"
+            echo "GOPATH: $GOPATH"
+            echo "GOMODCACHE: $GOMODCACHE"
             echo "Go version: $(go version)"
             echo "Task version: $(task --version)"
             echo "golangci-lint version: $(golangci-lint --version)"

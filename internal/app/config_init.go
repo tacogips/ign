@@ -9,6 +9,7 @@ import (
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/model"
+	"github.com/tacogips/ign/internal/version"
 )
 
 // InitOptions contains options for configuration initialization.
@@ -18,7 +19,7 @@ type InitOptions struct {
 	URL string
 	// Ref is the git branch, tag, or commit SHA.
 	Ref string
-	// Force backs up and overwrites existing .ign-config directory if true.
+	// Force backs up and overwrites existing .ign directory if true.
 	Force bool
 	// Config is the path to global config file (optional).
 	Config string
@@ -27,10 +28,13 @@ type InitOptions struct {
 }
 
 // Init initializes configuration from a template.
-// Creates .ign-config/ign-var.json with template metadata and empty/default variables.
+// Creates two configuration files in .ign directory:
+//   - .ign/ign.json (template source and hash)
+//   - .ign/ign-var.json (variable values with defaults)
+//
 // Deprecated: Use PrepareCheckout and CompleteCheckout instead.
 func Init(ctx context.Context, opts InitOptions) error {
-	configDir := ".ign-config"
+	configDir := ".ign"
 
 	debug.DebugSection("[app] Init workflow start (deprecated)")
 	debug.DebugValue("[app] Template URL", opts.URL)
@@ -62,29 +66,64 @@ func Init(ctx context.Context, opts InitOptions) error {
 		return err
 	}
 
-	// Create ign-var.json with empty/default variables (not generating files)
-	debug.Debug("[app] Creating ign-var.json with default variables")
-	ignVarJson := &model.IgnVarJson{
+	// Calculate template hash
+	templateHash := calculateTemplateHash(prepResult.Template)
+	debug.DebugValue("[app] Template hash", templateHash)
+
+	// Save ign.json (template source and hash)
+	ignConfigPath := filepath.Join(configDir, "ign.json")
+	debug.Debug("[app] Creating ign.json")
+	ignConfig := &model.IgnConfig{
 		Template: model.TemplateSource{
 			URL:  prepResult.NormalizedURL,
 			Path: prepResult.TemplateRef.Path,
 			Ref:  prepResult.TemplateRef.Ref,
 		},
-		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
-		Metadata: &model.VarMetadata{
+		Hash: templateHash,
+		Metadata: &model.FileMetadata{
 			GeneratedAt:     time.Now(),
 			GeneratedBy:     "ign init",
 			TemplateName:    prepResult.IgnJson.Name,
 			TemplateVersion: prepResult.IgnJson.Version,
+			IgnVersion:      version.Version,
 		},
 	}
 
-	// Save ign-var.json
+	// Create ign-var.json with empty/default variables (not generating files)
+	debug.Debug("[app] Creating ign-var.json with default variables")
+	ignVarJson := &model.IgnVarJson{
+		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
+		Metadata: &model.FileMetadata{
+			GeneratedAt:     time.Now(),
+			GeneratedBy:     "ign init",
+			TemplateName:    prepResult.IgnJson.Name,
+			TemplateVersion: prepResult.IgnJson.Version,
+			IgnVersion:      version.Version,
+		},
+	}
+
 	ignVarPath := filepath.Join(configDir, "ign-var.json")
+
+	// Save both configuration files with rollback on failure.
+	// Write ign.json first, then ign-var.json.
+	// If ign-var.json save fails, remove ign.json to maintain consistent state.
+	debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
+	if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
+		debug.Debug("[app] Failed to save ign.json: %v", err)
+		return NewInitError("failed to save ign.json", err)
+	}
+	debug.Debug("[app] ign.json saved successfully")
+
+	// Save ign-var.json
 	debug.DebugValue("[app] Saving ign-var.json to", ignVarPath)
 	if err := config.SaveIgnVarJson(ignVarPath, ignVarJson); err != nil {
 		debug.Debug("[app] Failed to save ign-var.json: %v", err)
-		return NewInitError("failed to save ign-var.json", err)
+		// Rollback: remove ign.json to avoid inconsistent state
+		debug.Debug("[app] Rolling back ign.json due to ign-var.json save failure")
+		if removeErr := os.Remove(ignConfigPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
+		}
+		return NewInitError("failed to save ign-var.json (rolled back ign.json)", err)
 	}
 	debug.Debug("[app] ign-var.json saved successfully")
 

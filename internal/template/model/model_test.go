@@ -183,18 +183,13 @@ func TestIgnVarJson_MarshalUnmarshal(t *testing.T) {
 	now := time.Now().UTC()
 
 	original := IgnVarJson{
-		Template: TemplateSource{
-			URL:  "github.com/myorg/templates",
-			Path: "go/rest-api",
-			Ref:  "v2.1.0",
-		},
 		Variables: map[string]interface{}{
 			"project_name": "user-service",
 			"port":         8080,
 			"enable_tls":   true,
 			"description":  "User management service",
 		},
-		Metadata: &VarMetadata{
+		Metadata: &FileMetadata{
 			GeneratedAt:     now,
 			GeneratedBy:     "ign build init v1.0.0",
 			TemplateName:    "go-rest-api",
@@ -213,14 +208,6 @@ func TestIgnVarJson_MarshalUnmarshal(t *testing.T) {
 	var decoded IgnVarJson
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
-	}
-
-	// Verify template source
-	if decoded.Template.URL != original.Template.URL {
-		t.Errorf("Template.URL: expected %s, got %s", original.Template.URL, decoded.Template.URL)
-	}
-	if decoded.Template.Path != original.Template.Path {
-		t.Errorf("Template.Path: expected %s, got %s", original.Template.Path, decoded.Template.Path)
 	}
 
 	// Verify variables
@@ -249,6 +236,65 @@ func TestIgnVarJson_MarshalUnmarshal(t *testing.T) {
 	}
 	if decoded.Metadata.TemplateName != "go-rest-api" {
 		t.Errorf("Metadata.TemplateName: expected 'go-rest-api', got %s", decoded.Metadata.TemplateName)
+	}
+}
+
+func TestIgnConfig_MarshalUnmarshal(t *testing.T) {
+	now := time.Now().UTC()
+
+	original := IgnConfig{
+		Template: TemplateSource{
+			URL:  "github.com/myorg/templates",
+			Path: "go/rest-api",
+			Ref:  "v2.1.0",
+		},
+		Hash: "abc123def456",
+		Metadata: &FileMetadata{
+			GeneratedAt:     now,
+			GeneratedBy:     "ign checkout v1.0.0",
+			TemplateName:    "go-rest-api",
+			TemplateVersion: "2.1.0",
+			IgnVersion:      "1.0.0",
+		},
+	}
+
+	// Marshal to JSON
+	data, err := json.MarshalIndent(original, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	// Unmarshal from JSON
+	var decoded IgnConfig
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	// Verify template source
+	if decoded.Template.URL != original.Template.URL {
+		t.Errorf("Template.URL: expected %s, got %s", original.Template.URL, decoded.Template.URL)
+	}
+	if decoded.Template.Path != original.Template.Path {
+		t.Errorf("Template.Path: expected %s, got %s", original.Template.Path, decoded.Template.Path)
+	}
+	if decoded.Template.Ref != original.Template.Ref {
+		t.Errorf("Template.Ref: expected %s, got %s", original.Template.Ref, decoded.Template.Ref)
+	}
+
+	// Verify hash
+	if decoded.Hash != original.Hash {
+		t.Errorf("Hash: expected %s, got %s", original.Hash, decoded.Hash)
+	}
+
+	// Verify metadata
+	if decoded.Metadata == nil {
+		t.Fatal("Metadata is nil")
+	}
+	if decoded.Metadata.TemplateName != "go-rest-api" {
+		t.Errorf("Metadata.TemplateName: expected 'go-rest-api', got %s", decoded.Metadata.TemplateName)
+	}
+	if decoded.Metadata.TemplateVersion != "2.1.0" {
+		t.Errorf("Metadata.TemplateVersion: expected '2.1.0', got %s", decoded.Metadata.TemplateVersion)
 	}
 }
 
@@ -364,9 +410,6 @@ func TestVarDef_WithFileMode(t *testing.T) {
 func TestIgnVarJson_EmptyMetadata(t *testing.T) {
 	// Test that metadata can be nil
 	varConfig := IgnVarJson{
-		Template: TemplateSource{
-			URL: "github.com/test/repo",
-		},
 		Variables: map[string]interface{}{
 			"name": "test",
 		},
@@ -379,6 +422,32 @@ func TestIgnVarJson_EmptyMetadata(t *testing.T) {
 	}
 
 	var decoded IgnVarJson
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+
+	// Metadata should be nil (omitempty)
+	if decoded.Metadata != nil {
+		t.Errorf("Expected nil metadata, got %+v", decoded.Metadata)
+	}
+}
+
+func TestIgnConfig_EmptyMetadata(t *testing.T) {
+	// Test that metadata can be nil
+	config := IgnConfig{
+		Template: TemplateSource{
+			URL: "github.com/test/repo",
+		},
+		Hash:     "abc123",
+		Metadata: nil,
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var decoded IgnConfig
 	if err := json.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("failed to unmarshal: %v", err)
 	}

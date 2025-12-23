@@ -16,7 +16,7 @@ A simple project scaffolding tool. Download templates from GitHub and generate p
 ign init github.com/owner/templates/go-basic
 
 # 2. Edit variables
-vim .ign-config/ign-var.json
+vim .ign/ign-var.json
 
 # 3. Generate project
 ign checkout .              # Current directory
@@ -61,9 +61,9 @@ ign init /absolute/path/to/template
 
 | Condition | Action |
 |-----------|--------|
-| `.ign-config/` does not exist | Create `.ign-config/ign-var.json` |
-| `.ign-config/` exists | Do nothing (skip) |
-| `.ign-config/` exists + `--force` | Backup existing config, then reinitialize |
+| `.ign/` does not exist | Create `.ign/ign-var.json` |
+| `.ign/` exists | Do nothing (skip) |
+| `.ign/` exists + `--force` | Backup existing config, then reinitialize |
 
 **Backup naming:** When `--force` is used, existing `ign-var.json` is backed up as `ign-var.json.bk1`, `ign-var.json.bk2`, etc.
 
@@ -72,14 +72,14 @@ ign init /absolute/path/to/template
 ign init github.com/owner/repo --force
 
 # Result:
-# .ign-config/
+# .ign/
 #   ign-var.json       <- New config
 #   ign-var.json.bk1   <- Previous config
 ```
 
 ### `ign checkout <path>`
 
-Generate project files to the specified path using existing `.ign-config/`.
+Generate project files to the specified path using existing `.ign/`.
 
 ```bash
 ign checkout .              # Generate to current directory
@@ -89,7 +89,7 @@ ign checkout . --dry-run    # Preview without writing files
 ign checkout . --verbose    # Show detailed processing info
 ```
 
-**Requires:** `.ign-config/ign-var.json` must exist (run `ign init` first).
+**Requires:** `.ign/ign-var.json` must exist (run `ign init` first).
 
 **Flags:**
 
@@ -137,15 +137,16 @@ ign version --json   # JSON format output
 
 ## Configuration Directory
 
-`.ign-config/` contains:
+`.ign/` contains:
 
 ```
-.ign-config/
-  ign-var.json         # Template reference and variable values
+.ign/
+  ign.json             # Template reference and content hash
+  ign-var.json         # User variable values
   license-header.txt   # Optional files for @file: references
 ```
 
-### ign-var.json
+### ign.json (Template Reference)
 
 ```json
 {
@@ -153,6 +154,14 @@ ign version --json   # JSON format output
     "url": "github.com/owner/templates/go-basic",
     "ref": "main"
   },
+  "hash": "sha256:e3b0c44298fc1c149..."
+}
+```
+
+### ign-var.json (User Variables)
+
+```json
+{
   "variables": {
     "app_name": "my-app",
     "port": 8080,

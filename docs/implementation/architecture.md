@@ -394,7 +394,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
    │  ├─ If not cached: provider.Fetch()
    │  └─ Cache result
    ├─ Parse ign.json
-   ├─ Create .ign-config directory
+   ├─ Create .ign directory
    ├─ Generate ign-var.json
    │  ├─ Template reference
    │  ├─ Empty variable values
@@ -410,7 +410,7 @@ User: ign build init github.com/owner/repo/path --ref v1.0.0
    └─ Return Template
 
 4. Output
-   └─ .ign-config/ign-var.json created
+   └─ .ign/ign-var.json created
 ```
 
 ### 4.2 Init Workflow
@@ -424,7 +424,7 @@ User: ign init --output ./my-project
    └─ Call app.Init()
 
 2. Application Layer (internal/app/init.go)
-   ├─ Load .ign-config/ign-var.json
+   ├─ Load .ign/ign-var.json
    ├─ Validate variables
    ├─ Resolve @file: references
    ├─ Get Provider and fetch template
@@ -505,11 +505,16 @@ type TemplateSettings struct {
     MaxIncludeDepth    int      `json:"max_include_depth,omitempty"`
 }
 
-// IgnVarJson represents the ign-var.json file
+// IgnConfig represents the .ign/ign.json file (template reference + hash)
+type IgnConfig struct {
+    Template  TemplateSource   `json:"template"`
+    Hash      string           `json:"hash"`
+    Metadata  *ConfigMetadata  `json:"metadata,omitempty"`
+}
+
+// IgnVarJson represents the .ign/ign-var.json file (user variables only)
 type IgnVarJson struct {
-    Template  TemplateSource         `json:"template"`
     Variables map[string]interface{} `json:"variables"`
-    Metadata  *VarMetadata           `json:"metadata,omitempty"`
 }
 
 // TemplateSource identifies the template
@@ -519,8 +524,8 @@ type TemplateSource struct {
     Ref  string `json:"ref,omitempty"`
 }
 
-// VarMetadata contains generation metadata
-type VarMetadata struct {
+// ConfigMetadata contains generation metadata for IgnConfig
+type ConfigMetadata struct {
     GeneratedAt     time.Time `json:"generated_at,omitempty"`
     GeneratedBy     string    `json:"generated_by,omitempty"`
     TemplateName    string    `json:"template_name,omitempty"`
@@ -661,10 +666,10 @@ Error: Template variable not defined
 File: main.go.template:15
 Variable: @ign-var:database_url@
 
-This variable is required but not found in .ign-config/ign-var.json
+This variable is required but not found in .ign/ign-var.json
 Available variables: project_name, version, port
 
-Please edit .ign-config/ign-var.json and add:
+Please edit .ign/ign-var.json and add:
   "database_url": "your-value-here"
 ```
 

@@ -15,7 +15,7 @@ import (
 func TestE2E_FilenameVariableSubstitution(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Get fixture path from testdata
@@ -30,7 +30,7 @@ func TestE2E_FilenameVariableSubstitution(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Step 1: Init
 	t.Log("Step 1: Running init with filename-vars-template")
@@ -165,7 +165,7 @@ func TestE2E_FilenameVariableSubstitution(t *testing.T) {
 func TestE2E_FilenameVariables_DefaultValues(t *testing.T) {
 	// Setup
 	tempDir := t.TempDir()
-	configDir := filepath.Join(tempDir, ".ign-config")
+	configDir := filepath.Join(tempDir, ".ign")
 	outputDir := filepath.Join(tempDir, "output")
 
 	// Get fixture path from testdata
@@ -180,7 +180,7 @@ func TestE2E_FilenameVariables_DefaultValues(t *testing.T) {
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("failed to change to temp directory: %v", err)
 	}
-	defer os.Chdir(origDir)
+	defer func() { _ = os.Chdir(origDir) }()
 
 	// Step 1: Init
 	t.Log("Step 1: Running init")
