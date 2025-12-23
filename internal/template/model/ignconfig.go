@@ -26,8 +26,10 @@ type IgnJson struct {
 type VarDef struct {
 	// Type is the variable type (string, int, or bool).
 	Type VarType `json:"type"`
-	// Description is a human-readable description of the variable.
+	// Description is a short description shown in the prompt by default.
 	Description string `json:"description"`
+	// Help is a longer explanation shown when user types '?' during input.
+	Help string `json:"help,omitempty"`
 	// Required indicates if the variable must have a value.
 	Required bool `json:"required,omitempty"`
 	// Default is the default value if not provided (type must match).

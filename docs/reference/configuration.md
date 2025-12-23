@@ -101,13 +101,19 @@ Defines template metadata, required variables, and template-specific settings.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `type` | string | Yes | Variable type: `string`, `int`, or `bool` |
-| `description` | string | Yes | Human-readable description |
+| `description` | string | Yes | Short description shown in the prompt by default |
+| `help` | string | No | Longer explanation shown when user types `?` during input |
 | `required` | bool | No | If true, must have value in ign-var.json (default: false) |
 | `default` | any | No | Default value (type must match) |
 | `example` | any | No | Example value for documentation |
 | `pattern` | string | No | Regex validation pattern (strings only) |
 | `min` | int | No | Minimum value (integers only) |
 | `max` | int | No | Maximum value (integers only) |
+
+**Prompt Display Behavior:**
+- The `description` is always displayed in the prompt message (e.g., `? VARIABLE_NAME - description`)
+- When user types `?`, the `help` text is shown (or `description` if `help` is not set)
+- If `example` is provided, it is appended to the help text
 
 #### Settings Section
 
@@ -158,6 +164,7 @@ Defines template metadata, required variables, and template-specific settings.
     "project_name": {
       "type": "string",
       "description": "Project name (lowercase, hyphens)",
+      "help": "The name of your project. Must be lowercase and may contain hyphens. This will be used as the directory name and in various configuration files.",
       "required": true,
       "example": "my-api-service",
       "pattern": "^[a-z][a-z0-9-]*$"
@@ -165,6 +172,7 @@ Defines template metadata, required variables, and template-specific settings.
     "go_module_path": {
       "type": "string",
       "description": "Go module import path",
+      "help": "The full Go module path for your project (e.g., github.com/username/project). This will be used in go.mod and all import statements throughout the codebase.",
       "required": true,
       "example": "github.com/username/my-api"
     },
@@ -997,7 +1005,8 @@ interface IgnJson {
   variables: {
     [key: string]: {
       type: "string" | "int" | "bool";  // Required
-      description: string;               // Required
+      description: string;               // Required - short description shown in prompt
+      help?: string;                     // Longer explanation shown on '?'
       required?: boolean;
       default?: string | number | boolean;
       example?: string | number | boolean;

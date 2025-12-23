@@ -46,8 +46,12 @@ func PromptForVariables(ignJson *model.IgnJson) (map[string]interface{}, error) 
 
 // promptForVariable prompts for a single variable based on its type.
 func promptForVariable(name string, varDef model.VarDef) (interface{}, error) {
-	// Build help text from description
-	help := varDef.Description
+	// Build help text for '?' display
+	// Use Help field if provided, otherwise fall back to Description
+	help := varDef.Help
+	if help == "" {
+		help = varDef.Description
+	}
 	if varDef.Example != nil {
 		help += fmt.Sprintf(" (example: %v)", varDef.Example)
 	}
@@ -69,8 +73,11 @@ func promptForVariable(name string, varDef model.VarDef) (interface{}, error) {
 func promptString(name string, varDef model.VarDef, help string) (string, error) {
 	var result string
 
-	// Build message
+	// Build message with description displayed by default
 	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
 	if varDef.Required {
 		message += " (required)"
 	}
@@ -114,8 +121,11 @@ func promptString(name string, varDef model.VarDef, help string) (string, error)
 func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 	var result string
 
-	// Build message
+	// Build message with description displayed by default
 	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
 	if varDef.Required {
 		message += " (required)"
 	}
@@ -190,6 +200,12 @@ func promptInt(name string, varDef model.VarDef, help string) (int, error) {
 func promptBool(name string, varDef model.VarDef, help string) (bool, error) {
 	var result bool
 
+	// Build message with description displayed by default
+	message := name
+	if varDef.Description != "" {
+		message += " - " + varDef.Description
+	}
+
 	// Get default value
 	defaultVal := false
 	if varDef.Default != nil {
@@ -199,7 +215,7 @@ func promptBool(name string, varDef model.VarDef, help string) (bool, error) {
 	}
 
 	prompt := &survey.Confirm{
-		Message: name,
+		Message: message,
 		Default: defaultVal,
 		Help:    help,
 	}
