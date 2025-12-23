@@ -499,29 +499,50 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 			},
 		},
 		{
-			name: "hidden files excluded",
+			name: "dotfiles included but .git excluded",
 			setup: func(t *testing.T) string {
 				dir := t.TempDir()
 				if err := os.WriteFile(filepath.Join(dir, "visible.txt"), []byte("visible"), 0644); err != nil {
 					t.Fatalf("Failed to create visible file: %v", err)
 				}
-				if err := os.WriteFile(filepath.Join(dir, ".hidden"), []byte("hidden"), 0644); err != nil {
-					t.Fatalf("Failed to create hidden file: %v", err)
+				// Create a dotfile (should be included in hash)
+				if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte("*.tmp"), 0644); err != nil {
+					t.Fatalf("Failed to create .gitignore file: %v", err)
+				}
+				// Create .git directory (should be excluded from hash)
+				gitDir := filepath.Join(dir, ".git")
+				if err := os.MkdirAll(gitDir, 0755); err != nil {
+					t.Fatalf("Failed to create .git directory: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte("git config"), 0644); err != nil {
+					t.Fatalf("Failed to create .git/config file: %v", err)
 				}
 				return dir
 			},
 			wantErr: false,
 			validate: func(t *testing.T, hash1 string, dir string) {
-				// Remove hidden file
-				if err := os.Remove(filepath.Join(dir, ".hidden")); err != nil {
-					t.Fatalf("Failed to remove hidden file: %v", err)
+				// Removing .git directory should NOT change hash (it's excluded)
+				if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
+					t.Fatalf("Failed to remove .git directory: %v", err)
 				}
 				hash2, err := CalculateTemplateHashFromDir(dir)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
 				if hash1 != hash2 {
-					t.Error("Hash should not change when hidden file is removed (not included in hash)")
+					t.Error("Hash should not change when .git directory is removed (excluded from hash)")
+				}
+
+				// Removing .gitignore SHOULD change hash (dotfiles are now included)
+				if err := os.Remove(filepath.Join(dir, ".gitignore")); err != nil {
+					t.Fatalf("Failed to remove .gitignore file: %v", err)
+				}
+				hash3, err := CalculateTemplateHashFromDir(dir)
+				if err != nil {
+					t.Fatalf("Third hash calculation failed: %v", err)
+				}
+				if hash2 == hash3 {
+					t.Error("Hash should change when .gitignore is removed (dotfiles are included in hash)")
 				}
 			},
 		},

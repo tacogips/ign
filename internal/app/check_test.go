@@ -285,6 +285,49 @@ This block is never closed`
 				}
 			},
 		},
+		{
+			name: "dotfiles included but .git excluded",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+
+				// Regular file with directive
+				if err := os.WriteFile(filepath.Join(dir, "config.txt"), []byte("@ign-var:name@"), 0644); err != nil {
+					t.Fatalf("Failed to create regular file: %v", err)
+				}
+
+				// Dotfile with directive (should be checked)
+				if err := os.WriteFile(filepath.Join(dir, ".envrc"), []byte("export VAR=@ign-var:value@"), 0644); err != nil {
+					t.Fatalf("Failed to create .envrc file: %v", err)
+				}
+
+				// .git directory with file (should be skipped)
+				gitDir := filepath.Join(dir, ".git")
+				if err := os.MkdirAll(gitDir, 0755); err != nil {
+					t.Fatalf("Failed to create .git directory: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte("@ign-var:git_var@"), 0644); err != nil {
+					t.Fatalf("Failed to create .git/config file: %v", err)
+				}
+
+				return dir
+			},
+			opts: func(path string) CheckTemplateOptions {
+				return CheckTemplateOptions{
+					Path:      path,
+					Recursive: true,
+				}
+			},
+			wantErr: false,
+			validateResult: func(t *testing.T, result *CheckResult) {
+				// Should check config.txt and .envrc, but not .git/config
+				if result.FilesChecked != 2 {
+					t.Errorf("Expected 2 files checked (config.txt and .envrc, excluding .git), got %d", result.FilesChecked)
+				}
+				if result.FilesWithErrors != 0 {
+					t.Errorf("Expected 0 files with errors, got %d", result.FilesWithErrors)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
