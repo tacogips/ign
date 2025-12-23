@@ -24,7 +24,7 @@ remote_branch_exists() {
 # Check if REVIEW_BRANCH now exists in remote
 FINAL_REVIEW_BRANCH="$REVIEW_BRANCH"
 if remote_branch_exists "$REVIEW_BRANCH"; then
-  echo "⚠️ Review branch $REVIEW_BRANCH now exists in remote (created by another team member)"
+  echo "Warning: Review branch $REVIEW_BRANCH now exists in remote (created by another team member)"
   echo "Finding next available branch number..."
 
   # Extract base name and current number

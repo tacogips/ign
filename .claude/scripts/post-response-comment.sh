@@ -23,21 +23,21 @@ fi
 
 # Create comment body from template
 COMMENT_BODY=$(cat <<EOF
-✅ 修正完了
+[FIXED] Fixed
 
-この指摘事項への対応が完了しました。
+This issue has been addressed.
 
-**修正PR**: $REVIEW_PR_URL
+**Fix PR**: $REVIEW_PR_URL
 
-**修正内容**:
+**Fix Description**:
 $FIX_DESCRIPTION
 
-**変更ファイル**:
+**Changed Files**:
 $CHANGED_FILES
 
-**検証結果**:
-- コンパイル: ✅ PASSED
-- テスト: ✅ PASSED$TEST_DETAILS
+**Verification Results**:
+- Compilation: PASSED
+- Tests: PASSED$TEST_DETAILS
 EOF
 )
 

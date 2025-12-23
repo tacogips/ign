@@ -15,7 +15,7 @@ if [[ "$CURRENT_BRANCH" =~ _review_[0-9]+$ ]]; then
   CONTINUATION_MODE=true
 
   # Extract ORIGINAL_BRANCH from current review branch name
-  # Example: feature/some_review_1 → feature/some
+  # Example: feature/some_review_1 -> feature/some
   ORIGINAL_BRANCH="${CURRENT_BRANCH%_review_*}"
   echo "Detected original branch: $ORIGINAL_BRANCH"
 else
