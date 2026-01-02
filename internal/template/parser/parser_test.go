@@ -398,6 +398,21 @@ func TestValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "valid template with type annotation",
+			input:   "@ign-var:name:string@ and @ign-var:count:int@",
+			wantErr: false,
+		},
+		{
+			name:    "valid template with default value",
+			input:   "@ign-var:name=default@ and @ign-var:desc=A description@",
+			wantErr: false,
+		},
+		{
+			name:    "valid template with type and default",
+			input:   "@ign-var:name:string=default@",
+			wantErr: false,
+		},
+		{
 			name:    "unknown directive",
 			input:   "@ign-loop:items@",
 			wantErr: true,
@@ -410,6 +425,21 @@ func TestValidate(t *testing.T) {
 		{
 			name:    "unclosed if block",
 			input:   "@ign-if:test@content",
+			wantErr: true,
+		},
+		{
+			name:    "invalid type annotation - url as type",
+			input:   "@ign-var:REPOSITORY:https://github.com/user/repo@",
+			wantErr: true,
+		},
+		{
+			name:    "invalid type annotation - sentence as type",
+			input:   "@ign-var:DESCRIPTION:A TypeScript project@",
+			wantErr: true,
+		},
+		{
+			name:    "invalid type annotation - version as type",
+			input:   "@ign-var:VERSION:0.1.0@",
 			wantErr: true,
 		},
 	}
