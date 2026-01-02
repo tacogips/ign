@@ -979,3 +979,244 @@ func TestCompleteUpdate_EmptyVariables(t *testing.T) {
 		t.Errorf("Expected no removed variables, got %v", result.RemovedVariables)
 	}
 }
+
+func TestCompleteUpdate_OverwriteFlag(t *testing.T) {
+	tempDir := t.TempDir()
+	setupTestTemplate(t, tempDir, testHash1)
+
+	// Create an existing file that will be overwritten
+	existingFilePath := filepath.Join(tempDir, "test.txt")
+	originalContent := []byte("original content")
+	if err := os.WriteFile(existingFilePath, originalContent, 0644); err != nil {
+		t.Fatalf("Failed to create existing file: %v", err)
+	}
+
+	newContent := []byte("new content from template")
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test-template",
+			Version:   "1.0.0",
+			Hash:      testHash2,
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "test.txt",
+				Content: newContent,
+			},
+		},
+	}
+
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{
+			URL: "https://github.com/test/template",
+		},
+		Hash: testHash1,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		NewVars:       []string{},
+		RemovedVars:   []string{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(tempDir, ".ign", "ign.json"),
+		IgnVarPath:    filepath.Join(tempDir, ".ign", "ign-var.json"),
+		IgnConfig:     ignConfig,
+	}
+
+	t.Run("without overwrite - file should be skipped", func(t *testing.T) {
+		// Reset file to original content
+		if err := os.WriteFile(existingFilePath, originalContent, 0644); err != nil {
+			t.Fatalf("Failed to reset file: %v", err)
+		}
+
+		opts := CompleteUpdateOptions{
+			PrepareResult: prep,
+			NewVariables:  map[string]interface{}{},
+			OutputDir:     tempDir,
+			Overwrite:     false, // Do not overwrite
+			DryRun:        false,
+		}
+
+		result, err := CompleteUpdate(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("CompleteUpdate failed: %v", err)
+		}
+
+		if result.FilesSkipped != 1 {
+			t.Errorf("Expected 1 file skipped, got %d", result.FilesSkipped)
+		}
+		if result.FilesOverwritten != 0 {
+			t.Errorf("Expected 0 files overwritten, got %d", result.FilesOverwritten)
+		}
+
+		// Verify file content unchanged
+		content, err := os.ReadFile(existingFilePath)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		if string(content) != string(originalContent) {
+			t.Errorf("File content should not have changed. Got: %s, Expected: %s", string(content), string(originalContent))
+		}
+	})
+
+	t.Run("with overwrite - file should be overwritten", func(t *testing.T) {
+		// Reset file to original content
+		if err := os.WriteFile(existingFilePath, originalContent, 0644); err != nil {
+			t.Fatalf("Failed to reset file: %v", err)
+		}
+
+		opts := CompleteUpdateOptions{
+			PrepareResult: prep,
+			NewVariables:  map[string]interface{}{},
+			OutputDir:     tempDir,
+			Overwrite:     true, // Overwrite enabled
+			DryRun:        false,
+		}
+
+		result, err := CompleteUpdate(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("CompleteUpdate failed: %v", err)
+		}
+
+		if result.FilesSkipped != 0 {
+			t.Errorf("Expected 0 files skipped, got %d", result.FilesSkipped)
+		}
+		if result.FilesOverwritten != 1 {
+			t.Errorf("Expected 1 file overwritten, got %d", result.FilesOverwritten)
+		}
+
+		// Verify file content changed
+		content, err := os.ReadFile(existingFilePath)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		if string(content) != string(newContent) {
+			t.Errorf("File content should have been overwritten. Got: %s, Expected: %s", string(content), string(newContent))
+		}
+	})
+}
+
+func TestCompleteUpdate_DryRunWithOverwrite(t *testing.T) {
+	tempDir := t.TempDir()
+	setupTestTemplate(t, tempDir, testHash1)
+
+	// Create an existing file
+	existingFilePath := filepath.Join(tempDir, "test.txt")
+	originalContent := []byte("original content")
+	if err := os.WriteFile(existingFilePath, originalContent, 0644); err != nil {
+		t.Fatalf("Failed to create existing file: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test-template",
+			Version:   "1.0.0",
+			Hash:      testHash2,
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "test.txt",
+				Content: []byte("new content"),
+			},
+		},
+	}
+
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{
+			URL: "https://github.com/test/template",
+		},
+		Hash: testHash1,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		NewVars:       []string{},
+		RemovedVars:   []string{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(tempDir, ".ign", "ign.json"),
+		IgnVarPath:    filepath.Join(tempDir, ".ign", "ign-var.json"),
+		IgnConfig:     ignConfig,
+	}
+
+	t.Run("dry-run without overwrite - shows skip", func(t *testing.T) {
+		opts := CompleteUpdateOptions{
+			PrepareResult: prep,
+			NewVariables:  map[string]interface{}{},
+			OutputDir:     tempDir,
+			Overwrite:     false,
+			DryRun:        true,
+		}
+
+		result, err := CompleteUpdate(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("CompleteUpdate failed: %v", err)
+		}
+
+		if result.FilesSkipped != 1 {
+			t.Errorf("Expected 1 file skipped in dry-run, got %d", result.FilesSkipped)
+		}
+
+		// Verify DryRunFiles shows WouldSkip
+		if len(result.DryRunFiles) != 1 {
+			t.Fatalf("Expected 1 dry-run file, got %d", len(result.DryRunFiles))
+		}
+		if !result.DryRunFiles[0].WouldSkip {
+			t.Error("Expected WouldSkip to be true")
+		}
+
+		// Verify file was not modified (dry-run)
+		content, err := os.ReadFile(existingFilePath)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		if string(content) != string(originalContent) {
+			t.Error("File should not have been modified in dry-run mode")
+		}
+	})
+
+	t.Run("dry-run with overwrite - shows overwrite", func(t *testing.T) {
+		opts := CompleteUpdateOptions{
+			PrepareResult: prep,
+			NewVariables:  map[string]interface{}{},
+			OutputDir:     tempDir,
+			Overwrite:     true,
+			DryRun:        true,
+		}
+
+		result, err := CompleteUpdate(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("CompleteUpdate failed: %v", err)
+		}
+
+		if result.FilesOverwritten != 1 {
+			t.Errorf("Expected 1 file overwritten in dry-run, got %d", result.FilesOverwritten)
+		}
+
+		// Verify DryRunFiles shows WouldOverwrite
+		if len(result.DryRunFiles) != 1 {
+			t.Fatalf("Expected 1 dry-run file, got %d", len(result.DryRunFiles))
+		}
+		if !result.DryRunFiles[0].WouldOverwrite {
+			t.Error("Expected WouldOverwrite to be true")
+		}
+
+		// Verify file was not modified (dry-run)
+		content, err := os.ReadFile(existingFilePath)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		if string(content) != string(originalContent) {
+			t.Error("File should not have been modified in dry-run mode")
+		}
+	})
+}
