@@ -35,26 +35,29 @@ Requirements:
 If the template has not changed (same hash), no action is taken.
 
 Examples:
-  ign update                     # Update in current directory
+  ign update                     # Update if template changed, skip existing files
   ign update ./my-project        # Update to specific directory
   ign update --dry-run           # Preview changes without writing
-  ign update --force             # Overwrite existing files`,
+  ign update --overwrite         # Update if template changed, overwrite existing files
+  ign update --force             # Regenerate even if template unchanged, overwrite files`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runUpdate,
 }
 
 // Update command flags
 var (
-	updateForce   bool
-	updateDryRun  bool
-	updateVerbose bool
+	updateForce     bool
+	updateOverwrite bool
+	updateDryRun    bool
+	updateVerbose   bool
 )
 
 func init() {
 	// Flags for update
 	// Note: These flags control project file generation behavior, which differs from
 	// 'ign template update' flags that control template metadata updates
-	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Overwrite existing files in the generated project")
+	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Regenerate even if template unchanged (implies --overwrite)")
+	updateCmd.Flags().BoolVarP(&updateOverwrite, "overwrite", "o", false, "Overwrite existing files when template has changed")
 	updateCmd.Flags().BoolVarP(&updateDryRun, "dry-run", "d", false, "Preview what files would be generated without writing them")
 	updateCmd.Flags().BoolVarP(&updateVerbose, "verbose", "v", false, "Show detailed processing information during project generation")
 }
@@ -71,10 +74,13 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	printInfo("Checking for template updates...")
 
+	// Determine overwrite behavior: --force implies --overwrite
+	shouldOverwrite := updateOverwrite || updateForce
+
 	// Prepare update - fetch template and check for changes
 	prepResult, err := app.PrepareUpdate(cmd.Context(), app.UpdateOptions{
 		OutputDir:   outputPath,
-		Overwrite:   updateForce,
+		Overwrite:   shouldOverwrite,
 		DryRun:      updateDryRun,
 		Verbose:     updateVerbose,
 		GitHubToken: githubToken,
@@ -93,13 +99,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Check if hash changed
 	if !prepResult.HashChanged {
-		printSuccess("Template is up to date (no changes detected)")
-		return nil
+		if updateForce {
+			printInfo("Template unchanged, but --force specified - regenerating files...")
+		} else {
+			printSuccess("Template is up to date (no changes detected)")
+			return nil
+		}
+	} else {
+		printInfo("Template has been updated")
+		printInfo(fmt.Sprintf("  Previous hash: %s", truncateHash(prepResult.CurrentHash)))
+		printInfo(fmt.Sprintf("  New hash:      %s", truncateHash(prepResult.NewHash)))
 	}
-
-	printInfo("Template has been updated")
-	printInfo(fmt.Sprintf("  Previous hash: %s", truncateHash(prepResult.CurrentHash)))
-	printInfo(fmt.Sprintf("  New hash:      %s", truncateHash(prepResult.NewHash)))
 
 	// Show variable changes
 	if len(prepResult.RemovedVars) > 0 {
@@ -157,7 +167,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		PrepareResult: prepResult,
 		NewVariables:  newVarValues,
 		OutputDir:     outputPath,
-		Overwrite:     updateForce,
+		Overwrite:     shouldOverwrite,
 		DryRun:        updateDryRun,
 		Verbose:       updateVerbose,
 	})
@@ -282,7 +292,7 @@ func printUpdateDryRunPatch(result *app.UpdateResult) {
 	// Print each file in patch format
 	for _, file := range result.DryRunFiles {
 		if file.WouldSkip {
-			fmt.Printf("# SKIP: %s (file exists, use --force to overwrite)\n\n", file.Path)
+			fmt.Printf("# SKIP: %s (file exists, use --overwrite or --force to overwrite)\n\n", file.Path)
 			continue
 		}
 
