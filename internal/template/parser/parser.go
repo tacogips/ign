@@ -360,6 +360,13 @@ func (p *DefaultParser) Validate(ctx context.Context, input []byte) error {
 					"variable name is empty",
 					match.RawText)
 			}
+			// Validate variable syntax including type annotation
+			_, _, _, _, err := parseVarSyntax(match.Args)
+			if err != nil {
+				return newParseErrorWithDirective(InvalidDirectiveSyntax,
+					err.Error(),
+					match.RawText)
+			}
 		case DirectiveComment:
 			// @ign-comment: can have any content (including empty) - it's a template comment
 			// Validation of line positioning is done during processing
