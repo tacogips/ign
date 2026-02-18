@@ -13,6 +13,7 @@ import (
 
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/debug"
+	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -99,16 +100,8 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 		IgnJsonPath: ignJsonPath,
 	}
 
-	// Scan template files (always recursive to match hash calculation behavior)
-	err = scanTemplateFiles(ctx, absPath, result)
-	if err != nil {
-		return nil, err
-	}
-
-	debug.DebugValue("[app] Files scanned", result.FilesScanned)
-	debug.DebugValue("[app] Variables found", len(result.Variables))
-
-	// Load existing ign-template.json if it exists and merge mode is enabled
+	// Load existing ign-template.json BEFORE scanning so ignore patterns are available
+	// for both variable scanning and hash calculation.
 	var existingIgnJson *model.IgnJson
 	if _, err := os.Stat(ignJsonPath); err == nil {
 		existingIgnJson, err = config.LoadIgnJson(ignJsonPath)
@@ -116,6 +109,21 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 			return nil, NewValidationError("failed to load existing ign-template.json", err)
 		}
 	}
+
+	// Extract ignore patterns from existing config (if any)
+	var ignorePatterns []string
+	if existingIgnJson != nil && existingIgnJson.Settings != nil {
+		ignorePatterns = existingIgnJson.Settings.IgnorePatterns
+	}
+
+	// Scan template files (always recursive to match hash calculation behavior)
+	err = scanTemplateFiles(ctx, absPath, ignorePatterns, result)
+	if err != nil {
+		return nil, err
+	}
+
+	debug.DebugValue("[app] Files scanned", result.FilesScanned)
+	debug.DebugValue("[app] Variables found", len(result.Variables))
 
 	// Determine what's new and what's updated
 	result.NewVars, result.UpdatedVars = categorizeVars(result.Variables, existingIgnJson, opts.Merge)
@@ -137,9 +145,16 @@ func UpdateTemplate(ctx context.Context, opts UpdateTemplateOptions) (*UpdateTem
 // Includes all files and dotfiles (e.g., .gitignore, .envrc, .claude/) except:
 //   - .git directory (version control metadata)
 //   - ign-template.json (template config file itself)
+//   - Files/directories matching ignore patterns from ign-template.json settings
 //
 // Always scans recursively to match hash calculation behavior.
-func scanTemplateFiles(ctx context.Context, dirPath string, result *UpdateTemplateResult) error {
+func scanTemplateFiles(ctx context.Context, dirPath string, ignorePatterns []string, result *UpdateTemplateResult) error {
+	return scanTemplateFilesRecursive(ctx, dirPath, dirPath, ignorePatterns, result)
+}
+
+// scanTemplateFilesRecursive is the internal recursive implementation of scanTemplateFiles.
+// rootDir is the top-level template directory used to compute relative paths for pattern matching.
+func scanTemplateFilesRecursive(ctx context.Context, rootDir string, dirPath string, ignorePatterns []string, result *UpdateTemplateResult) error {
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return NewValidationError(fmt.Sprintf("failed to read directory: %s", dirPath), err)
@@ -159,8 +174,17 @@ func scanTemplateFiles(ctx context.Context, dirPath string, result *UpdateTempla
 			continue
 		}
 
+		// Check ignore patterns using relative path from template root
+		relPath, err := filepath.Rel(rootDir, fullPath)
+		if err == nil && len(ignorePatterns) > 0 {
+			if generator.ShouldIgnoreFile(relPath, ignorePatterns) {
+				debug.Debug("[app] Skipping ignored path during scan: %s", relPath)
+				continue
+			}
+		}
+
 		if entry.IsDir() {
-			if err := scanTemplateFiles(ctx, fullPath, result); err != nil {
+			if err := scanTemplateFilesRecursive(ctx, rootDir, fullPath, ignorePatterns, result); err != nil {
 				return err
 			}
 			continue
@@ -442,7 +466,14 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 	// may have changed independently of variable definitions. The hash represents
 	// the current state of template files, not just metadata.
 	templateDir := filepath.Dir(path)
-	newHash, err := CalculateTemplateHashFromDir(templateDir)
+
+	// Extract ignore patterns from config settings for hash calculation
+	var ignorePatterns []string
+	if ignJson.Settings != nil {
+		ignorePatterns = ignJson.Settings.IgnorePatterns
+	}
+
+	newHash, err := CalculateTemplateHashFromDir(templateDir, ignorePatterns)
 	if err != nil {
 		// Hash calculation failure is a critical error - return instead of silently continuing
 		return NewValidationError("failed to calculate template hash", err)
@@ -467,14 +498,21 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 // Files are sorted by path to ensure deterministic hash generation.
 //
 // Included: All files and dotfiles (e.g., .gitignore, .envrc, .claude/)
-// Excluded: .git directory (version control metadata) and ign-template.json (config file)
-func CalculateTemplateHashFromDir(dirPath string) (string, error) {
+// Excluded: .git directory (version control metadata), ign-template.json (config file),
+// and files/directories matching the provided ignore patterns.
+func CalculateTemplateHashFromDir(dirPath string, ignorePatterns []string) (string, error) {
 	var filePaths []string
 
 	// Collect all file paths
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+
+		// Get relative path for pattern matching
+		relPath, relErr := filepath.Rel(dirPath, path)
+		if relErr != nil {
+			return relErr
 		}
 
 		// Skip directories
@@ -484,6 +522,14 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 			if info.Name() == ".git" {
 				return filepath.SkipDir
 			}
+
+			// Skip directories matching ignore patterns
+			if relPath != "." && len(ignorePatterns) > 0 {
+				if generator.ShouldIgnoreFile(relPath, ignorePatterns) {
+					debug.Debug("[app] Skipping ignored directory during hash: %s", relPath)
+					return filepath.SkipDir
+				}
+			}
 			return nil
 		}
 
@@ -492,10 +538,12 @@ func CalculateTemplateHashFromDir(dirPath string) (string, error) {
 			return nil
 		}
 
-		// Get relative path
-		relPath, err := filepath.Rel(dirPath, path)
-		if err != nil {
-			return err
+		// Skip files matching ignore patterns
+		if len(ignorePatterns) > 0 {
+			if generator.ShouldIgnoreFile(relPath, ignorePatterns) {
+				debug.Debug("[app] Skipping ignored file during hash: %s", relPath)
+				return nil
+			}
 		}
 
 		filePaths = append(filePaths, relPath)
