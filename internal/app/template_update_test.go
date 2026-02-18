@@ -345,7 +345,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 			wantErr: false,
 			validate: func(t *testing.T, hash string, dir string) {
 				// Calculate again and verify same hash
-				hash2, err := CalculateTemplateHashFromDir(dir)
+				hash2, err := CalculateTemplateHashFromDir(dir, nil)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
@@ -392,7 +392,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content_v2"), 0644); err != nil {
 					t.Fatalf("Failed to modify file: %v", err)
 				}
-				hash2, err := CalculateTemplateHashFromDir(dir)
+				hash2, err := CalculateTemplateHashFromDir(dir, nil)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
@@ -419,7 +419,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(dir, model.IgnTemplateConfigFile), []byte(`{"name":"test","version":"2.0"}`), 0644); err != nil {
 					t.Fatalf("Failed to modify %s: %v", model.IgnTemplateConfigFile, err)
 				}
-				hash2, err := CalculateTemplateHashFromDir(dir)
+				hash2, err := CalculateTemplateHashFromDir(dir, nil)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
@@ -484,7 +484,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 				if err := os.RemoveAll(filepath.Join(dir, ".git")); err != nil {
 					t.Fatalf("Failed to remove .git directory: %v", err)
 				}
-				hash2, err := CalculateTemplateHashFromDir(dir)
+				hash2, err := CalculateTemplateHashFromDir(dir, nil)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
@@ -496,7 +496,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 				if err := os.Remove(filepath.Join(dir, ".gitignore")); err != nil {
 					t.Fatalf("Failed to remove .gitignore file: %v", err)
 				}
-				hash3, err := CalculateTemplateHashFromDir(dir)
+				hash3, err := CalculateTemplateHashFromDir(dir, nil)
 				if err != nil {
 					t.Fatalf("Third hash calculation failed: %v", err)
 				}
@@ -535,7 +535,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 				if err := os.WriteFile(filepath.Join(subdir, "sub.txt"), []byte("modified"), 0644); err != nil {
 					t.Fatalf("Failed to modify sub file: %v", err)
 				}
-				hash2, err := CalculateTemplateHashFromDir(dir)
+				hash2, err := CalculateTemplateHashFromDir(dir, nil)
 				if err != nil {
 					t.Fatalf("Second hash calculation failed: %v", err)
 				}
@@ -549,7 +549,7 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := tt.setup(t)
-			hash, err := CalculateTemplateHashFromDir(dir)
+			hash, err := CalculateTemplateHashFromDir(dir, nil)
 
 			if tt.wantErr {
 				if err == nil {
@@ -568,4 +568,271 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCalculateTemplateHashFromDir_IgnorePatterns(t *testing.T) {
+	t.Run("ignore patterns skip directories in hash", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// Create a file in root
+		if err := os.WriteFile(filepath.Join(dir, "main.txt"), []byte("main content"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Create a subdirectory that should be ignored
+		claudeDir := filepath.Join(dir, ".claude")
+		if err := os.MkdirAll(claudeDir, 0755); err != nil {
+			t.Fatalf("Failed to create .claude dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(claudeDir, "config.json"), []byte("claude config"), 0644); err != nil {
+			t.Fatalf("Failed to create .claude/config.json: %v", err)
+		}
+
+		// Hash WITHOUT ignore patterns (includes .claude/)
+		hashWithClaude, err := CalculateTemplateHashFromDir(dir, nil)
+		if err != nil {
+			t.Fatalf("Hash calculation failed: %v", err)
+		}
+
+		// Hash WITH ignore patterns (excludes .claude/)
+		hashWithoutClaude, err := CalculateTemplateHashFromDir(dir, []string{".claude"})
+		if err != nil {
+			t.Fatalf("Hash calculation with ignore failed: %v", err)
+		}
+
+		if hashWithClaude == hashWithoutClaude {
+			t.Error("Hash should differ when .claude/ directory is ignored vs included")
+		}
+
+		// Hash with ignore should match hash of directory without the .claude/ dir
+		dirNoIgnored := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dirNoIgnored, "main.txt"), []byte("main content"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		hashClean, err := CalculateTemplateHashFromDir(dirNoIgnored, nil)
+		if err != nil {
+			t.Fatalf("Clean hash calculation failed: %v", err)
+		}
+
+		if hashWithoutClaude != hashClean {
+			t.Error("Hash with ignored dir should equal hash of directory without that dir")
+		}
+	})
+
+	t.Run("ignore patterns skip files in hash", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if err := os.WriteFile(filepath.Join(dir, "main.txt"), []byte("main content"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "debug.log"), []byte("log content"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Hash WITHOUT ignore patterns
+		hashAll, err := CalculateTemplateHashFromDir(dir, nil)
+		if err != nil {
+			t.Fatalf("Hash calculation failed: %v", err)
+		}
+
+		// Hash WITH ignore patterns for *.log
+		hashNoLogs, err := CalculateTemplateHashFromDir(dir, []string{"*.log"})
+		if err != nil {
+			t.Fatalf("Hash calculation with ignore failed: %v", err)
+		}
+
+		if hashAll == hashNoLogs {
+			t.Error("Hash should differ when *.log files are ignored")
+		}
+	})
+
+	t.Run("ignore patterns with nested directories", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if err := os.WriteFile(filepath.Join(dir, "root.txt"), []byte("root"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Create nested ignored directory
+		nodeModules := filepath.Join(dir, "node_modules")
+		subPkg := filepath.Join(nodeModules, "pkg")
+		if err := os.MkdirAll(subPkg, 0755); err != nil {
+			t.Fatalf("Failed to create dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(subPkg, "index.js"), []byte("module"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Hash with node_modules ignored should not include any nested files
+		hashIgnored, err := CalculateTemplateHashFromDir(dir, []string{"node_modules"})
+		if err != nil {
+			t.Fatalf("Hash calculation failed: %v", err)
+		}
+
+		// Should equal hash of directory with only root.txt
+		dirClean := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dirClean, "root.txt"), []byte("root"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		hashClean, err := CalculateTemplateHashFromDir(dirClean, nil)
+		if err != nil {
+			t.Fatalf("Clean hash calculation failed: %v", err)
+		}
+
+		if hashIgnored != hashClean {
+			t.Error("Hash with ignored nested dir should equal hash without that dir")
+		}
+	})
+
+	t.Run("empty ignore patterns same as nil", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "file.txt"), []byte("content"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		hashNil, err := CalculateTemplateHashFromDir(dir, nil)
+		if err != nil {
+			t.Fatalf("Hash with nil failed: %v", err)
+		}
+
+		hashEmpty, err := CalculateTemplateHashFromDir(dir, []string{})
+		if err != nil {
+			t.Fatalf("Hash with empty failed: %v", err)
+		}
+
+		if hashNil != hashEmpty {
+			t.Error("Hash with nil and empty ignore patterns should be identical")
+		}
+	})
+}
+
+func TestScanTemplateFiles_IgnorePatterns(t *testing.T) {
+	t.Run("ignore patterns skip directories during scan", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// Create a template file in root
+		if err := os.WriteFile(filepath.Join(dir, "main.txt"), []byte("@ign-var:root_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Create a subdirectory with template files that should be ignored
+		claudeDir := filepath.Join(dir, ".claude")
+		if err := os.MkdirAll(claudeDir, 0755); err != nil {
+			t.Fatalf("Failed to create .claude dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(claudeDir, "config.txt"), []byte("@ign-var:ignored_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create .claude/config.txt: %v", err)
+		}
+
+		// Scan WITHOUT ignore patterns
+		resultAll := &UpdateTemplateResult{Variables: make(map[string]*CollectedVar)}
+		err := scanTemplateFiles(context.Background(), dir, nil, resultAll)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		if resultAll.FilesScanned != 2 {
+			t.Errorf("Expected 2 files scanned without ignore, got %d", resultAll.FilesScanned)
+		}
+		if _, ok := resultAll.Variables["ignored_var"]; !ok {
+			t.Error("Expected 'ignored_var' without ignore patterns")
+		}
+
+		// Scan WITH ignore patterns
+		resultIgnored := &UpdateTemplateResult{Variables: make(map[string]*CollectedVar)}
+		err = scanTemplateFiles(context.Background(), dir, []string{".claude"}, resultIgnored)
+		if err != nil {
+			t.Fatalf("Scan with ignore failed: %v", err)
+		}
+
+		if resultIgnored.FilesScanned != 1 {
+			t.Errorf("Expected 1 file scanned with ignore, got %d", resultIgnored.FilesScanned)
+		}
+		if _, ok := resultIgnored.Variables["ignored_var"]; ok {
+			t.Error("Expected 'ignored_var' to be excluded with ignore patterns")
+		}
+		if _, ok := resultIgnored.Variables["root_var"]; !ok {
+			t.Error("Expected 'root_var' to still be included")
+		}
+	})
+
+	t.Run("ignore patterns skip files during scan", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if err := os.WriteFile(filepath.Join(dir, "main.txt"), []byte("@ign-var:main_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "notes.log"), []byte("@ign-var:log_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		result := &UpdateTemplateResult{Variables: make(map[string]*CollectedVar)}
+		err := scanTemplateFiles(context.Background(), dir, []string{"*.log"}, result)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		if result.FilesScanned != 1 {
+			t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
+		}
+		if _, ok := result.Variables["log_var"]; ok {
+			t.Error("Expected 'log_var' to be excluded")
+		}
+		if _, ok := result.Variables["main_var"]; !ok {
+			t.Error("Expected 'main_var' to be included")
+		}
+	})
+}
+
+func TestUpdateTemplate_IgnorePatterns(t *testing.T) {
+	t.Run("ignore patterns from existing config applied during scan and hash", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// Create existing ign-template.json with ignore patterns
+		existingConfig := `{
+  "name": "test",
+  "version": "1.0.0",
+  "variables": {},
+  "settings": {
+    "ignore_patterns": [".claude"]
+  }
+}`
+		if err := os.WriteFile(filepath.Join(dir, model.IgnTemplateConfigFile), []byte(existingConfig), 0644); err != nil {
+			t.Fatalf("Failed to create config: %v", err)
+		}
+
+		// Create a template file in root
+		if err := os.WriteFile(filepath.Join(dir, "main.txt"), []byte("@ign-var:root_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Create .claude directory with files that should be ignored
+		claudeDir := filepath.Join(dir, ".claude")
+		if err := os.MkdirAll(claudeDir, 0755); err != nil {
+			t.Fatalf("Failed to create .claude dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(claudeDir, "agent.md"), []byte("@ign-var:ignored_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create .claude/agent.md: %v", err)
+		}
+
+		result, err := UpdateTemplate(context.Background(), UpdateTemplateOptions{
+			Path:   dir,
+			DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("UpdateTemplate failed: %v", err)
+		}
+
+		// Should only scan root file, not .claude/agent.md
+		if result.FilesScanned != 1 {
+			t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
+		}
+
+		if _, ok := result.Variables["root_var"]; !ok {
+			t.Error("Expected 'root_var' to be found")
+		}
+		if _, ok := result.Variables["ignored_var"]; ok {
+			t.Error("Expected 'ignored_var' to be excluded by ignore patterns")
+		}
+	})
 }

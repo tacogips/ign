@@ -526,3 +526,88 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 		t.Error(".ign/ign-var.json was created when it should be filtered")
 	}
 }
+
+// TestGenerator_GenerateWithSymlinkContent verifies that the generator processes
+// TemplateFile entries whose content was originally loaded from a symlink target
+// (as produced by collectFiles in the provider). The generator does not know about
+// symlinks; it treats all TemplateFiles as regular files. This test documents that
+// symlink-originated content is rendered as a regular output file with correct
+// variable substitution.
+func TestGenerator_GenerateWithSymlinkContent(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	// Simulate content that was loaded from a symlink target by collectFiles.
+	// The TemplateFile has no symlink metadata; it is treated as a regular file.
+	symlinkContent := "project: @ign-var:project_name@\nversion: @ign-var:version@"
+	expectedContent := "project: my-app\nversion: 1.0.0"
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				// This file's content originated from a symlink target.
+				// collectFiles read the symlink target and stored the content here.
+				Path:     "config.txt",
+				Content:  []byte(symlinkContent),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{
+		"project_name": "my-app",
+		"version":      "1.0.0",
+	})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+		Verbose:   false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesCreated != 1 {
+		t.Errorf("FilesCreated = %d, want 1", result.FilesCreated)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("Errors = %v, want none", result.Errors)
+	}
+
+	// Verify the output is a regular file with correct content.
+	outputPath := filepath.Join(tmpDir, "config.txt")
+	info, err := os.Lstat(outputPath)
+	if err != nil {
+		t.Fatalf("failed to stat output file: %v", err)
+	}
+
+	// Output must be a regular file, not a symlink.
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Error("output file is a symlink, expected a regular file")
+	}
+	if !info.Mode().IsRegular() {
+		t.Errorf("output file mode = %v, expected regular file", info.Mode())
+	}
+
+	// Verify content has variable substitution applied.
+	content, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatalf("failed to read output file: %v", err)
+	}
+	if string(content) != expectedContent {
+		t.Errorf("output content = %q, want %q", string(content), expectedContent)
+	}
+}
