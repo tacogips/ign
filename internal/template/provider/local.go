@@ -322,11 +322,40 @@ func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile,
 
 	err := filepath.Walk(templateRoot, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			// Handle errors from Walk (e.g., broken symlinks encountered by Lstat).
+			// If the entry is a broken symlink, skip it gracefully instead of failing.
+			if os.IsNotExist(err) {
+				debug.Debug("[local] Skipping broken symlink: %s", path)
+				return nil
+			}
 			return err
 		}
 
 		// Skip directories
 		if info.IsDir() {
+			return nil
+		}
+
+		// Handle symlinks: filepath.Walk uses os.Lstat, so symlinks appear as
+		// non-directory, non-regular entries. Resolve to determine behavior.
+		if info.Mode()&os.ModeSymlink != 0 {
+			resolved, err := os.Stat(path)
+			if err != nil {
+				// Broken/dangling symlink - skip gracefully
+				debug.Debug("[local] Skipping broken symlink: %s", path)
+				return nil
+			}
+			if resolved.IsDir() {
+				// Symlink to directory - skip (Walk does not descend into symlinked dirs)
+				debug.Debug("[local] Skipping symlink to directory: %s", path)
+				return nil
+			}
+			// Symlink to regular file - fall through to collect it
+		}
+
+		// Skip non-regular, non-symlink files (devices, sockets, named pipes, etc.)
+		if info.Mode()&os.ModeSymlink == 0 && !info.Mode().IsRegular() {
+			debug.Debug("[local] Skipping non-regular file: %s", path)
 			return nil
 		}
 
@@ -341,7 +370,7 @@ func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile,
 			return fmt.Errorf("failed to get relative path: %w", err)
 		}
 
-		// Read file content
+		// Read file content (use os.ReadFile which follows symlinks)
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %w", relPath, err)

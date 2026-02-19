@@ -506,6 +506,63 @@ func TestCalculateTemplateHashFromDir(t *testing.T) {
 			},
 		},
 		{
+			name: "symlink to directory is skipped gracefully",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				// Create a regular file
+				if err := os.WriteFile(filepath.Join(dir, "regular.txt"), []byte("regular content"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				// Create a subdirectory with a file
+				subDir := filepath.Join(dir, "realdir")
+				if err := os.MkdirAll(subDir, 0755); err != nil {
+					t.Fatalf("Failed to create subdir: %v", err)
+				}
+				if err := os.WriteFile(filepath.Join(subDir, "inner.txt"), []byte("inner content"), 0644); err != nil {
+					t.Fatalf("Failed to create inner file: %v", err)
+				}
+				// Create a symlink to the subdirectory
+				if err := os.Symlink(subDir, filepath.Join(dir, "linkdir")); err != nil {
+					t.Fatalf("Failed to create symlink: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash string, dir string) {
+				if hash == "" {
+					t.Error("Expected non-empty hash")
+				}
+				// Hash should be deterministic and not fail due to symlink
+				hash2, err := CalculateTemplateHashFromDir(dir, nil)
+				if err != nil {
+					t.Fatalf("Second hash calculation failed: %v", err)
+				}
+				if hash != hash2 {
+					t.Errorf("Hash not deterministic with symlink: got %s then %s", hash, hash2)
+				}
+			},
+		},
+		{
+			name: "dangling symlink is skipped gracefully",
+			setup: func(t *testing.T) string {
+				dir := t.TempDir()
+				if err := os.WriteFile(filepath.Join(dir, "regular.txt"), []byte("regular content"), 0644); err != nil {
+					t.Fatalf("Failed to create file: %v", err)
+				}
+				// Create a dangling symlink
+				if err := os.Symlink(filepath.Join(dir, "nonexistent"), filepath.Join(dir, "broken-link.txt")); err != nil {
+					t.Fatalf("Failed to create dangling symlink: %v", err)
+				}
+				return dir
+			},
+			wantErr: false,
+			validate: func(t *testing.T, hash string, dir string) {
+				if hash == "" {
+					t.Error("Expected non-empty hash (from regular.txt)")
+				}
+			},
+		},
+		{
 			name: "error on non-existent directory",
 			setup: func(t *testing.T) string {
 				return "/nonexistent/directory/path"
@@ -780,6 +837,76 @@ func TestScanTemplateFiles_IgnorePatterns(t *testing.T) {
 		}
 		if _, ok := result.Variables["main_var"]; !ok {
 			t.Error("Expected 'main_var' to be included")
+		}
+	})
+}
+
+func TestScanTemplateFiles_SymlinkHandling(t *testing.T) {
+	t.Run("symlink to directory is traversed during scan", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// Create a template file in root
+		if err := os.WriteFile(filepath.Join(dir, "root.txt"), []byte("@ign-var:root_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Create a subdirectory with a template file
+		subDir := filepath.Join(dir, "realdir")
+		if err := os.MkdirAll(subDir, 0755); err != nil {
+			t.Fatalf("Failed to create subdir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(subDir, "inner.txt"), []byte("@ign-var:inner_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create inner file: %v", err)
+		}
+
+		// Create a symlink to the subdirectory
+		if err := os.Symlink(subDir, filepath.Join(dir, "linkdir")); err != nil {
+			t.Fatalf("Failed to create symlink: %v", err)
+		}
+
+		result := &UpdateTemplateResult{Variables: make(map[string]*CollectedVar)}
+		err := scanTemplateFiles(context.Background(), dir, nil, result)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		// Should have scanned root.txt, realdir/inner.txt, and linkdir/inner.txt
+		if result.FilesScanned < 2 {
+			t.Errorf("Expected at least 2 files scanned, got %d", result.FilesScanned)
+		}
+
+		if _, ok := result.Variables["root_var"]; !ok {
+			t.Error("Expected 'root_var' to be found")
+		}
+		if _, ok := result.Variables["inner_var"]; !ok {
+			t.Error("Expected 'inner_var' to be found")
+		}
+	})
+
+	t.Run("dangling symlink is skipped during scan", func(t *testing.T) {
+		dir := t.TempDir()
+
+		// Create a template file in root
+		if err := os.WriteFile(filepath.Join(dir, "root.txt"), []byte("@ign-var:root_var@"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+
+		// Create a dangling symlink
+		if err := os.Symlink(filepath.Join(dir, "nonexistent"), filepath.Join(dir, "broken-link.txt")); err != nil {
+			t.Fatalf("Failed to create dangling symlink: %v", err)
+		}
+
+		result := &UpdateTemplateResult{Variables: make(map[string]*CollectedVar)}
+		err := scanTemplateFiles(context.Background(), dir, nil, result)
+		if err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+
+		if result.FilesScanned != 1 {
+			t.Errorf("Expected 1 file scanned, got %d", result.FilesScanned)
+		}
+		if _, ok := result.Variables["root_var"]; !ok {
+			t.Error("Expected 'root_var' to be found")
 		}
 	})
 }
