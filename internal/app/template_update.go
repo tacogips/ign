@@ -190,6 +190,31 @@ func scanTemplateFilesRecursive(ctx context.Context, rootDir string, dirPath str
 			continue
 		}
 
+		// Handle symlinks: os.ReadDir uses os.Lstat, so symlinks are not recognized
+		// as directories even if they point to one. Resolve them to determine behavior.
+		if entry.Type()&os.ModeSymlink != 0 {
+			resolved, err := os.Stat(fullPath)
+			if err != nil {
+				// Broken/dangling symlink - skip gracefully
+				debug.Debug("[app] Skipping broken symlink during scan: %s", fullPath)
+				continue
+			}
+			if resolved.IsDir() {
+				// Symlink to directory - recurse into it
+				if err := scanTemplateFilesRecursive(ctx, rootDir, fullPath, ignorePatterns, result); err != nil {
+					return err
+				}
+				continue
+			}
+			// Symlink to regular file - fall through to scanFile
+		}
+
+		// Skip non-regular, non-symlink files (devices, sockets, named pipes, etc.)
+		if entry.Type()&os.ModeSymlink == 0 && !entry.Type().IsRegular() {
+			debug.Debug("[app] Skipping non-regular file during scan: %s", fullPath)
+			continue
+		}
+
 		// Skip binary files
 		if isBinaryFile(fullPath) {
 			continue
@@ -533,6 +558,30 @@ func CalculateTemplateHashFromDir(dirPath string, ignorePatterns []string) (stri
 			return nil
 		}
 
+		// Handle symlinks: filepath.Walk uses os.Lstat, so symlinks appear as
+		// non-directory, non-regular entries. We need to resolve them to determine
+		// whether they point to a file (include) or a directory (skip).
+		if info.Mode()&os.ModeSymlink != 0 {
+			resolved, err := os.Stat(path)
+			if err != nil {
+				// Broken/dangling symlink - skip gracefully
+				debug.Debug("[app] Skipping broken symlink during hash: %s", relPath)
+				return nil
+			}
+			if resolved.IsDir() {
+				// Symlink to directory - skip (Walk does not descend into symlinked dirs)
+				debug.Debug("[app] Skipping symlink to directory during hash: %s", relPath)
+				return nil
+			}
+			// Symlink to regular file - fall through to include it
+		}
+
+		// Skip non-regular files (devices, sockets, named pipes, etc.)
+		if info.Mode()&os.ModeSymlink == 0 && !info.Mode().IsRegular() {
+			debug.Debug("[app] Skipping non-regular file during hash: %s", relPath)
+			return nil
+		}
+
 		// Skip template config file (we're calculating hash for everything else)
 		if info.Name() == model.IgnTemplateConfigFile {
 			return nil
@@ -560,6 +609,19 @@ func CalculateTemplateHashFromDir(dirPath string, ignorePatterns []string) (stri
 	hashableFiles := make([]HashableFile, 0, len(filePaths))
 	for _, relPath := range filePaths {
 		fullPath := filepath.Join(dirPath, relPath)
+
+		// Defensive check: verify the path resolves to a regular file before reading.
+		// This guards against symlinks that resolve to directories or other non-regular files.
+		resolvedInfo, err := os.Stat(fullPath)
+		if err != nil {
+			debug.Debug("[app] Skipping unreadable file during hash read: %s: %v", relPath, err)
+			continue
+		}
+		if resolvedInfo.IsDir() {
+			debug.Debug("[app] Skipping directory during hash read: %s", relPath)
+			continue
+		}
+
 		content, err := os.ReadFile(fullPath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read %s: %w", relPath, err)

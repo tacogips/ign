@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/tacogips/ign/internal/template/model"
@@ -78,12 +77,11 @@ func TestCollectFiles_SymlinkToFile(t *testing.T) {
 	}
 }
 
-// TestCollectFiles_SymlinkToDirectory verifies behavior when a symlink points to a
-// subdirectory within the template directory. filepath.Walk uses os.Lstat, so the
-// symlink entry is NOT recognized as a directory (info.IsDir() is false for a symlink).
-// Walk does NOT descend into symlinked directories. Instead, collectFiles attempts to
-// read the symlink path via os.ReadFile, which follows the symlink to the directory
-// and fails with "is a directory" error. This documents the current behavior.
+// TestCollectFiles_SymlinkToDirectory verifies that a symlink pointing to a
+// subdirectory is handled gracefully. The symlink to directory is skipped by
+// collectFiles (filepath.Walk does not descend into symlinked directories),
+// but does NOT cause an error. The files inside the real directory are still
+// collected via the real directory path.
 func TestCollectFiles_SymlinkToDirectory(t *testing.T) {
 	templateDir := t.TempDir()
 	writeIgnTemplateConfig(t, templateDir)
@@ -104,32 +102,46 @@ func TestCollectFiles_SymlinkToDirectory(t *testing.T) {
 		t.Fatalf("failed to create directory symlink: %v", err)
 	}
 
-	// Fetch should fail because filepath.Walk (using os.Lstat) sees the symlink as
-	// a non-directory entry. collectFiles then tries os.ReadFile on a path that
-	// resolves to a directory, which fails.
+	// Fetch should succeed: the symlink to directory is gracefully skipped,
+	// and the real directory's files are collected normally.
 	provider := NewLocalProviderWithBase(templateDir)
 	ref := model.TemplateRef{
 		Provider: "local",
 		Path:     templateDir,
 	}
-	_, err := provider.Fetch(context.Background(), ref)
-	if err == nil {
-		t.Fatal("Fetch() expected error for directory symlink, got nil")
+	tmpl, err := provider.Fetch(context.Background(), ref)
+	if err != nil {
+		t.Fatalf("Fetch() unexpected error: %v", err)
 	}
 
-	// The error should indicate an attempt to read a directory.
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "is a directory") {
-		t.Errorf("Fetch() error = %q, expected to contain 'is a directory'", errMsg)
+	// The file inside the real directory should be collected.
+	foundInner := false
+	for _, f := range tmpl.Files {
+		if f.Path == filepath.Join("realdir", "inner.txt") {
+			foundInner = true
+			if string(f.Content) != fileContent {
+				t.Errorf("realdir/inner.txt content = %q, want %q", string(f.Content), fileContent)
+			}
+		}
+	}
+
+	if !foundInner {
+		t.Error("realdir/inner.txt not found in collected files")
 	}
 }
 
 // TestCollectFiles_DanglingSymlink verifies that a dangling symlink (pointing to a
-// non-existent target) causes an error during Fetch. filepath.Walk propagates the
-// error from os.Lstat on the broken symlink target.
+// non-existent target) is gracefully skipped during Fetch. The dangling symlink
+// should not cause an error; it is simply ignored.
 func TestCollectFiles_DanglingSymlink(t *testing.T) {
 	templateDir := t.TempDir()
 	writeIgnTemplateConfig(t, templateDir)
+
+	// Create a regular file so we have something to collect.
+	regularContent := "regular file content"
+	if err := os.WriteFile(filepath.Join(templateDir, "regular.txt"), []byte(regularContent), 0644); err != nil {
+		t.Fatalf("failed to write regular.txt: %v", err)
+	}
 
 	// Create a symlink pointing to a non-existent target.
 	linkPath := filepath.Join(templateDir, "broken-link.txt")
@@ -137,21 +149,33 @@ func TestCollectFiles_DanglingSymlink(t *testing.T) {
 		t.Fatalf("failed to create dangling symlink: %v", err)
 	}
 
-	// Fetch should fail because filepath.Walk encounters the dangling symlink.
+	// Fetch should succeed: the dangling symlink is gracefully skipped.
 	provider := NewLocalProviderWithBase(templateDir)
 	ref := model.TemplateRef{
 		Provider: "local",
 		Path:     templateDir,
 	}
-	_, err := provider.Fetch(context.Background(), ref)
-	if err == nil {
-		t.Fatal("Fetch() expected error for dangling symlink, got nil")
+	tmpl, err := provider.Fetch(context.Background(), ref)
+	if err != nil {
+		t.Fatalf("Fetch() unexpected error: %v", err)
 	}
 
-	// The error should mention something about the file not existing or the symlink.
-	errMsg := err.Error()
-	if !strings.Contains(errMsg, "no such file") && !strings.Contains(errMsg, "not exist") {
-		t.Errorf("Fetch() error = %q, expected to contain file-not-found indication", errMsg)
+	// The regular file should be collected; the broken symlink should be skipped.
+	foundRegular := false
+	for _, f := range tmpl.Files {
+		if f.Path == "regular.txt" {
+			foundRegular = true
+			if string(f.Content) != regularContent {
+				t.Errorf("regular.txt content = %q, want %q", string(f.Content), regularContent)
+			}
+		}
+		if f.Path == "broken-link.txt" {
+			t.Error("broken-link.txt (dangling symlink) should not be collected")
+		}
+	}
+
+	if !foundRegular {
+		t.Error("regular.txt not found in collected files")
 	}
 }
 
