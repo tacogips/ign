@@ -339,6 +339,21 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			}
 			_ = outFile.Close()
 			fileCount++
+		case tar.TypeSymlink:
+			// Create parent directory if needed
+			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				_ = os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to create parent directory for symlink: %v", err)
+				return "", fmt.Errorf("failed to create parent directory for symlink: %w", err)
+			}
+
+			// Create symbolic link (Linkname is stored as-is in tar archive)
+			if err := os.Symlink(header.Linkname, target); err != nil {
+				_ = os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to create symlink %s -> %s: %v", target, header.Linkname, err)
+				return "", fmt.Errorf("failed to create symlink %s -> %s: %w", target, header.Linkname, err)
+			}
+			fileCount++
 		}
 	}
 
