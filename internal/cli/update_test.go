@@ -100,6 +100,55 @@ func TestUpdateCmd_ShouldOverwriteLogic(t *testing.T) {
 	}
 }
 
+func TestShouldRegenerate(t *testing.T) {
+	tests := []struct {
+		name        string
+		hashChanged bool
+		force       bool
+		overwrite   bool
+		want        bool
+	}{
+		{
+			name:        "changed template always regenerates",
+			hashChanged: true,
+			force:       false,
+			overwrite:   false,
+			want:        true,
+		},
+		{
+			name:        "unchanged without flags does not regenerate",
+			hashChanged: false,
+			force:       false,
+			overwrite:   false,
+			want:        false,
+		},
+		{
+			name:        "unchanged with overwrite regenerates",
+			hashChanged: false,
+			force:       false,
+			overwrite:   true,
+			want:        true,
+		},
+		{
+			name:        "unchanged with force regenerates",
+			hashChanged: false,
+			force:       true,
+			overwrite:   false,
+			want:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRegenerate(tt.hashChanged, tt.force, tt.overwrite)
+			if got != tt.want {
+				t.Fatalf("shouldRegenerate(%v, %v, %v) = %v, want %v",
+					tt.hashChanged, tt.force, tt.overwrite, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdateCmd_FlagParsing(t *testing.T) {
 	tests := []struct {
 		name              string

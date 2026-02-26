@@ -32,14 +32,15 @@ Requirements:
   - .ign/ign-var.json must exist (stores variable values)
   - For private GitHub repositories, set GITHUB_TOKEN environment variable
 
-If the template has not changed (same hash), no action is taken.
+If the template has not changed (same hash), no action is taken unless
+--overwrite or --force is specified.
 
 Examples:
   ign update                     # Update if template changed, skip existing files
   ign update ./my-project        # Update to specific directory
   ign update --dry-run           # Preview changes without writing
-  ign update --overwrite         # Update if template changed, overwrite existing files
-  ign update --force             # Regenerate even if template unchanged, overwrite files`,
+  ign update --overwrite         # Overwrite existing files (also regenerates even if unchanged)
+  ign update --force             # Alias of --overwrite for explicit "force regenerate" intent`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runUpdate,
 }
@@ -97,13 +98,19 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	printSeparator()
 
+	// Decide whether to regenerate files.
+	// By default, unchanged template exits early. --overwrite or --force bypasses this.
+	if !shouldRegenerate(prepResult.HashChanged, updateForce, updateOverwrite) {
+		printSuccess("Template is up to date (no changes detected)")
+		return nil
+	}
+
 	// Check if hash changed
 	if !prepResult.HashChanged {
 		if updateForce {
 			printInfo("Template unchanged, but --force specified - regenerating files...")
 		} else {
-			printSuccess("Template is up to date (no changes detected)")
-			return nil
+			printInfo("Template unchanged, but --overwrite specified - regenerating files...")
 		}
 	} else {
 		printInfo("Template has been updated")
@@ -214,6 +221,13 @@ func truncateHash(hash string) string {
 		return hash
 	}
 	return hash[:8] + "..." + hash[len(hash)-8:]
+}
+
+func shouldRegenerate(hashChanged, force, overwrite bool) bool {
+	if hashChanged {
+		return true
+	}
+	return force || overwrite
 }
 
 // PromptForNewVariables prompts for values of new variables.
