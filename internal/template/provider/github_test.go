@@ -42,22 +42,38 @@ func TestGitHubProvider_ExtractArchive_PreservesSymlinkForCollectFiles(t *testin
 		t.Fatalf("symlink target = %q, want %q", target, "AGENTS.md")
 	}
 
-	// Verify downstream collection sees both files (symlink + target content).
+	// Verify downstream collection preserves both files:
+	// AGENTS.md as a regular file, CLAUDE.md as a symlink entry.
 	files, err := p.collectFiles(extractDir)
 	if err != nil {
 		t.Fatalf("collectFiles() error = %v", err)
 	}
 
-	got := map[string]string{}
+	foundAgents := false
+	foundClaude := false
 	for _, f := range files {
-		got[f.Path] = string(f.Content)
+		switch f.Path {
+		case "AGENTS.md":
+			foundAgents = true
+			if f.SymlinkTarget != "" {
+				t.Fatalf("AGENTS.md should be a regular file, got SymlinkTarget=%q", f.SymlinkTarget)
+			}
+			if string(f.Content) != "agent instructions\n" {
+				t.Fatalf("AGENTS.md content = %q, want %q", string(f.Content), "agent instructions\n")
+			}
+		case "CLAUDE.md":
+			foundClaude = true
+			if f.SymlinkTarget != "AGENTS.md" {
+				t.Fatalf("CLAUDE.md SymlinkTarget = %q, want %q", f.SymlinkTarget, "AGENTS.md")
+			}
+		}
 	}
 
-	if got["AGENTS.md"] != "agent instructions\n" {
-		t.Fatalf("AGENTS.md content = %q, want %q", got["AGENTS.md"], "agent instructions\n")
+	if !foundAgents {
+		t.Fatal("AGENTS.md not found in collected files")
 	}
-	if got["CLAUDE.md"] != "agent instructions\n" {
-		t.Fatalf("CLAUDE.md content = %q, want %q", got["CLAUDE.md"], "agent instructions\n")
+	if !foundClaude {
+		t.Fatal("CLAUDE.md (symlink) not found in collected files")
 	}
 }
 

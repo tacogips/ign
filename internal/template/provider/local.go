@@ -337,20 +337,32 @@ func (p *LocalProvider) collectFiles(templateRoot string) ([]model.TemplateFile,
 		}
 
 		// Handle symlinks: filepath.Walk uses os.Lstat, so symlinks appear as
-		// non-directory, non-regular entries. Resolve to determine behavior.
+		// non-directory, non-regular entries. Preserve symlinks as symlink entries
+		// so the generator can recreate them in the output.
 		if info.Mode()&os.ModeSymlink != 0 {
-			resolved, err := os.Stat(path)
+			linkTarget, err := os.Readlink(path)
 			if err != nil {
-				// Broken/dangling symlink - skip gracefully
-				debug.Debug("[local] Skipping broken symlink: %s", path)
+				debug.Debug("[local] Skipping unreadable symlink: %s: %v", path, err)
 				return nil
 			}
-			if resolved.IsDir() {
-				// Symlink to directory - skip (Walk does not descend into symlinked dirs)
-				debug.Debug("[local] Skipping symlink to directory: %s", path)
+
+			relPath, err := filepath.Rel(templateRoot, path)
+			if err != nil {
+				return fmt.Errorf("failed to get relative path for symlink: %w", err)
+			}
+
+			// Skip template config file even if it's a symlink
+			if filepath.Base(path) == model.IgnTemplateConfigFile {
 				return nil
 			}
-			// Symlink to regular file - fall through to collect it
+
+			debug.Debug("[local] Collecting symlink: %s -> %s", relPath, linkTarget)
+			files = append(files, model.TemplateFile{
+				Path:          relPath,
+				Mode:          info.Mode(),
+				SymlinkTarget: linkTarget,
+			})
+			return nil
 		}
 
 		// Skip non-regular, non-symlink files (devices, sockets, named pipes, etc.)

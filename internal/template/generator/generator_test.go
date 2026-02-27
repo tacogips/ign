@@ -527,21 +527,12 @@ func TestGenerator_FilterSpecialFiles(t *testing.T) {
 	}
 }
 
-// TestGenerator_GenerateWithSymlinkContent verifies that the generator processes
-// TemplateFile entries whose content was originally loaded from a symlink target
-// (as produced by collectFiles in the provider). The generator does not know about
-// symlinks; it treats all TemplateFiles as regular files. This test documents that
-// symlink-originated content is rendered as a regular output file with correct
-// variable substitution.
-func TestGenerator_GenerateWithSymlinkContent(t *testing.T) {
+// TestGenerator_GenerateWithFileSymlink verifies that the generator creates
+// a symbolic link when the TemplateFile has SymlinkTarget set (file symlink).
+func TestGenerator_GenerateWithFileSymlink(t *testing.T) {
 	tmpDir := t.TempDir()
 	gen := NewGenerator()
 	ctx := context.Background()
-
-	// Simulate content that was loaded from a symlink target by collectFiles.
-	// The TemplateFile has no symlink metadata; it is treated as a regular file.
-	symlinkContent := "project: @ign-var:project_name@\nversion: @ign-var:version@"
-	expectedContent := "project: my-app\nversion: 1.0.0"
 
 	template := &model.Template{
 		Ref: model.TemplateRef{},
@@ -551,21 +542,23 @@ func TestGenerator_GenerateWithSymlinkContent(t *testing.T) {
 		},
 		Files: []model.TemplateFile{
 			{
-				// This file's content originated from a symlink target.
-				// collectFiles read the symlink target and stored the content here.
-				Path:     "config.txt",
-				Content:  []byte(symlinkContent),
+				// Regular file: the symlink target.
+				Path:     "AGENTS.md",
+				Content:  []byte("# Agents"),
 				Mode:     0644,
 				IsBinary: false,
+			},
+			{
+				// Symlink entry: CLAUDE.md -> AGENTS.md
+				Path:          "CLAUDE.md",
+				Mode:          0777 | os.ModeSymlink,
+				SymlinkTarget: "AGENTS.md",
 			},
 		},
 		RootPath: tmpDir,
 	}
 
-	vars := parser.NewMapVariables(map[string]interface{}{
-		"project_name": "my-app",
-		"version":      "1.0.0",
-	})
+	vars := parser.NewMapVariables(map[string]interface{}{})
 
 	opts := GenerateOptions{
 		Template:  template,
@@ -580,34 +573,126 @@ func TestGenerator_GenerateWithSymlinkContent(t *testing.T) {
 		t.Fatalf("Generate() error = %v", err)
 	}
 
-	if result.FilesCreated != 1 {
-		t.Errorf("FilesCreated = %d, want 1", result.FilesCreated)
+	if result.FilesCreated != 2 {
+		t.Errorf("FilesCreated = %d, want 2", result.FilesCreated)
 	}
 	if len(result.Errors) != 0 {
 		t.Errorf("Errors = %v, want none", result.Errors)
 	}
 
-	// Verify the output is a regular file with correct content.
-	outputPath := filepath.Join(tmpDir, "config.txt")
-	info, err := os.Lstat(outputPath)
+	// Verify AGENTS.md is a regular file.
+	agentsPath := filepath.Join(tmpDir, "AGENTS.md")
+	agentsInfo, err := os.Lstat(agentsPath)
 	if err != nil {
-		t.Fatalf("failed to stat output file: %v", err)
+		t.Fatalf("failed to stat AGENTS.md: %v", err)
+	}
+	if !agentsInfo.Mode().IsRegular() {
+		t.Errorf("AGENTS.md mode = %v, expected regular file", agentsInfo.Mode())
 	}
 
-	// Output must be a regular file, not a symlink.
-	if info.Mode()&os.ModeSymlink != 0 {
-		t.Error("output file is a symlink, expected a regular file")
+	// Verify CLAUDE.md is a symlink pointing to AGENTS.md.
+	claudePath := filepath.Join(tmpDir, "CLAUDE.md")
+	claudeInfo, err := os.Lstat(claudePath)
+	if err != nil {
+		t.Fatalf("failed to lstat CLAUDE.md: %v", err)
 	}
-	if !info.Mode().IsRegular() {
-		t.Errorf("output file mode = %v, expected regular file", info.Mode())
+	if claudeInfo.Mode()&os.ModeSymlink == 0 {
+		t.Error("CLAUDE.md should be a symlink")
 	}
 
-	// Verify content has variable substitution applied.
-	content, err := os.ReadFile(outputPath)
+	linkTarget, err := os.Readlink(claudePath)
 	if err != nil {
-		t.Fatalf("failed to read output file: %v", err)
+		t.Fatalf("failed to readlink CLAUDE.md: %v", err)
 	}
-	if string(content) != expectedContent {
-		t.Errorf("output content = %q, want %q", string(content), expectedContent)
+	if linkTarget != "AGENTS.md" {
+		t.Errorf("CLAUDE.md symlink target = %q, want %q", linkTarget, "AGENTS.md")
+	}
+}
+
+// TestGenerator_GenerateWithDirectorySymlink verifies that the generator creates
+// a symbolic link for directory symlink entries.
+func TestGenerator_GenerateWithDirectorySymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				// Regular file inside the real directory.
+				Path:     ".agents/settings.json",
+				Content:  []byte("{}"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				// Directory symlink: .claude -> .agents
+				Path:          ".claude",
+				Mode:          0777 | os.ModeSymlink,
+				SymlinkTarget: ".agents",
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+		Verbose:   false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesCreated != 2 {
+		t.Errorf("FilesCreated = %d, want 2", result.FilesCreated)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("Errors = %v, want none", result.Errors)
+	}
+
+	// Verify .agents/settings.json is a regular file.
+	settingsPath := filepath.Join(tmpDir, ".agents", "settings.json")
+	if _, err := os.Lstat(settingsPath); err != nil {
+		t.Fatalf("failed to stat .agents/settings.json: %v", err)
+	}
+
+	// Verify .claude is a symlink pointing to .agents.
+	claudePath := filepath.Join(tmpDir, ".claude")
+	claudeInfo, err := os.Lstat(claudePath)
+	if err != nil {
+		t.Fatalf("failed to lstat .claude: %v", err)
+	}
+	if claudeInfo.Mode()&os.ModeSymlink == 0 {
+		t.Error(".claude should be a symlink")
+	}
+
+	linkTarget, err := os.Readlink(claudePath)
+	if err != nil {
+		t.Fatalf("failed to readlink .claude: %v", err)
+	}
+	if linkTarget != ".agents" {
+		t.Errorf(".claude symlink target = %q, want %q", linkTarget, ".agents")
+	}
+
+	// Verify we can access files through the symlink.
+	symlinkSettingsPath := filepath.Join(tmpDir, ".claude", "settings.json")
+	content, err := os.ReadFile(symlinkSettingsPath)
+	if err != nil {
+		t.Fatalf("failed to read file through directory symlink: %v", err)
+	}
+	if string(content) != "{}" {
+		t.Errorf("settings.json content through symlink = %q, want %q", string(content), "{}")
 	}
 }

@@ -3,6 +3,7 @@ package generator
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/tacogips/ign/internal/debug"
@@ -173,8 +174,6 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 		// Construct output path
 		outputPath := filepath.Join(opts.OutputDir, processedFilePath)
-		debug.Debug("[generator] Processing file: %s -> %s (processed: %s, size: %d bytes)",
-			file.Path, outputPath, processedFilePath, len(file.Content))
 
 		// Track parent directories for dry-run
 		if dryRun {
@@ -193,6 +192,57 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 		// Add to processed files list
 		result.Files = append(result.Files, outputPath)
+
+		// Handle symlinks: create symbolic links instead of regular files
+		if file.SymlinkTarget != "" {
+			debug.Debug("[generator] Processing symlink: %s -> %s (processed path: %s)",
+				file.Path, file.SymlinkTarget, processedFilePath)
+
+			// Check if something already exists at the output path (use Lstat to detect dangling symlinks too)
+			_, lstatErr := os.Lstat(outputPath)
+			fileExists := lstatErr == nil
+
+			if fileExists && !opts.Overwrite {
+				debug.Debug("[generator] Skipping existing symlink: %s", outputPath)
+				result.FilesSkipped++
+				if dryRun {
+					result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+						Path:      outputPath,
+						Content:   nil,
+						Exists:    true,
+						WouldSkip: true,
+					})
+				}
+				continue
+			}
+
+			if !dryRun {
+				if err := writer.WriteSymlink(outputPath, file.SymlinkTarget); err != nil {
+					result.Errors = append(result.Errors, fmt.Errorf("failed to create symlink %s -> %s: %w",
+						file.Path, file.SymlinkTarget, err))
+					continue
+				}
+			} else {
+				debug.Debug("[generator] Dry run: would create symlink %s -> %s", outputPath, file.SymlinkTarget)
+				result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+					Path:           outputPath,
+					Content:        []byte(file.SymlinkTarget),
+					Exists:         fileExists,
+					WouldOverwrite: fileExists,
+					WouldSkip:      false,
+				})
+			}
+
+			if fileExists {
+				result.FilesOverwritten++
+			} else {
+				result.FilesCreated++
+			}
+			continue
+		}
+
+		debug.Debug("[generator] Processing file: %s -> %s (processed: %s, size: %d bytes)",
+			file.Path, outputPath, processedFilePath, len(file.Content))
 
 		// Check if file exists
 		fileExists := writer.Exists(outputPath)

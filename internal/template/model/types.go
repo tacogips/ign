@@ -46,10 +46,14 @@ type TemplateRef struct {
 type TemplateFile struct {
 	// Path is the relative path from template root.
 	Path string
-	// Content is the file content.
+	// Content is the file content (empty for symlinks).
 	Content []byte
 	// Mode is the file permission mode.
 	Mode os.FileMode
 	// IsBinary indicates whether the file is binary (should not be template-processed).
 	IsBinary bool
+	// SymlinkTarget is the symlink target path. If non-empty, this entry represents
+	// a symbolic link and Content is ignored. The target is stored as-is (may be
+	// relative or absolute, pointing to files or directories).
+	SymlinkTarget string
 }

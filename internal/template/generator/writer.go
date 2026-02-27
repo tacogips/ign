@@ -14,6 +14,10 @@ type Writer interface {
 	// WriteFile writes content to a file with the specified permissions.
 	WriteFile(path string, content []byte, mode os.FileMode) error
 
+	// WriteSymlink creates a symbolic link at path pointing to target.
+	// Creates parent directories if needed. Removes any existing entry at path.
+	WriteSymlink(path string, target string) error
+
 	// CreateDir creates a directory and any necessary parent directories.
 	CreateDir(path string) error
 
@@ -107,6 +111,44 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 	}
 
 	debug.Debug("[generator] File written successfully: %s", path)
+	return nil
+}
+
+// WriteSymlink creates a symbolic link at path pointing to target.
+// Creates parent directories if needed. Removes any existing entry at path
+// (since os.Symlink fails if the path already exists).
+func (w *FileWriter) WriteSymlink(path string, target string) error {
+	debug.Debug("[generator] Creating symlink: %s -> %s", path, target)
+
+	// Create parent directories if needed
+	dir := filepath.Dir(path)
+	if dir != "" && dir != "." {
+		if err := w.CreateDir(dir); err != nil {
+			return newGeneratorError(GeneratorWriteFailed,
+				"failed to create parent directory for symlink",
+				path,
+				err)
+		}
+	}
+
+	// Remove existing entry if any (os.Symlink fails if path exists)
+	if _, err := os.Lstat(path); err == nil {
+		if err := os.Remove(path); err != nil {
+			return newGeneratorError(GeneratorWriteFailed,
+				"failed to remove existing entry for symlink",
+				path,
+				err)
+		}
+	}
+
+	if err := os.Symlink(target, path); err != nil {
+		return newGeneratorError(GeneratorWriteFailed,
+			"failed to create symlink",
+			path,
+			err)
+	}
+
+	debug.Debug("[generator] Symlink created successfully: %s -> %s", path, target)
 	return nil
 }
 

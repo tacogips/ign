@@ -20,8 +20,8 @@ func writeIgnTemplateConfig(t *testing.T, dir string) {
 }
 
 // TestCollectFiles_SymlinkToFile verifies that a symlink pointing to a regular file
-// within the template directory is followed by filepath.Walk. The symlink target's
-// content is collected as a regular TemplateFile (the symlink itself is not preserved).
+// is collected as a symlink entry with SymlinkTarget set (not as a regular file
+// with the target's content).
 func TestCollectFiles_SymlinkToFile(t *testing.T) {
 	templateDir := t.TempDir()
 	writeIgnTemplateConfig(t, templateDir)
@@ -33,7 +33,7 @@ func TestCollectFiles_SymlinkToFile(t *testing.T) {
 		t.Fatalf("failed to write target file: %v", err)
 	}
 
-	// Create a symlink pointing to the target file.
+	// Create a symlink pointing to the target file (absolute path).
 	linkPath := filepath.Join(templateDir, "link.txt")
 	if err := os.Symlink(targetPath, linkPath); err != nil {
 		t.Fatalf("failed to create symlink: %v", err)
@@ -50,21 +50,26 @@ func TestCollectFiles_SymlinkToFile(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	// We expect two files: target.txt and link.txt (both with target content).
+	// We expect two entries: target.txt (regular file) and link.txt (symlink).
 	foundTarget := false
 	foundLink := false
 	for _, f := range tmpl.Files {
 		switch f.Path {
 		case "target.txt":
 			foundTarget = true
+			if f.SymlinkTarget != "" {
+				t.Errorf("target.txt should be a regular file, got SymlinkTarget=%q", f.SymlinkTarget)
+			}
 			if string(f.Content) != targetContent {
 				t.Errorf("target.txt content = %q, want %q", string(f.Content), targetContent)
 			}
 		case "link.txt":
 			foundLink = true
-			// The symlink is followed: content should match the target.
-			if string(f.Content) != targetContent {
-				t.Errorf("link.txt (symlink) content = %q, want %q", string(f.Content), targetContent)
+			// The symlink should be preserved with the target path.
+			if f.SymlinkTarget == "" {
+				t.Error("link.txt should be a symlink entry with SymlinkTarget set")
+			} else if f.SymlinkTarget != targetPath {
+				t.Errorf("link.txt SymlinkTarget = %q, want %q", f.SymlinkTarget, targetPath)
 			}
 		}
 	}
@@ -78,10 +83,8 @@ func TestCollectFiles_SymlinkToFile(t *testing.T) {
 }
 
 // TestCollectFiles_SymlinkToDirectory verifies that a symlink pointing to a
-// subdirectory is handled gracefully. The symlink to directory is skipped by
-// collectFiles (filepath.Walk does not descend into symlinked directories),
-// but does NOT cause an error. The files inside the real directory are still
-// collected via the real directory path.
+// subdirectory is collected as a symlink entry. The real directory's files are
+// also collected via the real directory path.
 func TestCollectFiles_SymlinkToDirectory(t *testing.T) {
 	templateDir := t.TempDir()
 	writeIgnTemplateConfig(t, templateDir)
@@ -102,8 +105,8 @@ func TestCollectFiles_SymlinkToDirectory(t *testing.T) {
 		t.Fatalf("failed to create directory symlink: %v", err)
 	}
 
-	// Fetch should succeed: the symlink to directory is gracefully skipped,
-	// and the real directory's files are collected normally.
+	// Fetch should succeed: the directory symlink is collected as a symlink entry,
+	// and the real directory's files are also collected.
 	provider := NewLocalProviderWithBase(templateDir)
 	ref := model.TemplateRef{
 		Provider: "local",
@@ -116,6 +119,7 @@ func TestCollectFiles_SymlinkToDirectory(t *testing.T) {
 
 	// The file inside the real directory should be collected.
 	foundInner := false
+	foundLinkDir := false
 	for _, f := range tmpl.Files {
 		if f.Path == filepath.Join("realdir", "inner.txt") {
 			foundInner = true
@@ -123,16 +127,28 @@ func TestCollectFiles_SymlinkToDirectory(t *testing.T) {
 				t.Errorf("realdir/inner.txt content = %q, want %q", string(f.Content), fileContent)
 			}
 		}
+		if f.Path == "linkdir" {
+			foundLinkDir = true
+			if f.SymlinkTarget == "" {
+				t.Error("linkdir should be a symlink entry with SymlinkTarget set")
+			} else if f.SymlinkTarget != subDir {
+				t.Errorf("linkdir SymlinkTarget = %q, want %q", f.SymlinkTarget, subDir)
+			}
+		}
 	}
 
 	if !foundInner {
 		t.Error("realdir/inner.txt not found in collected files")
 	}
+	if !foundLinkDir {
+		t.Error("linkdir (directory symlink) not found in collected files")
+	}
 }
 
 // TestCollectFiles_DanglingSymlink verifies that a dangling symlink (pointing to a
-// non-existent target) is gracefully skipped during Fetch. The dangling symlink
-// should not cause an error; it is simply ignored.
+// non-existent target) is collected as a symlink entry. The target path is preserved
+// even though the target does not exist. This allows the generator to recreate the
+// symlink in the output (the target might be created during generation).
 func TestCollectFiles_DanglingSymlink(t *testing.T) {
 	templateDir := t.TempDir()
 	writeIgnTemplateConfig(t, templateDir)
@@ -144,12 +160,13 @@ func TestCollectFiles_DanglingSymlink(t *testing.T) {
 	}
 
 	// Create a symlink pointing to a non-existent target.
+	danglingTarget := filepath.Join(templateDir, "nonexistent-target")
 	linkPath := filepath.Join(templateDir, "broken-link.txt")
-	if err := os.Symlink(filepath.Join(templateDir, "nonexistent-target"), linkPath); err != nil {
+	if err := os.Symlink(danglingTarget, linkPath); err != nil {
 		t.Fatalf("failed to create dangling symlink: %v", err)
 	}
 
-	// Fetch should succeed: the dangling symlink is gracefully skipped.
+	// Fetch should succeed: the dangling symlink is collected as a symlink entry.
 	provider := NewLocalProviderWithBase(templateDir)
 	ref := model.TemplateRef{
 		Provider: "local",
@@ -160,8 +177,9 @@ func TestCollectFiles_DanglingSymlink(t *testing.T) {
 		t.Fatalf("Fetch() unexpected error: %v", err)
 	}
 
-	// The regular file should be collected; the broken symlink should be skipped.
+	// Both the regular file and the dangling symlink should be collected.
 	foundRegular := false
+	foundBrokenLink := false
 	for _, f := range tmpl.Files {
 		if f.Path == "regular.txt" {
 			foundRegular = true
@@ -170,19 +188,24 @@ func TestCollectFiles_DanglingSymlink(t *testing.T) {
 			}
 		}
 		if f.Path == "broken-link.txt" {
-			t.Error("broken-link.txt (dangling symlink) should not be collected")
+			foundBrokenLink = true
+			if f.SymlinkTarget != danglingTarget {
+				t.Errorf("broken-link.txt SymlinkTarget = %q, want %q", f.SymlinkTarget, danglingTarget)
+			}
 		}
 	}
 
 	if !foundRegular {
 		t.Error("regular.txt not found in collected files")
 	}
+	if !foundBrokenLink {
+		t.Error("broken-link.txt (dangling symlink) not found in collected files")
+	}
 }
 
 // TestCollectFiles_SymlinkOutsideTemplate verifies that a symlink pointing to a file
-// outside the template directory is followed by filepath.Walk. The external file's
-// content is collected. This documents the current behavior: there is no security
-// restriction on symlink targets.
+// outside the template directory is collected as a symlink entry with the target path
+// preserved.
 func TestCollectFiles_SymlinkOutsideTemplate(t *testing.T) {
 	// Create a file outside the template directory.
 	externalDir := t.TempDir()
@@ -213,13 +236,13 @@ func TestCollectFiles_SymlinkOutsideTemplate(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	// The symlink target's content should be collected (no security restriction).
+	// The symlink should be collected with its target path preserved.
 	found := false
 	for _, f := range tmpl.Files {
 		if f.Path == "external-link.txt" {
 			found = true
-			if string(f.Content) != externalContent {
-				t.Errorf("external-link.txt content = %q, want %q", string(f.Content), externalContent)
+			if f.SymlinkTarget != externalFile {
+				t.Errorf("external-link.txt SymlinkTarget = %q, want %q", f.SymlinkTarget, externalFile)
 			}
 		}
 	}
@@ -230,8 +253,7 @@ func TestCollectFiles_SymlinkOutsideTemplate(t *testing.T) {
 }
 
 // TestCollectFiles_RelativeSymlink verifies that a relative symlink within the template
-// directory works correctly. filepath.Walk follows the relative symlink and collects
-// the target content.
+// directory is collected as a symlink entry with the relative target path preserved.
 func TestCollectFiles_RelativeSymlink(t *testing.T) {
 	templateDir := t.TempDir()
 	writeIgnTemplateConfig(t, templateDir)
@@ -248,8 +270,9 @@ func TestCollectFiles_RelativeSymlink(t *testing.T) {
 
 	// Create a relative symlink in the template root pointing to subdir/target.txt.
 	// The relative path is relative to the directory containing the symlink.
+	relTarget := filepath.Join("subdir", "target.txt")
 	linkPath := filepath.Join(templateDir, "relative-link.txt")
-	if err := os.Symlink(filepath.Join("subdir", "target.txt"), linkPath); err != nil {
+	if err := os.Symlink(relTarget, linkPath); err != nil {
 		t.Fatalf("failed to create relative symlink: %v", err)
 	}
 
@@ -264,20 +287,23 @@ func TestCollectFiles_RelativeSymlink(t *testing.T) {
 		t.Fatalf("Fetch() error = %v", err)
 	}
 
-	// We expect subdir/target.txt and relative-link.txt both with the same content.
+	// We expect subdir/target.txt (regular file) and relative-link.txt (symlink).
 	foundTarget := false
 	foundLink := false
 	for _, f := range tmpl.Files {
 		switch f.Path {
 		case filepath.Join("subdir", "target.txt"):
 			foundTarget = true
+			if f.SymlinkTarget != "" {
+				t.Errorf("subdir/target.txt should be a regular file, got SymlinkTarget=%q", f.SymlinkTarget)
+			}
 			if string(f.Content) != targetContent {
 				t.Errorf("subdir/target.txt content = %q, want %q", string(f.Content), targetContent)
 			}
 		case "relative-link.txt":
 			foundLink = true
-			if string(f.Content) != targetContent {
-				t.Errorf("relative-link.txt content = %q, want %q", string(f.Content), targetContent)
+			if f.SymlinkTarget != relTarget {
+				t.Errorf("relative-link.txt SymlinkTarget = %q, want %q", f.SymlinkTarget, relTarget)
 			}
 		}
 	}
