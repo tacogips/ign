@@ -322,8 +322,15 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 				return "", fmt.Errorf("failed to create parent directory: %w", err)
 			}
 
+			// Replace any existing entry at this path.
+			if err := removeExistingArchiveEntry(target); err != nil {
+				_ = os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to remove existing path %s: %v", target, err)
+				return "", fmt.Errorf("failed to remove existing path %s: %w", target, err)
+			}
+
 			// Create file
-			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			outFile, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode))
 			if err != nil {
 				_ = os.RemoveAll(extractDir)
 				debug.Debug("[github] Failed to create file %s: %v", target, err)
@@ -347,6 +354,13 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 				return "", fmt.Errorf("failed to create parent directory for symlink: %w", err)
 			}
 
+			// Replace any existing entry at this path.
+			if err := removeExistingArchiveEntry(target); err != nil {
+				_ = os.RemoveAll(extractDir)
+				debug.Debug("[github] Failed to remove existing path %s before symlink: %v", target, err)
+				return "", fmt.Errorf("failed to remove existing path %s before symlink: %w", target, err)
+			}
+
 			// Create symbolic link (Linkname is stored as-is in tar archive)
 			if err := os.Symlink(header.Linkname, target); err != nil {
 				_ = os.RemoveAll(extractDir)
@@ -359,6 +373,23 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 
 	debug.Debug("[github] Extracted %d files and %d directories", fileCount, dirCount)
 	return extractDir, nil
+}
+
+// removeExistingArchiveEntry removes an existing filesystem entry at path.
+// It supports regular files, symlinks, and non-empty directories.
+func removeExistingArchiveEntry(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
+		return os.RemoveAll(path)
+	}
+	return os.Remove(path)
 }
 
 // readIgnConfig reads and parses the template config file.

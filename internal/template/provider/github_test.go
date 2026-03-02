@@ -77,6 +77,40 @@ func TestGitHubProvider_ExtractArchive_PreservesSymlinkForCollectFiles(t *testin
 	}
 }
 
+func TestGitHubProvider_ExtractArchive_SymlinkReplacesExistingFile(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "template-replace.tar.gz")
+	if err := createTestTemplateArchiveWithFileThenSymlink(archivePath); err != nil {
+		t.Fatalf("failed to create test archive: %v", err)
+	}
+
+	p := NewGitHubProvider()
+	extractDir, err := p.extractArchive(archivePath)
+	if err != nil {
+		t.Fatalf("extractArchive() error = %v", err)
+	}
+	defer func() { _ = os.RemoveAll(extractDir) }()
+
+	claudePath := filepath.Join(extractDir, "CLAUDE.md")
+	info, err := os.Lstat(claudePath)
+	if err != nil {
+		t.Fatalf("Lstat(%s) error = %v", claudePath, err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("%s should be a symlink, got mode=%v", claudePath, info.Mode())
+	}
+
+	target, err := os.Readlink(claudePath)
+	if err != nil {
+		t.Fatalf("Readlink(%s) error = %v", claudePath, err)
+	}
+	if target != "AGENTS.md" {
+		t.Fatalf("symlink target = %q, want %q", target, "AGENTS.md")
+	}
+}
+
 func createTestTemplateArchiveWithSymlink(archivePath string) error {
 	f, err := os.Create(archivePath)
 	if err != nil {
@@ -120,6 +154,83 @@ func createTestTemplateArchiveWithSymlink(archivePath string) error {
 			content: []byte("agent instructions\n"),
 		},
 		{
+			header: &tar.Header{
+				Name:     "repo-main/CLAUDE.md",
+				Typeflag: tar.TypeSymlink,
+				Mode:     0777,
+				Linkname: "AGENTS.md",
+			},
+		},
+	}
+
+	for _, e := range entries {
+		if err := tw.WriteHeader(e.header); err != nil {
+			return err
+		}
+		if len(e.content) > 0 {
+			if _, err := tw.Write(e.content); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func createTestTemplateArchiveWithFileThenSymlink(archivePath string) error {
+	f, err := os.Create(archivePath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	gzw := gzip.NewWriter(f)
+	defer func() { _ = gzw.Close() }()
+
+	tw := tar.NewWriter(gzw)
+	defer func() { _ = tw.Close() }()
+
+	entries := []struct {
+		header  *tar.Header
+		content []byte
+	}{
+		{
+			header: &tar.Header{
+				Name:     "repo-main/",
+				Typeflag: tar.TypeDir,
+				Mode:     0755,
+			},
+		},
+		{
+			header: &tar.Header{
+				Name:     "repo-main/ign-template.json",
+				Typeflag: tar.TypeReg,
+				Mode:     0644,
+				Size:     int64(len([]byte(`{"name":"test-template","version":"1.0.0"}`))),
+			},
+			content: []byte(`{"name":"test-template","version":"1.0.0"}`),
+		},
+		{
+			header: &tar.Header{
+				Name:     "repo-main/AGENTS.md",
+				Typeflag: tar.TypeReg,
+				Mode:     0644,
+				Size:     int64(len([]byte("agent instructions\n"))),
+			},
+			content: []byte("agent instructions\n"),
+		},
+		{
+			// Old entry at same path as a regular file.
+			header: &tar.Header{
+				Name:     "repo-main/CLAUDE.md",
+				Typeflag: tar.TypeReg,
+				Mode:     0644,
+				Size:     int64(len([]byte("stale file\n"))),
+			},
+			content: []byte("stale file\n"),
+		},
+		{
+			// Final entry should replace the regular file with a symlink.
 			header: &tar.Header{
 				Name:     "repo-main/CLAUDE.md",
 				Typeflag: tar.TypeSymlink,

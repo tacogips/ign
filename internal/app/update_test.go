@@ -1220,3 +1220,87 @@ func TestCompleteUpdate_DryRunWithOverwrite(t *testing.T) {
 		}
 	})
 }
+
+func TestCompleteUpdate_OverwriteSymlinkReplacesRegularFile(t *testing.T) {
+	tempDir := t.TempDir()
+	setupTestTemplate(t, tempDir, testHash1)
+
+	// Existing regular file at path that should become a symlink.
+	existingClaudePath := filepath.Join(tempDir, "CLAUDE.md")
+	if err := os.WriteFile(existingClaudePath, []byte("old regular file"), 0644); err != nil {
+		t.Fatalf("Failed to create existing CLAUDE.md file: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test-template",
+			Version:   "1.0.0",
+			Hash:      testHash2,
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "AGENTS.md",
+				Content: []byte("# agents\n"),
+				Mode:    0644,
+			},
+			{
+				Path:          "CLAUDE.md",
+				Mode:          0777 | os.ModeSymlink,
+				SymlinkTarget: "AGENTS.md",
+			},
+		},
+	}
+
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{
+			URL: "https://github.com/test/template",
+		},
+		Hash: testHash1,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		NewVars:       []string{},
+		RemovedVars:   []string{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(tempDir, ".ign", "ign.json"),
+		IgnVarPath:    filepath.Join(tempDir, ".ign", "ign-var.json"),
+		IgnConfig:     ignConfig,
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		DryRun:        false,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+
+	if result.FilesOverwritten < 1 {
+		t.Errorf("Expected at least 1 overwritten file, got %d", result.FilesOverwritten)
+	}
+
+	claudeInfo, err := os.Lstat(existingClaudePath)
+	if err != nil {
+		t.Fatalf("Failed to lstat CLAUDE.md: %v", err)
+	}
+	if claudeInfo.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("CLAUDE.md should be a symlink after overwrite, got mode=%v", claudeInfo.Mode())
+	}
+
+	target, err := os.Readlink(existingClaudePath)
+	if err != nil {
+		t.Fatalf("Failed to read CLAUDE.md symlink target: %v", err)
+	}
+	if target != "AGENTS.md" {
+		t.Errorf("CLAUDE.md symlink target = %q, want %q", target, "AGENTS.md")
+	}
+}
