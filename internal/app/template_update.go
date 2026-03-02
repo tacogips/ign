@@ -467,6 +467,32 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 			}
 		}
 
+		existingDef, exists := ignJson.Variables[name]
+		if exists {
+			// Preserve author-provided metadata while syncing detected variable shape.
+			varDef := existingDef
+
+			if collected.Type != "" {
+				varDef.Type = collected.Type
+			} else if varDef.Type == "" {
+				varDef.Type = model.VarTypeString
+			}
+
+			varDef.Required = collected.Required
+			if collected.HasDefault {
+				varDef.Default = collected.Default
+			} else {
+				varDef.Default = nil
+			}
+
+			if strings.TrimSpace(varDef.Description) == "" {
+				varDef.Description = fmt.Sprintf("Variable %s", name)
+			}
+
+			ignJson.Variables[name] = varDef
+			continue
+		}
+
 		varDef := model.VarDef{
 			Type:        collected.Type,
 			Description: fmt.Sprintf("Variable %s", name),

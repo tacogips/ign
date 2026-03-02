@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -320,6 +321,58 @@ func TestMergeMode(t *testing.T) {
 	// UpdatedVars should be empty in merge mode
 	if len(result.UpdatedVars) != 0 {
 		t.Errorf("Expected empty UpdatedVars in merge mode, got %v", result.UpdatedVars)
+	}
+}
+
+func TestUpdateTemplate_PreservesCustomVariableMetadata(t *testing.T) {
+	dir := t.TempDir()
+
+	existingIgnJson := `{
+  "name": "test",
+  "version": "1.0.0",
+  "variables": {
+    "MODULE_PATH": {
+      "type": "string",
+      "description": "Go module path used in go.mod",
+      "example": "github.com/yourname/yourrepo",
+      "help": "Use full module import path",
+      "required": true
+    }
+  }
+}`
+	if err := os.WriteFile(filepath.Join(dir, model.IgnTemplateConfigFile), []byte(existingIgnJson), 0644); err != nil {
+		t.Fatalf("Failed to create %s: %v", model.IgnTemplateConfigFile, err)
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "template.txt"), []byte("@ign-var:MODULE_PATH@"), 0644); err != nil {
+		t.Fatalf("Failed to create template file: %v", err)
+	}
+
+	if _, err := UpdateTemplate(context.Background(), UpdateTemplateOptions{
+		Path:  dir,
+		Merge: false,
+	}); err != nil {
+		t.Fatalf("UpdateTemplate failed: %v", err)
+	}
+
+	updated, err := config.LoadIgnJson(filepath.Join(dir, model.IgnTemplateConfigFile))
+	if err != nil {
+		t.Fatalf("Failed to load updated %s: %v", model.IgnTemplateConfigFile, err)
+	}
+
+	modulePathVar, ok := updated.Variables["MODULE_PATH"]
+	if !ok {
+		t.Fatal("Expected MODULE_PATH variable to exist")
+	}
+
+	if modulePathVar.Description != "Go module path used in go.mod" {
+		t.Errorf("description was overwritten: got %q", modulePathVar.Description)
+	}
+	if modulePathVar.Help != "Use full module import path" {
+		t.Errorf("help was overwritten: got %q", modulePathVar.Help)
+	}
+	if modulePathVar.Example != "github.com/yourname/yourrepo" {
+		t.Errorf("example was overwritten: got %v", modulePathVar.Example)
 	}
 }
 
