@@ -156,7 +156,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		}
 
 		printInfo("")
-		printInfo("Configuration saved to: .ign/ign-var.json")
+		printInfo("Configuration saved to: .ign/ign.json, .ign/ign-var.json, .ign/ign-files.json")
 		printInfo(fmt.Sprintf("Project ready at: %s", outputPath))
 	}
 

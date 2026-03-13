@@ -365,6 +365,13 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 	}
 	debug.Debug("[app] Generation completed successfully")
 
+	if !opts.DryRun {
+		if err := saveManifestFromGenerateResult(manifestPathFromConfigPath(prep.IgnConfigPath), genResult); err != nil {
+			debug.Debug("[app] Failed to save ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		}
+	}
+
 	// Build result
 	result := &UpdateResult{
 		HashChanged:      prep.HashChanged,

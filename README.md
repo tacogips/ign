@@ -21,6 +21,8 @@ vim .ign/ign-var.json
 # 3. Generate project
 ign checkout .              # Current directory
 ign checkout ./my-project   # Specific directory
+ign rewind                  # Remove ign-managed files
+ign switch ./another-template
 ```
 
 ## Commands
@@ -107,6 +109,31 @@ ign checkout . --verbose    # Show detailed processing info
 | File exists | Skip (do not overwrite) |
 | File exists + `--force` | Overwrite |
 
+After a successful checkout, ign stores the created file list in `.ign/ign-files.json`.
+
+### `ign rewind [output-path]`
+
+Remove files previously created by ign and delete `.ign/`.
+
+```bash
+ign rewind
+ign rewind ./my-project
+```
+
+If `.ign/ign-files.json` exists, ign uses it directly. Otherwise it falls back to the
+currently checked-out template and variables to infer the managed files.
+
+### `ign switch <url-or-path> [output-path]`
+
+Replace the current checked-out template with a new one.
+
+```bash
+ign switch github.com/owner/new-template
+ign switch ./new-local-template ./my-project
+```
+
+`ign switch` is equivalent to `ign rewind` followed by `ign checkout`.
+
 ### `ign template check [PATH]`
 
 Validate template files for syntax errors.
@@ -142,6 +169,7 @@ ign version --json   # JSON format output
 ```
 .ign/
   ign.json             # Template reference and content hash
+  ign-files.json       # Files created by ign
   ign-var.json         # User variable values
   license-header.txt   # Optional files for @file: references
 ```
