@@ -92,6 +92,28 @@ func LoadIgnVarJson(path string) (*model.IgnVarJson, error) {
 	return &ignVar, nil
 }
 
+// LoadIgnManifest loads ign-files.json from the specified path.
+func LoadIgnManifest(path string) (*model.IgnManifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, NewConfigErrorWithCause(ConfigNotFound, path, "ign-files.json not found", err)
+		}
+		return nil, NewConfigErrorWithCause(ConfigInvalid, path, "failed to read ign-files.json", err)
+	}
+
+	var manifest model.IgnManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, NewConfigErrorWithCause(ConfigInvalid, path, "invalid JSON syntax in ign-files.json", err)
+	}
+
+	if manifest.Files == nil {
+		manifest.Files = []string{}
+	}
+
+	return &manifest, nil
+}
+
 // LoadIgnJson loads ign.json template metadata from the specified path.
 // This function reads the template's ign.json file which contains template information
 // (name, version, variable definitions). This is DIFFERENT from LoadIgnConfig which
@@ -143,6 +165,40 @@ func SaveIgnVarJson(path string, ignVar *model.IgnVarJson) error {
 
 	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-var.json", err)
+	}
+
+	return nil
+}
+
+// SaveIgnManifest saves ign-files.json to the specified path.
+// Security: The path is validated to prevent path traversal attacks.
+func SaveIgnManifest(path string, manifest *model.IgnManifest) error {
+	cleanPath := filepath.Clean(path)
+	if strings.Contains(cleanPath, "..") {
+		return NewConfigErrorWithCause(ConfigInvalid, path,
+			"path contains '..' which is not allowed for security reasons", nil)
+	}
+
+	dir := filepath.Dir(cleanPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath,
+			fmt.Sprintf("failed to create directory %s", dir), err)
+	}
+
+	if manifest == nil {
+		manifest = &model.IgnManifest{}
+	}
+	if manifest.Files == nil {
+		manifest.Files = []string{}
+	}
+
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-files.json", err)
+	}
+
+	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
+		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-files.json", err)
 	}
 
 	return nil

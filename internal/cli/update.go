@@ -208,7 +208,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 
 		printInfo("")
-		printInfo("Configuration updated: .ign/ign.json, .ign/ign-var.json")
+		printInfo("Configuration updated: .ign/ign.json, .ign/ign-var.json, .ign/ign-files.json")
 		printInfo(fmt.Sprintf("Project ready at: %s", outputPath))
 	}
 

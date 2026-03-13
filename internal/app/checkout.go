@@ -207,6 +207,11 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 			}
 			debug.Debug("[app] Existing ign-var.json backed up successfully")
 		}
+
+		if err := backupManifestIfExists(); err != nil {
+			debug.Debug("[app] Failed to backup existing ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to backup existing ign-files.json", err)
+		}
 	} else {
 		// Create config directory
 		debug.Debug("[app] Creating config directory: %s", configDir)
@@ -358,6 +363,13 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	debug.DebugValue("[app] Files created", genResult.FilesCreated)
 	debug.DebugValue("[app] Files skipped", genResult.FilesSkipped)
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
+
+	if !opts.DryRun {
+		if err := saveManifestFromGenerateResult(manifestPath(), genResult); err != nil {
+			debug.Debug("[app] Failed to save ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		}
+	}
 
 	// Convert generator result to checkout result
 	result := &CheckoutResult{
@@ -596,6 +608,13 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	debug.DebugValue("[app] Files created", genResult.FilesCreated)
 	debug.DebugValue("[app] Files skipped", genResult.FilesSkipped)
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
+
+	if !opts.DryRun {
+		if err := saveManifestFromGenerateResult(manifestPathFromConfigPath(ignConfigPath), genResult); err != nil {
+			debug.Debug("[app] Failed to save ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		}
+	}
 
 	// Convert generator result to checkout result
 	result := &CheckoutResult{
