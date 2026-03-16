@@ -55,6 +55,8 @@ func init() {
 	// Add subcommands
 	rootCmd.AddCommand(checkoutCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(rewindCmd)
+	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(templateCmd)
 	rootCmd.AddCommand(versionCmd)
 }

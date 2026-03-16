@@ -60,6 +60,13 @@ type GenerateResult struct {
 	// FilesCreated is the number of new files created.
 	FilesCreated int
 
+	// CreatedFiles contains paths that were newly created by ign.
+	CreatedFiles []string
+
+	// WrittenFiles contains paths that ign wrote during generation.
+	// This includes both newly created and overwritten files.
+	WrittenFiles []string
+
 	// FilesSkipped is the number of files skipped (already exist).
 	FilesSkipped int
 
@@ -124,10 +131,12 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Initialize result
 	result := &GenerateResult{
-		Errors:      []error{},
-		Files:       []string{},
-		DryRunFiles: []DryRunFile{},
-		Directories: []string{},
+		Errors:       []error{},
+		CreatedFiles: []string{},
+		WrittenFiles: []string{},
+		Files:        []string{},
+		DryRunFiles:  []DryRunFile{},
+		Directories:  []string{},
 	}
 
 	// Track directories for dry-run mode
@@ -237,6 +246,10 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 				result.FilesOverwritten++
 			} else {
 				result.FilesCreated++
+				result.CreatedFiles = append(result.CreatedFiles, outputPath)
+			}
+			if !dryRun {
+				result.WrittenFiles = append(result.WrittenFiles, outputPath)
 			}
 			continue
 		}
@@ -300,6 +313,10 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			result.FilesOverwritten++
 		} else {
 			result.FilesCreated++
+			result.CreatedFiles = append(result.CreatedFiles, outputPath)
+		}
+		if !dryRun {
+			result.WrittenFiles = append(result.WrittenFiles, outputPath)
 		}
 	}
 

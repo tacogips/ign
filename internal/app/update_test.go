@@ -57,6 +57,7 @@ const (
 func TestPrepareUpdate_NoIgnDirectory(t *testing.T) {
 	// Create temporary directory without .ign
 	tempDir := t.TempDir()
+	t.Chdir(tempDir)
 
 	opts := UpdateOptions{
 		OutputDir: tempDir,
@@ -83,6 +84,7 @@ func TestPrepareUpdate_NoIgnDirectory(t *testing.T) {
 
 func TestPrepareUpdate_MissingIgnConfig(t *testing.T) {
 	tempDir := t.TempDir()
+	t.Chdir(tempDir)
 
 	// Create .ign directory but no ign.json
 	ignDir := filepath.Join(tempDir, ".ign")

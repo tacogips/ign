@@ -12,6 +12,8 @@ const (
 	IgnProjectConfigFile = "ign.json"
 	// IgnVarFile is the project variables file name in .ign/ directory.
 	IgnVarFile = "ign-var.json"
+	// IgnManifestFile is the generated file manifest stored in .ign/ directory.
+	IgnManifestFile = "ign-files.json"
 )
 
 // VarType represents the type of a template variable.

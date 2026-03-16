@@ -107,6 +107,20 @@ func findNextBackupNumber(dir, filename string) (int, error) {
 	return 0, fmt.Errorf("too many backup files exist for %s (max %d), please clean up old backups", filename, maxBackups)
 }
 
+func validateTemplateHash(hash string) error {
+	debug.DebugValue("[app] Template hash from ign-template.json", hash)
+	if hash != "" {
+		return nil
+	}
+
+	debug.Debug("[app] Template hash is missing in ign-template.json")
+	return NewCheckoutError(
+		"template is missing hash in ign-template.json.\n"+
+			"The template author needs to run 'ign template update' to generate the hash.",
+		nil,
+	)
+}
+
 // PrepareCheckout prepares for checkout by fetching the template and handling config directory.
 // Returns template information and variable definitions for interactive prompting.
 func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*PrepareCheckoutResult, error) {
@@ -207,6 +221,11 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 			}
 			debug.Debug("[app] Existing ign-var.json backed up successfully")
 		}
+
+		if err := backupManifestIfExists(); err != nil {
+			debug.Debug("[app] Failed to backup existing ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to backup existing ign-files.json", err)
+		}
 	} else {
 		// Create config directory
 		debug.Debug("[app] Creating config directory: %s", configDir)
@@ -254,6 +273,10 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	// Convert variables to parser.Variables
 	vars := parser.NewMapVariables(opts.Variables)
 
+	if err := validateTemplateHash(prep.IgnJson.Hash); err != nil {
+		return nil, err
+	}
+
 	// Validate that all required variables are set
 	debug.Debug("[app] Validating required variables")
 	if err := ValidateVariables(prep.IgnJson, vars); err != nil {
@@ -264,20 +287,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {
-		// Get hash from template's ign-template.json
-		// The hash must be present (calculated by 'ign template update' on the template side)
 		templateHash := prep.IgnJson.Hash
-		debug.DebugValue("[app] Template hash from ign-template.json", templateHash)
-
-		// Validate hash is present
-		if templateHash == "" {
-			debug.Debug("[app] Template hash is missing in ign-template.json")
-			return nil, NewCheckoutError(
-				"template is missing hash in ign-template.json.\n"+
-					"The template author needs to run 'ign template update' to generate the hash.",
-				nil,
-			)
-		}
 
 		// Save ign.json (template source and hash)
 		ignConfigPath := filepath.Join(configDir, "ign.json")
@@ -358,6 +368,13 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	debug.DebugValue("[app] Files created", genResult.FilesCreated)
 	debug.DebugValue("[app] Files skipped", genResult.FilesSkipped)
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
+
+	if !opts.DryRun {
+		if err := saveManifestFromGenerateResult(manifestPath(), genResult); err != nil {
+			debug.Debug("[app] Failed to save ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		}
+	}
 
 	// Convert generator result to checkout result
 	result := &CheckoutResult{
@@ -526,21 +543,13 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	}
 	debug.Debug("[app] Template fetched successfully")
 
+	if err := validateTemplateHash(template.Config.Hash); err != nil {
+		return nil, err
+	}
+
 	// Get and update template hash in ign.json (unless dry-run)
 	if !opts.DryRun {
-		// Get hash from template's ign-template.json
 		templateHash := template.Config.Hash
-		debug.DebugValue("[app] Template hash from ign-template.json", templateHash)
-
-		// Validate hash is present
-		if templateHash == "" {
-			debug.Debug("[app] Template hash is missing in ign-template.json")
-			return nil, NewCheckoutError(
-				"template is missing hash in ign-template.json.\n"+
-					"The template author needs to run 'ign template update' to generate the hash.",
-				nil,
-			)
-		}
 
 		// Load existing ign.json
 		existingConfig, err := config.LoadIgnConfig(ignConfigPath)
@@ -596,6 +605,13 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	debug.DebugValue("[app] Files created", genResult.FilesCreated)
 	debug.DebugValue("[app] Files skipped", genResult.FilesSkipped)
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
+
+	if !opts.DryRun {
+		if err := saveManifestFromGenerateResult(manifestPathFromConfigPath(ignConfigPath), genResult); err != nil {
+			debug.Debug("[app] Failed to save ign-files.json: %v", err)
+			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		}
+	}
 
 	// Convert generator result to checkout result
 	result := &CheckoutResult{
