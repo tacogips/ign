@@ -78,7 +78,7 @@ func Rewind(ctx context.Context, opts RewindOptions) (*RewindResult, error) {
 			return result, err
 		}
 
-		cleanPath, err := validateManagedPath(path)
+		cleanPath, err := validateManagedPath(path, opts.OutputDir)
 		if err != nil {
 			result.Errors = append(result.Errors, err)
 			continue
@@ -105,7 +105,7 @@ func Rewind(ctx context.Context, opts RewindOptions) (*RewindResult, error) {
 		}
 		result.FilesRemoved++
 
-		for _, dir := range removeEmptyParentDirs(cleanPath) {
+		for _, dir := range removeEmptyParentDirs(cleanPath, opts.OutputDir) {
 			removedDirs[dir] = struct{}{}
 		}
 	}
@@ -214,23 +214,63 @@ func dedupePaths(paths []string) []string {
 	return result
 }
 
-func validateManagedPath(path string) (string, error) {
+func validateManagedPath(path string, outputDir string) (string, error) {
 	clean := filepath.Clean(path)
 	if clean == "" || clean == "." {
 		return "", fmt.Errorf("managed path is empty")
 	}
 
-	if clean == model.IgnConfigDir || strings.HasPrefix(clean, model.IgnConfigDir+string(filepath.Separator)) {
+	absOutputDir, err := filepath.Abs(outputDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve output directory %s: %w", outputDir, err)
+	}
+
+	absPath := clean
+	if !filepath.IsAbs(clean) {
+		absPath, err = filepath.Abs(clean)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve managed path %s: %w", clean, err)
+		}
+	}
+
+	outputRel, err := filepath.Rel(absOutputDir, absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to compare managed path %s against output directory %s: %w", clean, outputDir, err)
+	}
+	if outputRel == ".." || strings.HasPrefix(outputRel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("managed path %s is outside output directory %s; refusing to remove", clean, filepath.Clean(outputDir))
+	}
+
+	absIgnDir, err := filepath.Abs(model.IgnConfigDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve %s directory: %w", model.IgnConfigDir, err)
+	}
+
+	ignRel, err := filepath.Rel(absIgnDir, absPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to compare managed path %s against %s: %w", clean, model.IgnConfigDir, err)
+	}
+	if ignRel == "." || !(ignRel == ".." || strings.HasPrefix(ignRel, ".."+string(filepath.Separator))) {
 		return "", fmt.Errorf("managed path %s points into .ign; refusing to remove", clean)
 	}
 
-	return clean, nil
+	return absPath, nil
 }
 
-func removeEmptyParentDirs(path string) []string {
+func removeEmptyParentDirs(path string, outputDir string) []string {
 	removed := []string{}
+	absOutputDir, err := filepath.Abs(outputDir)
+	if err != nil {
+		return removed
+	}
+
 	dir := filepath.Dir(path)
-	for dir != "." && dir != string(filepath.Separator) && dir != model.IgnConfigDir {
+	for dir != "." && dir != string(filepath.Separator) {
+		relToOutputDir, relErr := filepath.Rel(absOutputDir, dir)
+		if relErr != nil || relToOutputDir == "." || relToOutputDir == ".." || strings.HasPrefix(relToOutputDir, ".."+string(filepath.Separator)) {
+			break
+		}
+
 		entries, err := os.ReadDir(dir)
 		if err != nil || len(entries) > 0 {
 			break

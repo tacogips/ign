@@ -43,15 +43,6 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 
 	githubToken := getGitHubToken("")
 
-	printInfo("Removing current template output...")
-	if _, err := app.Rewind(cmd.Context(), app.RewindOptions{
-		OutputDir:   outputPath,
-		GitHubToken: githubToken,
-	}); err != nil {
-		printErrorMsg(fmt.Sprintf("Switch failed during rewind: %v", err))
-		return err
-	}
-
 	printInfo(fmt.Sprintf("Template: %s", url))
 	if switchRef != "main" {
 		printInfo(fmt.Sprintf("Reference: %s", switchRef))
@@ -73,6 +64,15 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	vars, err := PromptForVariables(prepResult.IgnJson)
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
+		return err
+	}
+
+	printInfo("Removing current template output...")
+	if _, err := app.Rewind(cmd.Context(), app.RewindOptions{
+		OutputDir:   outputPath,
+		GitHubToken: githubToken,
+	}); err != nil {
+		printErrorMsg(fmt.Sprintf("Switch failed during rewind: %v", err))
 		return err
 	}
 
