@@ -67,6 +67,20 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	printInfo("Validating new template before replacing current output...")
+	if _, err := app.CompleteCheckout(cmd.Context(), app.CompleteCheckoutOptions{
+		PrepareResult: prepResult,
+		Variables:     vars,
+		OutputDir:     outputPath,
+		Overwrite:     switchForce,
+		DryRun:        true,
+		Verbose:       switchVerbose,
+		GitHubToken:   githubToken,
+	}); err != nil {
+		printErrorMsg(fmt.Sprintf("Switch validation failed: %v", err))
+		return err
+	}
+
 	printInfo("Removing current template output...")
 	if _, err := app.Rewind(cmd.Context(), app.RewindOptions{
 		OutputDir:   outputPath,

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -8,6 +9,30 @@ import (
 	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/template/model"
 )
+
+func writeTemplateWithoutHash(t *testing.T, dir string) string {
+	t.Helper()
+
+	templateDir := filepath.Join(dir, "template-without-hash")
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template directory: %v", err)
+	}
+
+	ignTemplate := `{
+  "name": "broken-template",
+  "version": "1.0.0",
+  "description": "template missing hash",
+  "variables": {}
+}`
+	if err := os.WriteFile(filepath.Join(templateDir, model.IgnTemplateConfigFile), []byte(ignTemplate), 0644); err != nil {
+		t.Fatalf("failed to write %s: %v", model.IgnTemplateConfigFile, err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "README.md"), []byte("new template"), 0644); err != nil {
+		t.Fatalf("failed to write template file: %v", err)
+	}
+
+	return templateDir
+}
 
 func TestSwitchCmd_FlagRegistration(t *testing.T) {
 	tests := []struct {
@@ -52,6 +77,7 @@ func TestRunSwitch_PreservesCurrentProjectWhenPreparationFails(t *testing.T) {
 	switchRef = "main"
 	switchForce = false
 	switchVerbose = false
+	switchCmd.SetContext(context.Background())
 
 	generatedFile := filepath.Join(tempDir, "generated.txt")
 	if err := os.WriteFile(generatedFile, []byte("existing project"), 0644); err != nil {
@@ -78,5 +104,44 @@ func TestRunSwitch_PreservesCurrentProjectWhenPreparationFails(t *testing.T) {
 	}
 	if _, statErr := os.Stat(filepath.Join(tempDir, model.IgnConfigDir)); statErr != nil {
 		t.Fatalf(".ign should be preserved when switch preparation fails: %v", statErr)
+	}
+}
+
+func TestRunSwitch_PreservesCurrentProjectWhenValidationFails(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	switchRef = "main"
+	switchForce = false
+	switchVerbose = false
+	switchCmd.SetContext(context.Background())
+
+	generatedFile := filepath.Join(tempDir, "generated.txt")
+	if err := os.WriteFile(generatedFile, []byte("existing project"), 0644); err != nil {
+		t.Fatalf("failed to create generated file: %v", err)
+	}
+
+	if err := os.MkdirAll(model.IgnConfigDir, 0755); err != nil {
+		t.Fatalf("failed to create .ign directory: %v", err)
+	}
+	if err := config.SaveIgnManifest(
+		filepath.Join(tempDir, model.IgnConfigDir, model.IgnManifestFile),
+		&model.IgnManifest{Files: []string{generatedFile}},
+	); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	templateDir := writeTemplateWithoutHash(t, tempDir)
+
+	err := runSwitch(switchCmd, []string{templateDir})
+	if err == nil {
+		t.Fatal("runSwitch should fail when the new template fails preflight validation")
+	}
+
+	if _, statErr := os.Stat(generatedFile); statErr != nil {
+		t.Fatalf("existing generated file should be preserved when switch validation fails: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(tempDir, model.IgnConfigDir)); statErr != nil {
+		t.Fatalf(".ign should be preserved when switch validation fails: %v", statErr)
 	}
 }

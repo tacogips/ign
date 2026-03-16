@@ -59,7 +59,12 @@ func saveManifestFromGenerateResult(path string, result *generator.GenerateResul
 		seen[clean] = struct{}{}
 	}
 
-	for _, path := range result.CreatedFiles {
+	writtenPaths := result.WrittenFiles
+	if len(writtenPaths) == 0 {
+		writtenPaths = result.CreatedFiles
+	}
+
+	for _, path := range writtenPaths {
 		clean := filepath.Clean(path)
 		if clean == "" || clean == "." {
 			continue
