@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,7 +101,7 @@ func TestCreateEmptyVariablesMap(t *testing.T) {
 			"project_name": {
 				Type:        model.VarTypeString,
 				Description: "Project name",
-				Required:    true,
+				Default:     "{current_dir}",
 			},
 			"port": {
 				Type:        model.VarTypeInt,
@@ -116,9 +118,9 @@ func TestCreateEmptyVariablesMap(t *testing.T) {
 
 	vars := CreateEmptyVariablesMap(ignJson)
 
-	// Check string variable (no default)
-	if val, ok := vars["project_name"]; !ok || val != "" {
-		t.Errorf("Expected project_name to be empty string, got %v", val)
+	// Check string variable with raw dynamic default
+	if val, ok := vars["project_name"]; !ok || val != "{current_dir}" {
+		t.Errorf("Expected project_name to keep raw default, got %v", val)
 	}
 
 	// Check int variable with default
@@ -129,6 +131,46 @@ func TestCreateEmptyVariablesMap(t *testing.T) {
 	// Check bool variable (no default)
 	if val, ok := vars["enable_tls"]; !ok || val != false {
 		t.Errorf("Expected enable_tls to be false, got %v", val)
+	}
+}
+
+func TestCountVariablesByType_NilIgnJSON(t *testing.T) {
+	stringCount, intCount, boolCount := CountVariablesByType(nil)
+	if stringCount != 0 || intCount != 0 || boolCount != 0 {
+		t.Fatalf("CountVariablesByType(nil) = (%d, %d, %d), want (0, 0, 0)", stringCount, intCount, boolCount)
+	}
+}
+
+func TestValidateTemplateHash(t *testing.T) {
+	tests := []struct {
+		name    string
+		hash    string
+		wantErr bool
+	}{
+		{
+			name:    "missing hash",
+			hash:    "",
+			wantErr: true,
+		},
+		{
+			name:    "invalid hash format",
+			hash:    "test-hash",
+			wantErr: true,
+		},
+		{
+			name:    "valid sha256 hash",
+			hash:    strings.Repeat("a", 64),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTemplateHash(tt.hash)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateTemplateHash(%q) error = %v, wantErr %v", tt.hash, err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -228,6 +270,100 @@ func TestLoadVariables(t *testing.T) {
 				tt.check(t, vars)
 			}
 		})
+	}
+}
+
+func TestCompleteCheckout_PreparesRuntimeVariables(t *testing.T) {
+	tempDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.Mkdir(".ign", 0755); err != nil {
+		t.Fatalf("failed to create .ign directory: %v", err)
+	}
+
+	licenseContent := "Licensed under test terms"
+	if err := os.WriteFile(filepath.Join(".ign", "license.txt"), []byte(licenseContent), 0644); err != nil {
+		t.Fatalf("failed to write license file: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:    "runtime-defaults",
+			Version: "1.0.0",
+			Hash:    strings.Repeat("a", 64),
+			Variables: map[string]model.VarDef{
+				"project_name": {
+					Type:    model.VarTypeString,
+					Default: "{current_dir}",
+				},
+				"license_text": {
+					Type:     model.VarTypeString,
+					Required: true,
+				},
+			},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "cmd/@ign-var:project_name@/main.txt",
+				Content: []byte("project=@ign-var:project_name@\nlicense=@ign-var:license_text@\n"),
+				Mode:    0644,
+			},
+		},
+	}
+
+	outputDir := filepath.Join(tempDir, "sample-app")
+	prep := &PrepareCheckoutResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		TemplateRef:   model.TemplateRef{Provider: "local", Repo: "runtime-defaults"},
+		NormalizedURL: "./template",
+	}
+
+	if _, err := CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: prep,
+		Variables: map[string]interface{}{
+			"license_text": "@file:license.txt",
+		},
+		OutputDir: outputDir,
+	}); err != nil {
+		t.Fatalf("CompleteCheckout failed: %v", err)
+	}
+
+	generatedPath := filepath.Join(outputDir, "cmd", "sample-app", "main.txt")
+	data, err := os.ReadFile(generatedPath)
+	if err != nil {
+		t.Fatalf("failed to read generated file: %v", err)
+	}
+
+	content := string(data)
+	if !strings.Contains(content, "project=sample-app") {
+		t.Fatalf("generated file did not use current_dir default: %s", content)
+	}
+	if !strings.Contains(content, "license="+licenseContent) {
+		t.Fatalf("generated file did not resolve @file reference: %s", content)
+	}
+
+	var ignVar model.IgnVarJson
+	ignVarData, err := os.ReadFile(filepath.Join(".ign", "ign-var.json"))
+	if err != nil {
+		t.Fatalf("failed to read ign-var.json: %v", err)
+	}
+	if err := json.Unmarshal(ignVarData, &ignVar); err != nil {
+		t.Fatalf("failed to parse ign-var.json: %v", err)
+	}
+
+	if ignVar.Variables["project_name"] != "{current_dir}" {
+		t.Fatalf("project_name default should remain dynamic in ign-var.json, got %v", ignVar.Variables["project_name"])
+	}
+	if ignVar.Variables["license_text"] != "@file:license.txt" {
+		t.Fatalf("license_text should preserve raw @file reference, got %v", ignVar.Variables["license_text"])
 	}
 }
 

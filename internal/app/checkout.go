@@ -12,7 +12,6 @@ import (
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
-	"github.com/tacogips/ign/internal/template/parser"
 	"github.com/tacogips/ign/internal/template/provider"
 )
 
@@ -109,14 +108,23 @@ func findNextBackupNumber(dir, filename string) (int, error) {
 
 func validateTemplateHash(hash string) error {
 	debug.DebugValue("[app] Template hash from ign-template.json", hash)
-	if hash != "" {
+	if hash == "" {
+		debug.Debug("[app] Template hash is missing in ign-template.json")
+		return NewCheckoutError(
+			"template is missing hash in ign-template.json.\n"+
+				"The template author needs to run 'ign template update' to generate the hash.",
+			nil,
+		)
+	}
+
+	if config.IsValidSHA256Hash(hash) {
 		return nil
 	}
 
-	debug.Debug("[app] Template hash is missing in ign-template.json")
+	debug.Debug("[app] Template hash has invalid format")
 	return NewCheckoutError(
-		"template is missing hash in ign-template.json.\n"+
-			"The template author needs to run 'ign template update' to generate the hash.",
+		"template hash in ign-template.json must be a valid SHA256 string.\n"+
+			"The template author needs to run 'ign template update' to regenerate the hash.",
 		nil,
 	)
 }
@@ -124,7 +132,7 @@ func validateTemplateHash(hash string) error {
 // PrepareCheckout prepares for checkout by fetching the template and handling config directory.
 // Returns template information and variable definitions for interactive prompting.
 func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*PrepareCheckoutResult, error) {
-	configDir := ".ign"
+	configDir := model.IgnConfigDir
 
 	debug.DebugSection("[app] PrepareCheckout workflow start")
 	debug.DebugValue("[app] Template URL", opts.URL)
@@ -191,13 +199,13 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 		debug.Debug("[app] Config directory exists, Force mode - backing up")
 
 		// Backup existing ign.json if it exists
-		ignConfigPath := filepath.Join(configDir, "ign.json")
+		ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
 		if _, err := os.Stat(ignConfigPath); err == nil {
-			backupNum, err := findNextBackupNumber(configDir, "ign.json")
+			backupNum, err := findNextBackupNumber(configDir, model.IgnProjectConfigFile)
 			if err != nil {
 				return nil, NewCheckoutError(err.Error(), nil)
 			}
-			backupPath := filepath.Join(configDir, fmt.Sprintf("ign.json.bk%d", backupNum))
+			backupPath := filepath.Join(configDir, fmt.Sprintf("%s.bk%d", model.IgnProjectConfigFile, backupNum))
 			debug.Debug("[app] Backing up existing ign.json to: %s", backupPath)
 			if err := os.Rename(ignConfigPath, backupPath); err != nil {
 				debug.Debug("[app] Failed to backup existing ign.json: %v", err)
@@ -207,13 +215,13 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 		}
 
 		// Backup existing ign-var.json if it exists
-		ignVarPath := filepath.Join(configDir, "ign-var.json")
+		ignVarPath := filepath.Join(configDir, model.IgnVarFile)
 		if _, err := os.Stat(ignVarPath); err == nil {
-			backupNum, err := findNextBackupNumber(configDir, "ign-var.json")
+			backupNum, err := findNextBackupNumber(configDir, model.IgnVarFile)
 			if err != nil {
 				return nil, NewCheckoutError(err.Error(), nil)
 			}
-			backupPath := filepath.Join(configDir, fmt.Sprintf("ign-var.json.bk%d", backupNum))
+			backupPath := filepath.Join(configDir, fmt.Sprintf("%s.bk%d", model.IgnVarFile, backupNum))
 			debug.Debug("[app] Backing up existing ign-var.json to: %s", backupPath)
 			if err := os.Rename(ignVarPath, backupPath); err != nil {
 				debug.Debug("[app] Failed to backup existing ign-var.json: %v", err)
@@ -247,8 +255,8 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 
 // CompleteCheckout completes checkout by saving configuration and generating files.
 func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*CheckoutResult, error) {
-	configDir := ".ign"
-	ignVarPath := filepath.Join(configDir, "ign-var.json")
+	configDir := model.IgnConfigDir
+	ignVarPath := filepath.Join(configDir, model.IgnVarFile)
 
 	debug.DebugSection("[app] CompleteCheckout workflow start")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)
@@ -270,8 +278,10 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 		return nil, NewValidationError("prepare result cannot be nil", nil)
 	}
 
-	// Convert variables to parser.Variables
-	vars := parser.NewMapVariables(opts.Variables)
+	rawVars, vars, err := prepareVariablesForGeneration(prep.IgnJson.Variables, opts.Variables, configDir, opts.OutputDir)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := validateTemplateHash(prep.IgnJson.Hash); err != nil {
 		return nil, err
@@ -290,7 +300,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 		templateHash := prep.IgnJson.Hash
 
 		// Save ign.json (template source and hash)
-		ignConfigPath := filepath.Join(configDir, "ign.json")
+		ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
 		debug.Debug("[app] Creating ign.json")
 		ignConfig := &model.IgnConfig{
 			Template: model.TemplateSource{
@@ -311,7 +321,7 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 		// Save ign-var.json (variables only, no metadata as it's already in ign.json)
 		debug.Debug("[app] Creating ign-var.json")
 		ignVarJson := &model.IgnVarJson{
-			Variables: opts.Variables,
+			Variables: rawVars,
 		}
 
 		// Save both configuration files with rollback on failure.
@@ -351,7 +361,6 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Generate or dry run
 	var genResult *generator.GenerateResult
-	var err error
 	if opts.DryRun {
 		debug.Debug("[app] Starting dry run generation")
 		genResult, err = gen.DryRun(ctx, genOpts)
@@ -425,9 +434,9 @@ type CheckoutOptions struct {
 // Supports backward compatibility with old ign-var.json format that includes template info.
 // Deprecated: Use PrepareCheckout and CompleteCheckout for new code.
 func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error) {
-	configDir := ".ign"
-	ignConfigPath := filepath.Join(configDir, "ign.json")
-	ignVarPath := filepath.Join(configDir, "ign-var.json")
+	configDir := model.IgnConfigDir
+	ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
+	ignVarPath := filepath.Join(configDir, model.IgnVarFile)
 
 	debug.DebugSection("[app] Checkout workflow start (backward-compatible)")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)
@@ -497,12 +506,6 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 
 	// Convert variables map to parser.Variables and resolve @file: references
 	debug.Debug("[app] Loading variables")
-	vars, err := LoadVariablesFromMap(variables, configDir)
-	if err != nil {
-		debug.Debug("[app] Failed to load variables: %v", err)
-		return nil, err
-	}
-	debug.Debug("[app] Variables loaded successfully")
 
 	// Create provider from template URL
 	normalizedURL := NormalizeTemplateURL(templateSource.URL)
@@ -542,6 +545,13 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 		return nil, NewTemplateFetchError("failed to fetch template", err)
 	}
 	debug.Debug("[app] Template fetched successfully")
+
+	_, vars, err := prepareVariablesForGeneration(template.Config.Variables, variables, configDir, opts.OutputDir)
+	if err != nil {
+		debug.Debug("[app] Failed to load variables: %v", err)
+		return nil, err
+	}
+	debug.Debug("[app] Variables loaded successfully")
 
 	if err := validateTemplateHash(template.Config.Hash); err != nil {
 		return nil, err

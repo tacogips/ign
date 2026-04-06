@@ -156,11 +156,6 @@ func buildManagedFilesFromCurrentTemplate(ctx context.Context, opts RewindOption
 		return nil, NewCheckoutError("failed to load .ign/ign-var.json: run 'ign checkout <template-url>' first", err)
 	}
 
-	vars, err := LoadVariables(ignVar, model.IgnConfigDir)
-	if err != nil {
-		return nil, err
-	}
-
 	normalizedURL := NormalizeTemplateURL(ignConfig.Template.URL)
 	prov, err := provider.NewProviderWithToken(normalizedURL, opts.GitHubToken)
 	if err != nil {
@@ -181,6 +176,11 @@ func buildManagedFilesFromCurrentTemplate(ctx context.Context, opts RewindOption
 	template, err := prov.Fetch(ctx, templateRef)
 	if err != nil {
 		return nil, NewTemplateFetchError("failed to fetch template", err)
+	}
+
+	_, vars, err := prepareVariablesForGeneration(template.Config.Variables, ignVar.Variables, model.IgnConfigDir, opts.OutputDir)
+	if err != nil {
+		return nil, err
 	}
 
 	gen := generator.NewGenerator()

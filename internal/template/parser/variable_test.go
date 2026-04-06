@@ -8,11 +8,12 @@ import (
 // TestExtendedVarSyntax tests the extended variable syntax with types and defaults
 func TestExtendedVarSyntax(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		vars     map[string]interface{}
-		expected string
-		wantErr  bool
+		name       string
+		input      string
+		vars       map[string]interface{}
+		currentDir string
+		expected   string
+		wantErr    bool
 	}{
 		// Basic syntax (existing behavior, required variables)
 		{
@@ -141,6 +142,22 @@ func TestExtendedVarSyntax(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name:       "type and default - current_dir placeholder",
+			input:      "@ign-var:project_name:string={current_dir}@",
+			vars:       map[string]interface{}{},
+			currentDir: "/tmp/sample-project",
+			expected:   "sample-project",
+			wantErr:    false,
+		},
+		{
+			name:       "default value - embedded current_dir placeholder",
+			input:      "@ign-var:module_path=github.com/acme/{current_dir}@",
+			vars:       map[string]interface{}{},
+			currentDir: "/tmp/sample-project",
+			expected:   "github.com/acme/sample-project",
+			wantErr:    false,
+		},
+		{
 			name:     "type and default - type mismatch from vars",
 			input:    "@ign-var:port:string=8080@",
 			vars:     map[string]interface{}{"port": 9000},
@@ -191,7 +208,8 @@ func TestExtendedVarSyntax(t *testing.T) {
 	parser := NewParser()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := parser.Parse(context.Background(), []byte(tt.input), testVars(tt.vars))
+			vars := NewMapVariablesWithCurrentDir(tt.vars, tt.currentDir)
+			result, err := parser.Parse(context.Background(), []byte(tt.input), vars)
 
 			if tt.wantErr {
 				if err == nil {

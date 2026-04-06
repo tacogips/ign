@@ -225,6 +225,23 @@ func main() {
 
 **Types:** `string`, `int`, `bool`
 
+String default values support `{current_dir}` as a placeholder for the output directory name.
+
+```json
+{
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "default": "{current_dir}"
+    },
+    "module_path": {
+      "type": "string",
+      "default": "github.com/acme/{current_dir}"
+    }
+  }
+}
+```
+
 ### Other Directives
 
 | Directive | Usage |

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tacogips/ign/internal/template/model"
 )
 
 func TestLoadVariablesFromMap(t *testing.T) {
@@ -181,4 +183,42 @@ func TestLoadVariablesFromMap(t *testing.T) {
 			t.Errorf("Expected port=3000, got %v", val)
 		}
 	})
+}
+
+func TestPrepareVariablesForGeneration_ResolvesDynamicDefaultsAtRuntime(t *testing.T) {
+	tmpDir := t.TempDir()
+	outputDir := filepath.Join(tmpDir, "sample-app")
+
+	rawVars, runtimeVars, err := prepareVariablesForGeneration(
+		map[string]model.VarDef{
+			"project_name": {
+				Type:    model.VarTypeString,
+				Default: "{current_dir}",
+			},
+			"module_path": {
+				Type:    model.VarTypeString,
+				Default: "github.com/acme/{current_dir}",
+			},
+		},
+		nil,
+		tmpDir,
+		outputDir,
+	)
+	if err != nil {
+		t.Fatalf("prepareVariablesForGeneration returned error: %v", err)
+	}
+
+	if got := rawVars["project_name"]; got != "{current_dir}" {
+		t.Fatalf("raw project_name = %v, want %q", got, "{current_dir}")
+	}
+	if got := rawVars["module_path"]; got != "github.com/acme/{current_dir}" {
+		t.Fatalf("raw module_path = %v, want %q", got, "github.com/acme/{current_dir}")
+	}
+
+	if got, _ := runtimeVars.Get("project_name"); got != "sample-app" {
+		t.Fatalf("runtime project_name = %v, want %q", got, "sample-app")
+	}
+	if got, _ := runtimeVars.Get("module_path"); got != "github.com/acme/sample-app" {
+		t.Fatalf("runtime module_path = %v, want %q", got, "github.com/acme/sample-app")
+	}
 }

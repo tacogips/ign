@@ -107,7 +107,7 @@ func ValidateIgnConfig(ignConfig *model.IgnConfig) error {
 	}
 
 	// Validate hash format (must be valid SHA256: 64 hexadecimal characters)
-	if !isValidSHA256Hash(ignConfig.Hash) {
+	if !IsValidSHA256Hash(ignConfig.Hash) {
 		return NewConfigErrorWithField(ConfigValidationFailed, ".ign/ign.json", "hash",
 			"hash must be a valid SHA256 string (64 hexadecimal characters)")
 	}

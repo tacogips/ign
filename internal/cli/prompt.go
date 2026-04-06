@@ -15,6 +15,10 @@ import (
 func PromptForVariables(ignJson *model.IgnJson) (map[string]interface{}, error) {
 	vars := make(map[string]interface{})
 
+	if ignJson == nil {
+		return vars, nil
+	}
+
 	if len(ignJson.Variables) == 0 {
 		return vars, nil
 	}

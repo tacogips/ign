@@ -8,6 +8,16 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
+func TestPromptForVariables_NilConfig(t *testing.T) {
+	vars, err := PromptForVariables(nil)
+	if err != nil {
+		t.Fatalf("PromptForVariables(nil) returned error: %v", err)
+	}
+	if len(vars) != 0 {
+		t.Fatalf("PromptForVariables(nil) = %v, want empty map", vars)
+	}
+}
+
 // TestPromptNumber_Validator tests the number validation logic
 func TestPromptNumber_Validator(t *testing.T) {
 	tests := []struct {

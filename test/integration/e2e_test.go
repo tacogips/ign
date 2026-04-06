@@ -11,6 +11,61 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
+func TestE2E_CurrentDirDefaultsRemainDynamicAcrossInitAndCheckout(t *testing.T) {
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".ign")
+	outputDir := filepath.Join(tempDir, "sample-app")
+	templatePath := writeCurrentDirTemplateFixture(t, tempDir)
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := app.Init(context.Background(), app.InitOptions{URL: templatePath}); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	ignVarPath := filepath.Join(configDir, "ign-var.json")
+	ignVar := loadIgnVar(t, ignVarPath)
+	if got := ignVar.Variables["project_name"]; got != "{current_dir}" {
+		t.Fatalf("project_name in ign-var.json = %v, want %q", got, "{current_dir}")
+	}
+	if got := ignVar.Variables["module_path"]; got != "github.com/acme/{current_dir}" {
+		t.Fatalf("module_path in ign-var.json = %v, want %q", got, "github.com/acme/{current_dir}")
+	}
+
+	if _, err := app.Checkout(context.Background(), app.CheckoutOptions{OutputDir: outputDir}); err != nil {
+		t.Fatalf("Checkout failed: %v", err)
+	}
+
+	generatedPath := filepath.Join(outputDir, "cmd", "sample-app", "main.txt")
+	generated, err := os.ReadFile(generatedPath)
+	if err != nil {
+		t.Fatalf("failed to read generated file: %v", err)
+	}
+
+	content := string(generated)
+	if !contains(content, "project=sample-app") {
+		t.Fatalf("generated content does not contain resolved project_name: %s", content)
+	}
+	if !contains(content, "module=github.com/acme/sample-app") {
+		t.Fatalf("generated content does not contain resolved module_path: %s", content)
+	}
+
+	ignVar = loadIgnVar(t, ignVarPath)
+	if got := ignVar.Variables["project_name"]; got != "{current_dir}" {
+		t.Fatalf("project_name should remain dynamic after checkout, got %v", got)
+	}
+	if got := ignVar.Variables["module_path"]; got != "github.com/acme/{current_dir}" {
+		t.Fatalf("module_path should remain dynamic after checkout, got %v", got)
+	}
+}
+
 // TestE2E_CompleteWorkflow tests the complete init -> checkout workflow
 func TestE2E_CompleteWorkflow(t *testing.T) {
 	// Setup
@@ -325,6 +380,62 @@ func TestE2E_DryRun(t *testing.T) {
 	if _, err := os.Stat(readmePath); os.IsNotExist(err) {
 		t.Errorf("README.md should be created in real mode")
 	}
+}
+
+func loadIgnVar(t *testing.T, path string) model.IgnVarJson {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("failed to read ign-var.json: %v", err)
+	}
+
+	var ignVar model.IgnVarJson
+	if err := json.Unmarshal(data, &ignVar); err != nil {
+		t.Fatalf("failed to parse ign-var.json: %v", err)
+	}
+
+	return ignVar
+}
+
+func writeCurrentDirTemplateFixture(t *testing.T, tempDir string) string {
+	t.Helper()
+
+	templateDir := filepath.Join(tempDir, "current-dir-template")
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template directory: %v", err)
+	}
+
+	templateConfig := `{
+  "name": "current-dir-template",
+  "version": "1.0.0",
+  "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "default": "{current_dir}"
+    },
+    "module_path": {
+      "type": "string",
+      "default": "github.com/acme/{current_dir}"
+    }
+  }
+}
+`
+	if err := os.WriteFile(filepath.Join(templateDir, "ign-template.json"), []byte(templateConfig), 0644); err != nil {
+		t.Fatalf("failed to write ign-template.json: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(templateDir, "cmd", "@ign-var:project_name@"), 0755); err != nil {
+		t.Fatalf("failed to create template file directory: %v", err)
+	}
+
+	content := "project=@ign-var:project_name@\nmodule=@ign-var:module_path@\n"
+	if err := os.WriteFile(filepath.Join(templateDir, "cmd", "@ign-var:project_name@", "main.txt"), []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write template file: %v", err)
+	}
+
+	return "./current-dir-template"
 }
 
 // TestE2E_ErrorHandling tests error scenarios

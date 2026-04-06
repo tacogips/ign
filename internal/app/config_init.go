@@ -34,7 +34,7 @@ type InitOptions struct {
 //
 // Deprecated: Use PrepareCheckout and CompleteCheckout instead.
 func Init(ctx context.Context, opts InitOptions) error {
-	configDir := ".ign"
+	configDir := model.IgnConfigDir
 
 	debug.DebugSection("[app] Init workflow start (deprecated)")
 	debug.DebugValue("[app] Template URL", opts.URL)
@@ -82,7 +82,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 	}
 
 	// Save ign.json (template source and hash)
-	ignConfigPath := filepath.Join(configDir, "ign.json")
+	ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
 	debug.Debug("[app] Creating ign.json")
 	ignConfig := &model.IgnConfig{
 		Template: model.TemplateSource{
@@ -106,7 +106,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
 	}
 
-	ignVarPath := filepath.Join(configDir, "ign-var.json")
+	ignVarPath := filepath.Join(configDir, model.IgnVarFile)
 
 	// Save both configuration files with rollback on failure.
 	// Write ign.json first, then ign-var.json.

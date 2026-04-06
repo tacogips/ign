@@ -13,7 +13,6 @@ import (
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
-	"github.com/tacogips/ign/internal/template/parser"
 	"github.com/tacogips/ign/internal/template/provider"
 )
 
@@ -84,9 +83,9 @@ type UpdateResult struct {
 // PrepareUpdate prepares for update by checking if .ign exists and fetching template.
 // Returns information about hash changes and new variables that need prompting.
 func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResult, error) {
-	configDir := ".ign"
-	ignConfigPath := filepath.Join(configDir, "ign.json")
-	ignVarPath := filepath.Join(configDir, "ign-var.json")
+	configDir := model.IgnConfigDir
+	ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
+	ignVarPath := filepath.Join(configDir, model.IgnVarFile)
 
 	debug.DebugSection("[app] PrepareUpdate workflow start")
 	debug.DebugValue("[app] OutputDir", opts.OutputDir)
@@ -294,8 +293,10 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 	}
 	debug.DebugValue("[app] Merged variables count", len(mergedVars))
 
-	// Convert variables to parser.Variables
-	vars := parser.NewMapVariables(mergedVars)
+	rawVars, vars, err := prepareVariablesForGeneration(prep.IgnJson.Variables, mergedVars, model.IgnConfigDir, opts.OutputDir)
+	if err != nil {
+		return nil, err
+	}
 
 	// Validate that all required variables are set
 	debug.Debug("[app] Validating required variables")
@@ -326,7 +327,7 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		// Update ign-var.json with merged variables (no metadata as it's already in ign.json)
 		debug.Debug("[app] Updating ign-var.json with merged variables")
 		ignVarJson := &model.IgnVarJson{
-			Variables: mergedVars,
+			Variables: rawVars,
 		}
 
 		if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {
@@ -350,7 +351,6 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	// Generate or dry run
 	var genResult *generator.GenerateResult
-	var err error
 	if opts.DryRun {
 		debug.Debug("[app] Starting dry run generation")
 		genResult, err = gen.DryRun(ctx, genOpts)
@@ -434,18 +434,7 @@ func FilterVariablesForPrompt(newVarDefs map[string]model.VarDef) map[string]mod
 // If providedVars is nil, it is treated as an empty map and only defaults are applied.
 // Returns a new map containing provided variables plus defaults for any missing variables.
 func ApplyDefaults(newVarDefs map[string]model.VarDef, providedVars map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
-	// Copy provided variables (nil map iteration is safe in Go - no-op)
-	for name, value := range providedVars {
-		result[name] = value
-	}
-	// Add defaults for variables not provided
-	for name, varDef := range newVarDefs {
-		if _, provided := result[name]; !provided && varDef.Default != nil {
-			result[name] = varDef.Default
-		}
-	}
-	return result
+	return mergeVariableDefaults(newVarDefs, providedVars)
 }
 
 // FormatVariableChanges returns a formatted string describing variable changes.
