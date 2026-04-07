@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
+	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -134,7 +135,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		printInfo("New variables have been added to the template:")
 
 		// Get variable definitions for new variables
-		newVarDefs := app.GetNewVariableDefinitions(prepResult)
+		newVarDefs := templatedefaults.ResolveVarDefs(app.GetNewVariableDefinitions(prepResult), outputPath)
 
 		// Separate variables into those needing prompt and those with defaults
 		varsNeedingPrompt := app.FilterVariablesForPrompt(newVarDefs)

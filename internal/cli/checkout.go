@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
+	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
 )
 
 // checkoutCmd represents the checkout command
@@ -103,7 +104,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	}
 
 	// Prompt for variables interactively
-	vars, err := PromptForVariables(prepResult.IgnJson)
+	vars, err := PromptForVariables(templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath))
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
 		return err

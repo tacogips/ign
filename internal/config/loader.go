@@ -236,7 +236,7 @@ func LoadIgnConfig(path string) (*model.IgnConfig, error) {
 	}
 
 	// Validate hash format if present (64 hex characters for SHA256)
-	if ignConfig.Hash != "" && !isValidSHA256Hash(ignConfig.Hash) {
+	if ignConfig.Hash != "" && !IsValidSHA256Hash(ignConfig.Hash) {
 		return nil, NewConfigErrorWithField(ConfigValidationFailed, path, "hash",
 			"hash must be a valid SHA256 string (64 hexadecimal characters)")
 	}
@@ -244,8 +244,8 @@ func LoadIgnConfig(path string) (*model.IgnConfig, error) {
 	return &ignConfig, nil
 }
 
-// isValidSHA256Hash validates that a string is a valid SHA256 hash (64 hex characters).
-func isValidSHA256Hash(hash string) bool {
+// IsValidSHA256Hash validates that a string is a valid SHA256 hash (64 hex characters).
+func IsValidSHA256Hash(hash string) bool {
 	if len(hash) != 64 {
 		return false
 	}

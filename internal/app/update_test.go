@@ -770,6 +770,24 @@ func TestApplyDefaults(t *testing.T) {
 				"defaulted": "default_value",
 			},
 		},
+		{
+			name: "preserves dynamic defaults for later runtime resolution",
+			newVarDefs: map[string]model.VarDef{
+				"project_name": {
+					Type:    model.VarTypeString,
+					Default: "{current_dir}",
+				},
+				"module_path": {
+					Type:    model.VarTypeString,
+					Default: "github.com/acme/{current_dir}",
+				},
+			},
+			providedVars: nil,
+			wantResult: map[string]interface{}{
+				"project_name": "{current_dir}",
+				"module_path":  "github.com/acme/{current_dir}",
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/tacogips/ign/internal/debug"
+	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
 )
 
 // Variables holds template variable values and provides type-safe access.
@@ -35,15 +36,24 @@ type Variables interface {
 
 // MapVariables implements Variables using a map[string]interface{}.
 type MapVariables struct {
-	data map[string]interface{}
+	data       map[string]interface{}
+	currentDir string
 }
 
 // NewMapVariables creates a new MapVariables from a map.
 func NewMapVariables(data map[string]interface{}) *MapVariables {
+	return NewMapVariablesWithCurrentDir(data, "")
+}
+
+// NewMapVariablesWithCurrentDir creates a new MapVariables with runtime directory context.
+func NewMapVariablesWithCurrentDir(data map[string]interface{}, currentDir string) *MapVariables {
 	if data == nil {
 		data = make(map[string]interface{})
 	}
-	return &MapVariables{data: data}
+	return &MapVariables{
+		data:       data,
+		currentDir: currentDir,
+	}
 }
 
 // Get retrieves a variable value by name.
@@ -119,6 +129,11 @@ func (m *MapVariables) All() map[string]interface{} {
 	return result
 }
 
+// CurrentDir returns the runtime current directory used for resolving dynamic defaults.
+func (m *MapVariables) CurrentDir() string {
+	return m.currentDir
+}
+
 // processVarDirective substitutes a @ign-var:NAME@ directive with its value.
 // Supports the following syntax variants:
 //
@@ -147,8 +162,9 @@ func processVarDirective(args string, vars Variables) (string, error) {
 	if !ok {
 		// If default value is provided, use it (optional variable)
 		if hasDefault {
-			debug.Debug("[parser] processVarDirective: using default value for %s: %v", varName, defaultValue)
-			val = defaultValue
+			resolvedDefault := templatedefaults.ResolveValue(defaultValue, currentDirFromVariables(vars))
+			debug.Debug("[parser] processVarDirective: using default value for %s: %v", varName, resolvedDefault)
+			val = resolvedDefault
 		} else {
 			// No default value means required variable
 			return "", newParseErrorWithDirective(MissingVariable,
@@ -168,6 +184,18 @@ func processVarDirective(args string, vars Variables) (string, error) {
 	result := valueToString(val)
 	debug.Debug("[parser] processVarDirective: variable=%s, value=%v, resolved=%s", varName, val, result)
 	return result, nil
+}
+
+type currentDirProvider interface {
+	CurrentDir() string
+}
+
+func currentDirFromVariables(vars Variables) string {
+	provider, ok := vars.(currentDirProvider)
+	if !ok {
+		return ""
+	}
+	return provider.CurrentDir()
 }
 
 // parseVarSyntax parses the variable directive arguments.

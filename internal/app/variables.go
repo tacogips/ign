@@ -7,9 +7,49 @@ import (
 	"strings"
 
 	"github.com/tacogips/ign/internal/debug"
+	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 )
+
+func prepareVariablesForGeneration(varDefs map[string]model.VarDef, providedVars map[string]interface{}, buildDir string, currentDir string) (map[string]interface{}, parser.Variables, error) {
+	rawVars := mergeVariableDefaults(varDefs, providedVars)
+	runtimeInput := resolveRuntimeVariables(varDefs, rawVars, currentDir)
+
+	runtimeVars, err := LoadVariablesFromMap(runtimeInput, buildDir)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return rawVars, parser.NewMapVariablesWithCurrentDir(runtimeVars.All(), currentDir), nil
+}
+
+func resolveRuntimeVariables(varDefs map[string]model.VarDef, rawVars map[string]interface{}, currentDir string) map[string]interface{} {
+	runtimeVars := make(map[string]interface{}, len(rawVars))
+
+	for name, value := range rawVars {
+		runtimeVars[name] = value
+
+		varDef, ok := varDefs[name]
+		if !ok || !templatedefaults.ContainsPlaceholder(varDef.Default) {
+			continue
+		}
+
+		defaultValue, ok := varDef.Default.(string)
+		if !ok {
+			continue
+		}
+
+		valueStr, ok := value.(string)
+		if !ok || valueStr != defaultValue {
+			continue
+		}
+
+		runtimeVars[name] = templatedefaults.ResolveValue(valueStr, currentDir)
+	}
+
+	return runtimeVars
+}
 
 // LoadVariablesFromMap loads and processes variables from a map.
 // Resolves @file: prefixed values by reading file content from buildDir.

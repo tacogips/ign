@@ -9,12 +9,13 @@ import (
 
 func TestProcessFilename(t *testing.T) {
 	tests := []struct {
-		name      string
-		filePath  string
-		variables map[string]interface{}
-		want      string
-		wantErr   bool
-		errMsg    string
+		name       string
+		filePath   string
+		variables  map[string]interface{}
+		currentDir string
+		want       string
+		wantErr    bool
+		errMsg     string
 	}{
 		{
 			name:     "simple filename with variable",
@@ -60,6 +61,14 @@ func TestProcessFilename(t *testing.T) {
 			variables: map[string]interface{}{},
 			want:      "config-dev.yaml",
 			wantErr:   false,
+		},
+		{
+			name:       "variable with current_dir default placeholder",
+			filePath:   "cmd/@ign-var:project_name={current_dir}@/main.go",
+			variables:  map[string]interface{}{},
+			currentDir: "/tmp/sample-app",
+			want:       "cmd/sample-app/main.go",
+			wantErr:    false,
 		},
 		{
 			name:     "no variables in path",
@@ -468,7 +477,7 @@ func TestProcessFilename(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vars := parser.NewMapVariables(tt.variables)
+			vars := parser.NewMapVariablesWithCurrentDir(tt.variables, tt.currentDir)
 			got, err := ProcessFilename(ctx, tt.filePath, vars, p)
 
 			if tt.wantErr {

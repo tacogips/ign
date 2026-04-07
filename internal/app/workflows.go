@@ -60,19 +60,21 @@ func ValidateOutputDir(path string) error {
 	return nil
 }
 
-// CreateEmptyVariablesMap creates an empty variables map from IgnJson variable definitions.
-// Sets all values to appropriate zero values or empty strings.
+// CreateEmptyVariablesMap creates an initial variables map from IgnJson variable definitions.
+// Declared defaults are preserved as authored so runtime-only placeholders can be resolved later.
 func CreateEmptyVariablesMap(ignJson *model.IgnJson) map[string]interface{} {
-	vars := make(map[string]interface{})
+	if ignJson == nil {
+		return map[string]interface{}{}
+	}
+
+	vars := mergeVariableDefaults(ignJson.Variables, nil)
 
 	for name, varDef := range ignJson.Variables {
-		// Use default value if provided
-		if varDef.Default != nil {
-			vars[name] = varDef.Default
+		if _, ok := vars[name]; ok {
 			continue
 		}
 
-		// Otherwise use type-appropriate zero/empty value
+		// Fall back to the type-appropriate zero value when no default was resolved.
 		switch varDef.Type {
 		case model.VarTypeString:
 			vars[name] = ""
@@ -88,6 +90,22 @@ func CreateEmptyVariablesMap(ignJson *model.IgnJson) map[string]interface{} {
 	return vars
 }
 
+func mergeVariableDefaults(varDefs map[string]model.VarDef, providedVars map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{}, len(providedVars)+len(varDefs))
+
+	for name, value := range providedVars {
+		result[name] = value
+	}
+
+	for name, varDef := range varDefs {
+		if _, provided := result[name]; !provided && varDef.Default != nil {
+			result[name] = varDef.Default
+		}
+	}
+
+	return result
+}
+
 // FormatVariableTip creates a helpful tip message for a variable.
 // Suggests using @file: for string variables without defaults.
 func FormatVariableTip(name string, varDef model.VarDef) string {
@@ -98,15 +116,19 @@ func FormatVariableTip(name string, varDef model.VarDef) string {
 }
 
 // CountVariablesByType counts variables by type in an IgnJson.
-func CountVariablesByType(ignJson *model.IgnJson) (strings int, ints int, bools int) {
+func CountVariablesByType(ignJson *model.IgnJson) (stringCount int, intCount int, boolCount int) {
+	if ignJson == nil {
+		return 0, 0, 0
+	}
+
 	for _, varDef := range ignJson.Variables {
 		switch varDef.Type {
 		case model.VarTypeString:
-			strings++
+			stringCount++
 		case model.VarTypeInt:
-			ints++
+			intCount++
 		case model.VarTypeBool:
-			bools++
+			boolCount++
 		}
 	}
 	return
