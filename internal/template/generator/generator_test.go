@@ -19,6 +19,8 @@ func TestIsSpecialFile(t *testing.T) {
 	}{
 		{"ign-template.json root", model.IgnTemplateConfigFile, true},
 		{"ign-template.json in subdir", "subdir/" + model.IgnTemplateConfigFile, true},
+		{".ign-overwrite-ignore root", model.IgnOverwriteIgnoreFile, true},
+		{".ign-overwrite-ignore in subdir", "subdir/" + model.IgnOverwriteIgnoreFile, false},
 		{".ign exact", ".ign", true},
 		{".ign with slash", ".ign/", true},
 		{".ign subpath", ".ign/ign-var.json", true},
@@ -86,6 +88,36 @@ func TestShouldIgnoreFile(t *testing.T) {
 			result := ShouldIgnoreFile(tt.path, tt.ignorePatterns)
 			if result != tt.expected {
 				t.Errorf("ShouldIgnoreFile(%q, %v) = %v, want %v", tt.path, tt.ignorePatterns, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchesGitIgnorePattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		patterns []string
+		want     bool
+	}{
+		{name: "basename anywhere", path: "cmd/app/config.yaml", patterns: []string{"config.yaml"}, want: true},
+		{name: "anchored path", path: "config/app.yaml", patterns: []string{"/config/app.yaml"}, want: true},
+		{name: "directory path", path: "internal/service/service.go", patterns: []string{"internal/"}, want: true},
+		{name: "glob path", path: "docs/spec.md", patterns: []string{"docs/*.md"}, want: true},
+		{name: "double-star directory", path: "docs/nested/spec.md", patterns: []string{"docs/**"}, want: true},
+		{name: "double-star basename at root", path: "app.local", patterns: []string{"**/*.local"}, want: true},
+		{name: "double-star basename nested", path: "cmd/app/app.local", patterns: []string{"**/*.local"}, want: true},
+		{name: "negation after double-star re-includes", path: "docs/keep.md", patterns: []string{"docs/**", "!docs/keep.md"}, want: false},
+		{name: "later double-star overrides negation", path: "docs/keep.md", patterns: []string{"!docs/keep.md", "docs/**"}, want: true},
+		{name: "negation re-includes", path: "config/keep.yaml", patterns: []string{"config/", "!config/keep.yaml"}, want: false},
+		{name: "no match", path: "README.md", patterns: []string{"config/"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MatchesGitIgnorePattern(tt.path, tt.patterns)
+			if got != tt.want {
+				t.Fatalf("MatchesGitIgnorePattern(%q, %v) = %v, want %v", tt.path, tt.patterns, got, tt.want)
 			}
 		})
 	}
@@ -412,6 +444,111 @@ func TestGenerator_GenerateWithOverwrite(t *testing.T) {
 	content, _ = os.ReadFile(existingPath)
 	if string(content) != "new content" {
 		t.Errorf("File content = %q, want %q", string(content), "new content")
+	}
+}
+
+func TestGenerator_GenerateWithSelectiveOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	if err := os.MkdirAll(filepath.Join(tmpDir, "config"), 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("old readme"), 0644); err != nil {
+		t.Fatalf("failed to create README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "config", "local.yaml"), []byte("old local"), 0644); err != nil {
+		t.Fatalf("failed to create local config: %v", err)
+	}
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:     model.IgnOverwriteIgnoreFile,
+				Content:  []byte("config/\n"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "nested/" + model.IgnOverwriteIgnoreFile,
+				Content:  []byte("nested metadata-like file"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "README.md",
+				Content:  []byte("new readme"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "config/local.yaml",
+				Content:  []byte("new local"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "config/default.yaml",
+				Content:  []byte("new default"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	result, err := gen.Generate(ctx, GenerateOptions{
+		Template:      template,
+		Variables:     parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir:     tmpDir,
+		OverwriteMode: OverwriteSelective,
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesOverwritten != 1 {
+		t.Fatalf("FilesOverwritten = %d, want 1", result.FilesOverwritten)
+	}
+	if result.FilesSkipped != 1 {
+		t.Fatalf("FilesSkipped = %d, want 1", result.FilesSkipped)
+	}
+	if result.FilesCreated != 2 {
+		t.Fatalf("FilesCreated = %d, want 2", result.FilesCreated)
+	}
+
+	readme, err := os.ReadFile(filepath.Join(tmpDir, "README.md"))
+	if err != nil {
+		t.Fatalf("failed to read README: %v", err)
+	}
+	if string(readme) != "new readme" {
+		t.Fatalf("README.md = %q, want new readme", string(readme))
+	}
+
+	localConfig, err := os.ReadFile(filepath.Join(tmpDir, "config", "local.yaml"))
+	if err != nil {
+		t.Fatalf("failed to read local config: %v", err)
+	}
+	if string(localConfig) != "old local" {
+		t.Fatalf("config/local.yaml = %q, want old local", string(localConfig))
+	}
+
+	nestedOverwriteIgnore, err := os.ReadFile(filepath.Join(tmpDir, "nested", model.IgnOverwriteIgnoreFile))
+	if err != nil {
+		t.Fatalf("failed to read nested %s: %v", model.IgnOverwriteIgnoreFile, err)
+	}
+	if string(nestedOverwriteIgnore) != "nested metadata-like file" {
+		t.Fatalf("nested %s = %q, want nested metadata-like file", model.IgnOverwriteIgnoreFile, string(nestedOverwriteIgnore))
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, model.IgnOverwriteIgnoreFile)); !os.IsNotExist(err) {
+		t.Fatalf("%s should not be generated", model.IgnOverwriteIgnoreFile)
 	}
 }
 

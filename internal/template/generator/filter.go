@@ -21,6 +21,12 @@ func IsSpecialFile(path string) bool {
 		return true
 	}
 
+	// Check for template-side overwrite ignore file. Only the template root file is metadata;
+	// nested files with the same name are generated normally.
+	if path == model.IgnOverwriteIgnoreFile {
+		return true
+	}
+
 	// Check for .ign directory
 	if path == model.IgnConfigDir || strings.HasPrefix(path, model.IgnConfigDir+"/") {
 		return true
@@ -81,4 +87,128 @@ func MatchesPattern(path, pattern string) bool {
 	}
 
 	return false
+}
+
+// ParseIgnoreFilePatterns parses gitignore-style pattern lines.
+// Blank lines and comments are ignored. Escaped leading hashes are unescaped.
+func ParseIgnoreFilePatterns(content []byte) []string {
+	lines := strings.Split(string(content), "\n")
+	patterns := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimRight(line, " \t\r")
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, `\#`) {
+			line = strings.TrimPrefix(line, `\`)
+		} else if strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
+			continue
+		}
+		patterns = append(patterns, line)
+	}
+	return patterns
+}
+
+// MatchesGitIgnorePattern checks a path against the subset of gitignore syntax
+// used by .ign-overwrite-ignore. Later negated patterns can re-include paths.
+func MatchesGitIgnorePattern(path string, patterns []string) bool {
+	path = strings.TrimPrefix(filepath.ToSlash(filepath.Clean(path)), "./")
+	ignored := false
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(filepath.ToSlash(pattern))
+		if pattern == "" || pattern == "." {
+			continue
+		}
+
+		negated := strings.HasPrefix(pattern, "!")
+		if negated {
+			pattern = strings.TrimPrefix(pattern, "!")
+		}
+		if pattern == "" {
+			continue
+		}
+
+		if matchesIgnorePattern(path, pattern) {
+			ignored = !negated
+		}
+	}
+	return ignored
+}
+
+func matchesIgnorePattern(path, pattern string) bool {
+	anchored := strings.HasPrefix(pattern, "/")
+	if anchored {
+		pattern = strings.TrimPrefix(pattern, "/")
+	}
+
+	dirOnly := strings.HasSuffix(pattern, "/")
+	if dirOnly {
+		pattern = strings.TrimSuffix(pattern, "/")
+	}
+	if pattern == "" {
+		return false
+	}
+
+	if dirOnly && matchDirectoryPattern(path, pattern, anchored) {
+		return true
+	}
+
+	if strings.Contains(pattern, "/") || anchored {
+		if matchSlashPattern(pattern, path) {
+			return true
+		}
+		return strings.HasPrefix(path, pattern+"/")
+	}
+
+	segments := strings.Split(path, "/")
+	for _, segment := range segments {
+		if ok, _ := filepath.Match(pattern, segment); ok {
+			return true
+		}
+	}
+	return false
+}
+func matchSlashPattern(pattern, path string) bool {
+	patternSegments := strings.Split(pattern, "/")
+	pathSegments := strings.Split(path, "/")
+	return matchSlashPatternSegments(patternSegments, pathSegments)
+}
+
+func matchSlashPatternSegments(patternSegments, pathSegments []string) bool {
+	if len(patternSegments) == 0 {
+		return len(pathSegments) == 0
+	}
+
+	segmentPattern := patternSegments[0]
+	if segmentPattern == "**" {
+		if len(patternSegments) == 1 {
+			return true
+		}
+		for i := 0; i <= len(pathSegments); i++ {
+			if matchSlashPatternSegments(patternSegments[1:], pathSegments[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if len(pathSegments) == 0 {
+		return false
+	}
+
+	matched, err := filepath.Match(segmentPattern, pathSegments[0])
+	if err != nil || !matched {
+		return false
+	}
+	return matchSlashPatternSegments(patternSegments[1:], pathSegments[1:])
+}
+
+func matchDirectoryPattern(path, pattern string, anchored bool) bool {
+	if anchored {
+		return path == pattern || strings.HasPrefix(path, pattern+"/")
+	}
+	if path == pattern || strings.HasPrefix(path, pattern+"/") {
+		return true
+	}
+	return strings.Contains(path, "/"+pattern+"/")
 }

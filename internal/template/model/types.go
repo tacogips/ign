@@ -6,6 +6,8 @@ import "os"
 const (
 	// IgnTemplateConfigFile is the template configuration file name in template root.
 	IgnTemplateConfigFile = "ign-template.json"
+	// IgnOverwriteIgnoreFile is the template-side ignore file for selective update overwrite.
+	IgnOverwriteIgnoreFile = ".ign-overwrite-ignore"
 	// IgnConfigDir is the project configuration directory name.
 	IgnConfigDir = ".ign"
 	// IgnProjectConfigFile is the project configuration file name in .ign/ directory.

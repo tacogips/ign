@@ -756,6 +756,35 @@ func TestCalculateTemplateHashFromDir_IgnorePatterns(t *testing.T) {
 		}
 	})
 
+	t.Run("overwrite ignore file remains hashable when ignored by pattern", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if err := os.WriteFile(filepath.Join(dir, "main.txt"), []byte("main content"), 0644); err != nil {
+			t.Fatalf("Failed to create file: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, model.IgnOverwriteIgnoreFile), []byte("config/\n"), 0644); err != nil {
+			t.Fatalf("Failed to create overwrite ignore file: %v", err)
+		}
+
+		hash1, err := CalculateTemplateHashFromDir(dir, []string{model.IgnOverwriteIgnoreFile})
+		if err != nil {
+			t.Fatalf("Hash calculation failed: %v", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(dir, model.IgnOverwriteIgnoreFile), []byte("config/\n.env\n"), 0644); err != nil {
+			t.Fatalf("Failed to update overwrite ignore file: %v", err)
+		}
+
+		hash2, err := CalculateTemplateHashFromDir(dir, []string{model.IgnOverwriteIgnoreFile})
+		if err != nil {
+			t.Fatalf("Second hash calculation failed: %v", err)
+		}
+
+		if hash1 == hash2 {
+			t.Error("Hash should change when .ign-overwrite-ignore changes")
+		}
+	})
+
 	t.Run("ignore patterns with nested directories", func(t *testing.T) {
 		dir := t.TempDir()
 

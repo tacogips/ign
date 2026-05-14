@@ -4,14 +4,17 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/tacogips/ign/internal/template/generator"
 )
 
 func TestUpdateCmd_FlagDefaults(t *testing.T) {
 	// Reset flags for testing
 	updateForce = false
 	updateOverwrite = false
+	updateOverwriteAll = false
 	updateDryRun = false
 	updateVerbose = false
+	updateYes = false
 
 	// Verify default values
 	if updateForce != false {
@@ -19,6 +22,9 @@ func TestUpdateCmd_FlagDefaults(t *testing.T) {
 	}
 	if updateOverwrite != false {
 		t.Errorf("Expected updateOverwrite default to be false, got %v", updateOverwrite)
+	}
+	if updateOverwriteAll != false {
+		t.Errorf("Expected updateOverwriteAll default to be false, got %v", updateOverwriteAll)
 	}
 	if updateDryRun != false {
 		t.Errorf("Expected updateDryRun default to be false, got %v", updateDryRun)
@@ -36,8 +42,10 @@ func TestUpdateCmd_FlagRegistration(t *testing.T) {
 	}{
 		{"force", "f"},
 		{"overwrite", "o"},
+		{"overwrite-all", ""},
 		{"dry-run", "d"},
 		{"verbose", "v"},
+		{"yes", "y"},
 	}
 
 	for _, tt := range tests {
@@ -59,42 +67,78 @@ func TestUpdateCmd_ShouldOverwriteLogic(t *testing.T) {
 		name              string
 		force             bool
 		overwrite         bool
+		overwriteAll      bool
 		expectedOverwrite bool
 	}{
 		{
 			name:              "no flags - no overwrite",
 			force:             false,
 			overwrite:         false,
+			overwriteAll:      false,
 			expectedOverwrite: false,
 		},
 		{
-			name:              "overwrite only - overwrite enabled",
+			name:              "overwrite only - selective overwrite enabled",
 			force:             false,
 			overwrite:         true,
+			overwriteAll:      false,
 			expectedOverwrite: true,
 		},
 		{
-			name:              "force only - overwrite enabled (force implies overwrite)",
+			name:              "overwrite-all only - overwrite enabled",
+			force:             false,
+			overwrite:         false,
+			overwriteAll:      true,
+			expectedOverwrite: true,
+		},
+		{
+			name:              "force only - overwrite enabled (force implies overwrite-all)",
 			force:             true,
 			overwrite:         false,
+			overwriteAll:      false,
 			expectedOverwrite: true,
 		},
 		{
 			name:              "both force and overwrite - overwrite enabled",
 			force:             true,
 			overwrite:         true,
+			overwriteAll:      false,
 			expectedOverwrite: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Simulate the logic from runUpdate
-			shouldOverwrite := tt.overwrite || tt.force
+			shouldOverwrite := updateOverwriteMode(tt.overwrite, tt.overwriteAll, tt.force) != generator.OverwriteNone
 
 			if shouldOverwrite != tt.expectedOverwrite {
-				t.Errorf("shouldOverwrite = %v, expected %v (force=%v, overwrite=%v)",
-					shouldOverwrite, tt.expectedOverwrite, tt.force, tt.overwrite)
+				t.Errorf("shouldOverwrite = %v, expected %v (force=%v, overwrite=%v, overwriteAll=%v)",
+					shouldOverwrite, tt.expectedOverwrite, tt.force, tt.overwrite, tt.overwriteAll)
+			}
+		})
+	}
+}
+
+func TestUpdateOverwriteMode(t *testing.T) {
+	tests := []struct {
+		name         string
+		overwrite    bool
+		overwriteAll bool
+		force        bool
+		want         generator.OverwriteMode
+	}{
+		{name: "none", want: generator.OverwriteNone},
+		{name: "selective", overwrite: true, want: generator.OverwriteSelective},
+		{name: "all", overwriteAll: true, want: generator.OverwriteAll},
+		{name: "force", force: true, want: generator.OverwriteAll},
+		{name: "force wins over selective", overwrite: true, force: true, want: generator.OverwriteAll},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := updateOverwriteMode(tt.overwrite, tt.overwriteAll, tt.force)
+			if got != tt.want {
+				t.Fatalf("updateOverwriteMode() = %s, want %s", got, tt.want)
 			}
 		})
 	}
@@ -151,60 +195,85 @@ func TestShouldRegenerate(t *testing.T) {
 
 func TestUpdateCmd_FlagParsing(t *testing.T) {
 	tests := []struct {
-		name              string
-		args              []string
-		expectedForce     bool
-		expectedOverwrite bool
-		expectedDryRun    bool
+		name                 string
+		args                 []string
+		expectedForce        bool
+		expectedOverwrite    bool
+		expectedOverwriteAll bool
+		expectedDryRun       bool
+		expectedYes          bool
 	}{
 		{
-			name:              "no flags",
-			args:              []string{},
-			expectedForce:     false,
-			expectedOverwrite: false,
-			expectedDryRun:    false,
+			name:                 "no flags",
+			args:                 []string{},
+			expectedForce:        false,
+			expectedOverwrite:    false,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
 		},
 		{
-			name:              "force flag long",
-			args:              []string{"--force"},
-			expectedForce:     true,
-			expectedOverwrite: false,
-			expectedDryRun:    false,
+			name:                 "force flag long",
+			args:                 []string{"--force"},
+			expectedForce:        true,
+			expectedOverwrite:    false,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
 		},
 		{
-			name:              "force flag short",
-			args:              []string{"-f"},
-			expectedForce:     true,
-			expectedOverwrite: false,
-			expectedDryRun:    false,
+			name:                 "force flag short",
+			args:                 []string{"-f"},
+			expectedForce:        true,
+			expectedOverwrite:    false,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
 		},
 		{
-			name:              "overwrite flag long",
-			args:              []string{"--overwrite"},
-			expectedForce:     false,
-			expectedOverwrite: true,
-			expectedDryRun:    false,
+			name:                 "overwrite flag long",
+			args:                 []string{"--overwrite"},
+			expectedForce:        false,
+			expectedOverwrite:    true,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
 		},
 		{
-			name:              "overwrite flag short",
-			args:              []string{"-o"},
-			expectedForce:     false,
-			expectedOverwrite: true,
-			expectedDryRun:    false,
+			name:                 "overwrite flag short",
+			args:                 []string{"-o"},
+			expectedForce:        false,
+			expectedOverwrite:    true,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
 		},
 		{
-			name:              "force and overwrite combined",
-			args:              []string{"-f", "-o"},
-			expectedForce:     true,
-			expectedOverwrite: true,
-			expectedDryRun:    false,
+			name:                 "overwrite all flag",
+			args:                 []string{"--overwrite-all"},
+			expectedForce:        false,
+			expectedOverwrite:    false,
+			expectedOverwriteAll: true,
+			expectedDryRun:       false,
+			expectedYes:          false,
 		},
 		{
-			name:              "all flags",
-			args:              []string{"--force", "--overwrite", "--dry-run"},
-			expectedForce:     true,
-			expectedOverwrite: true,
-			expectedDryRun:    true,
+			name:                 "force and overwrite combined",
+			args:                 []string{"-f", "-o"},
+			expectedForce:        true,
+			expectedOverwrite:    true,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
+		},
+		{
+			name:                 "all flags",
+			args:                 []string{"--force", "--overwrite", "--overwrite-all", "--dry-run", "--yes"},
+			expectedForce:        true,
+			expectedOverwrite:    true,
+			expectedOverwriteAll: true,
+			expectedDryRun:       true,
+			expectedYes:          true,
 		},
 	}
 
@@ -212,11 +281,13 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a fresh command for each test to avoid flag state pollution
 			cmd := &cobra.Command{Use: "update"}
-			var force, overwrite, dryRun, verbose bool
+			var force, overwrite, overwriteAll, dryRun, verbose, yes bool
 			cmd.Flags().BoolVarP(&force, "force", "f", false, "")
 			cmd.Flags().BoolVarP(&overwrite, "overwrite", "o", false, "")
+			cmd.Flags().BoolVar(&overwriteAll, "overwrite-all", false, "")
 			cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "")
 			cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "")
+			cmd.Flags().BoolVarP(&yes, "yes", "y", false, "")
 
 			// Parse the arguments
 			if err := cmd.ParseFlags(tt.args); err != nil {
@@ -229,8 +300,14 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			if overwrite != tt.expectedOverwrite {
 				t.Errorf("overwrite = %v, expected %v", overwrite, tt.expectedOverwrite)
 			}
+			if overwriteAll != tt.expectedOverwriteAll {
+				t.Errorf("overwriteAll = %v, expected %v", overwriteAll, tt.expectedOverwriteAll)
+			}
 			if dryRun != tt.expectedDryRun {
 				t.Errorf("dryRun = %v, expected %v", dryRun, tt.expectedDryRun)
+			}
+			if yes != tt.expectedYes {
+				t.Errorf("yes = %v, expected %v", yes, tt.expectedYes)
 			}
 		})
 	}

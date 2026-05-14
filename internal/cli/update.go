@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
 	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
+	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -34,34 +36,40 @@ Requirements:
   - For private GitHub repositories, set GITHUB_TOKEN environment variable
 
 If the template has not changed (same hash), no action is taken unless
---overwrite or --force is specified.
+--overwrite, --overwrite-all, or --force is specified.
 
 Examples:
   ign update                     # Update if template changed, skip existing files
   ign update ./my-project        # Update to specific directory
   ign update --dry-run           # Preview changes without writing
-  ign update --overwrite         # Overwrite existing files (also regenerates even if unchanged)
-  ign update --force             # Alias of --overwrite for explicit "force regenerate" intent`,
+  ign update --overwrite         # Selectively overwrite existing files, respecting .ign-overwrite-ignore
+  ign update --overwrite --yes   # Selectively overwrite without confirmation
+  ign update --overwrite-all     # Overwrite all existing files
+  ign update --force             # Regenerate even if unchanged and overwrite all existing files`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runUpdate,
 }
 
 // Update command flags
 var (
-	updateForce     bool
-	updateOverwrite bool
-	updateDryRun    bool
-	updateVerbose   bool
+	updateForce        bool
+	updateOverwrite    bool
+	updateOverwriteAll bool
+	updateDryRun       bool
+	updateVerbose      bool
+	updateYes          bool
 )
 
 func init() {
 	// Flags for update
 	// Note: These flags control project file generation behavior, which differs from
 	// 'ign template update' flags that control template metadata updates
-	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Regenerate even if template unchanged (implies --overwrite)")
-	updateCmd.Flags().BoolVarP(&updateOverwrite, "overwrite", "o", false, "Overwrite existing files when template has changed")
+	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Regenerate even if template unchanged (implies --overwrite-all)")
+	updateCmd.Flags().BoolVarP(&updateOverwrite, "overwrite", "o", false, "Overwrite existing files except paths matched by the template's .ign-overwrite-ignore")
+	updateCmd.Flags().BoolVar(&updateOverwriteAll, "overwrite-all", false, "Overwrite all existing files, ignoring .ign-overwrite-ignore")
 	updateCmd.Flags().BoolVarP(&updateDryRun, "dry-run", "d", false, "Preview what files would be generated without writing them")
 	updateCmd.Flags().BoolVarP(&updateVerbose, "verbose", "v", false, "Show detailed processing information during project generation")
+	updateCmd.Flags().BoolVarP(&updateYes, "yes", "y", false, "Skip overwrite confirmation prompt")
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
@@ -76,16 +84,17 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	printInfo("Checking for template updates...")
 
-	// Determine overwrite behavior: --force implies --overwrite
-	shouldOverwrite := updateOverwrite || updateForce
+	overwriteMode := updateOverwriteMode(updateOverwrite, updateOverwriteAll, updateForce)
+	shouldOverwrite := overwriteMode != generator.OverwriteNone
 
 	// Prepare update - fetch template and check for changes
 	prepResult, err := app.PrepareUpdate(cmd.Context(), app.UpdateOptions{
-		OutputDir:   outputPath,
-		Overwrite:   shouldOverwrite,
-		DryRun:      updateDryRun,
-		Verbose:     updateVerbose,
-		GitHubToken: githubToken,
+		OutputDir:     outputPath,
+		Overwrite:     shouldOverwrite,
+		OverwriteMode: overwriteMode,
+		DryRun:        updateDryRun,
+		Verbose:       updateVerbose,
+		GitHubToken:   githubToken,
 	})
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Update preparation failed: %v", err))
@@ -101,7 +110,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Decide whether to regenerate files.
 	// By default, unchanged template exits early. --overwrite or --force bypasses this.
-	if !shouldRegenerate(prepResult.HashChanged, updateForce, updateOverwrite) {
+	if !shouldRegenerate(prepResult.HashChanged, updateForce, shouldOverwrite) {
 		printSuccess("Template is up to date (no changes detected)")
 		return nil
 	}
@@ -163,6 +172,31 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if shouldOverwrite && !updateDryRun && !updateYes {
+		preview, err := app.CompleteUpdate(cmd.Context(), app.CompleteUpdateOptions{
+			PrepareResult: prepResult,
+			NewVariables:  newVarValues,
+			OutputDir:     outputPath,
+			Overwrite:     shouldOverwrite,
+			OverwriteMode: overwriteMode,
+			DryRun:        true,
+			Verbose:       updateVerbose,
+		})
+		if err != nil {
+			printErrorMsg(fmt.Sprintf("Update preview failed: %v", err))
+			return err
+		}
+		printUpdateWritePreview(preview)
+		confirmed, err := confirmUpdateOverwrite()
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			printInfo("Update cancelled")
+			return nil
+		}
+	}
+
 	// Complete update
 	printSeparator()
 	if updateDryRun {
@@ -176,6 +210,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		NewVariables:  newVarValues,
 		OutputDir:     outputPath,
 		Overwrite:     shouldOverwrite,
+		OverwriteMode: overwriteMode,
 		DryRun:        updateDryRun,
 		Verbose:       updateVerbose,
 	})
@@ -229,6 +264,53 @@ func shouldRegenerate(hashChanged, force, overwrite bool) bool {
 		return true
 	}
 	return force || overwrite
+}
+
+func updateOverwriteMode(overwrite, overwriteAll, force bool) generator.OverwriteMode {
+	if force || overwriteAll {
+		return generator.OverwriteAll
+	}
+	if overwrite {
+		return generator.OverwriteSelective
+	}
+	return generator.OverwriteNone
+}
+
+func printUpdateWritePreview(result *app.UpdateResult) {
+	printSeparator()
+	printInfo("Files to write:")
+	if result == nil || len(result.DryRunFiles) == 0 {
+		printInfo("  (none)")
+		return
+	}
+
+	written := 0
+	for _, file := range result.DryRunFiles {
+		if file.WouldSkip {
+			continue
+		}
+		status := "A"
+		if file.WouldOverwrite {
+			status = "M"
+		}
+		printInfo(fmt.Sprintf("  %s %s", status, file.Path))
+		written++
+	}
+	if written == 0 {
+		printInfo("  (none)")
+	}
+}
+
+func confirmUpdateOverwrite() (bool, error) {
+	var confirmed bool
+	prompt := &survey.Confirm{
+		Message: "Proceed with update?",
+		Default: false,
+	}
+	if err := survey.AskOne(prompt, &confirmed); err != nil {
+		return false, err
+	}
+	return confirmed, nil
 }
 
 // PromptForNewVariables prompts for values of new variables.

@@ -111,6 +111,46 @@ ign checkout . --verbose    # Show detailed processing info
 
 After a successful checkout, ign stores the created file list in `.ign/ign-files.json`.
 
+### `ign update [output-path]`
+
+Fetch the checked-out template again and regenerate project files when the template hash has changed.
+
+```bash
+ign update
+ign update ./my-project
+ign update --dry-run
+ign update --overwrite
+ign update --overwrite --yes
+ign update --overwrite-all
+```
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--overwrite` | `-o` | Overwrite existing files except paths matched by the remote template's `.ign-overwrite-ignore` |
+| `--overwrite-all` | | Overwrite all existing files |
+| `--force` | `-f` | Regenerate even if the hash is unchanged and overwrite all existing files |
+| `--yes` | `-y` | Skip the overwrite confirmation prompt |
+| `--dry-run` | `-d` | Preview what would be generated without writing |
+| `--verbose` | `-v` | Show detailed processing information |
+
+When `--overwrite` or `--overwrite-all` is used without `--yes`, `ign update` displays files that will be written before prompting:
+
+```text
+A new-file.txt
+M existing-file.txt
+```
+
+Template authors can add `.ign-overwrite-ignore` to the template root to protect user-owned files during selective overwrite. The file uses gitignore-style patterns and is included in the template hash.
+
+```gitignore
+config/
+.env
+*.local
+!config/default.yaml
+```
+
 ### `ign rewind [output-path]`
 
 Remove files previously created by ign and delete `.ign/`.
