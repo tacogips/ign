@@ -1227,6 +1227,7 @@ func TestCompleteUpdate_DryRunWithOverwrite(t *testing.T) {
 			{
 				Path:    "test.txt",
 				Content: []byte("new content"),
+				Mode:    0644,
 			},
 		},
 	}
@@ -1321,6 +1322,64 @@ func TestCompleteUpdate_DryRunWithOverwrite(t *testing.T) {
 		}
 		if string(content) != string(originalContent) {
 			t.Error("File should not have been modified in dry-run mode")
+		}
+	})
+
+	t.Run("dry-run with overwrite - omits unchanged file", func(t *testing.T) {
+		if err := os.WriteFile(existingFilePath, []byte("new content"), 0644); err != nil {
+			t.Fatalf("Failed to update existing file: %v", err)
+		}
+
+		opts := CompleteUpdateOptions{
+			PrepareResult: prep,
+			NewVariables:  map[string]interface{}{},
+			OutputDir:     tempDir,
+			Overwrite:     true,
+			DryRun:        true,
+		}
+
+		result, err := CompleteUpdate(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("CompleteUpdate failed: %v", err)
+		}
+
+		if result.FilesOverwritten != 0 {
+			t.Errorf("Expected 0 files overwritten in dry-run, got %d", result.FilesOverwritten)
+		}
+		if len(result.DryRunFiles) != 0 {
+			t.Fatalf("Expected unchanged file to be omitted from dry-run files, got %d", len(result.DryRunFiles))
+		}
+	})
+
+	t.Run("dry-run with overwrite - includes permission change", func(t *testing.T) {
+		if err := os.WriteFile(existingFilePath, []byte("new content"), 0600); err != nil {
+			t.Fatalf("Failed to update existing file: %v", err)
+		}
+		if err := os.Chmod(existingFilePath, 0600); err != nil {
+			t.Fatalf("Failed to chmod existing file: %v", err)
+		}
+
+		opts := CompleteUpdateOptions{
+			PrepareResult: prep,
+			NewVariables:  map[string]interface{}{},
+			OutputDir:     tempDir,
+			Overwrite:     true,
+			DryRun:        true,
+		}
+
+		result, err := CompleteUpdate(context.Background(), opts)
+		if err != nil {
+			t.Fatalf("CompleteUpdate failed: %v", err)
+		}
+
+		if result.FilesOverwritten != 1 {
+			t.Errorf("Expected 1 file overwritten in dry-run, got %d", result.FilesOverwritten)
+		}
+		if len(result.DryRunFiles) != 1 {
+			t.Fatalf("Expected permission change to remain in dry-run files, got %d", len(result.DryRunFiles))
+		}
+		if !result.DryRunFiles[0].WouldOverwrite {
+			t.Error("Expected WouldOverwrite to be true")
 		}
 	})
 }

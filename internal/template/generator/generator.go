@@ -1,6 +1,7 @@
 package generator
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -56,6 +57,9 @@ type GenerateOptions struct {
 
 	// Verbose enables detailed logging during generation.
 	Verbose bool
+
+	// SkipUnchanged avoids writing existing files when generated output is identical.
+	SkipUnchanged bool
 }
 
 // DryRunFile contains information about a file that would be created in dry-run mode.
@@ -243,6 +247,10 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 				}
 				continue
 			}
+			if opts.SkipUnchanged && fileExists && symlinkTargetMatchesExisting(outputPath, file.SymlinkTarget) {
+				debug.Debug("[generator] Skipping unchanged symlink: %s", outputPath)
+				continue
+			}
 
 			if !dryRun {
 				if err := writer.WriteSymlink(outputPath, file.SymlinkTarget); err != nil {
@@ -301,6 +309,10 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		if err != nil {
 			// Record error but continue processing
 			result.Errors = append(result.Errors, fmt.Errorf("failed to process %s: %w", file.Path, err))
+			continue
+		}
+		if opts.SkipUnchanged && fileExists && fileContentMatchesExisting(outputPath, processed, effectiveWriteFileMode(file.Mode, settings.PreserveExecutable)) {
+			debug.Debug("[generator] Skipping unchanged file: %s", outputPath)
 			continue
 		}
 
@@ -390,6 +402,30 @@ func shouldOverwritePath(path string, mode OverwriteMode, overwriteIgnorePattern
 	default:
 		return false
 	}
+}
+
+func fileContentMatchesExisting(path string, content []byte, mode os.FileMode) bool {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != mode.Perm() {
+		return false
+	}
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(existing, content)
+}
+
+func symlinkTargetMatchesExisting(path string, target string) bool {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return false
+	}
+	existingTarget, err := os.Readlink(path)
+	if err != nil {
+		return false
+	}
+	return existingTarget == target
 }
 
 // sortPaths sorts paths in a way that parent directories come before children.

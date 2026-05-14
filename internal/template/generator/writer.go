@@ -56,18 +56,7 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 		}
 	}
 
-	// Determine file mode
-	fileMode := mode
-	if !w.preserveExecutable {
-		// Use default mode 0644 for regular files
-		fileMode = 0644
-	} else {
-		// Preserve executable bit if set
-		// Ensure at least read/write for owner
-		if fileMode&0600 == 0 {
-			fileMode = fileMode | 0600
-		}
-	}
+	fileMode := effectiveWriteFileMode(mode, w.preserveExecutable)
 
 	// Write atomically using temporary file
 	tempFile := path + ".tmp"
@@ -109,9 +98,25 @@ func (w *FileWriter) WriteFile(path string, content []byte, mode os.FileMode) er
 			path,
 			err)
 	}
+	if err := os.Chmod(path, fileMode); err != nil {
+		return newGeneratorError(GeneratorWriteFailed,
+			"failed to set file permissions",
+			path,
+			err)
+	}
 
 	debug.Debug("[generator] File written successfully: %s", path)
 	return nil
+}
+
+func effectiveWriteFileMode(mode os.FileMode, preserveExecutable bool) os.FileMode {
+	if !preserveExecutable {
+		return 0644
+	}
+	if mode&0600 == 0 {
+		return mode | 0600
+	}
+	return mode
 }
 
 // WriteSymlink creates a symbolic link at path pointing to target.

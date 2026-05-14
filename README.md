@@ -142,6 +142,8 @@ A new-file.txt
 M existing-file.txt
 ```
 
+Existing files whose generated content and permissions are unchanged are omitted from the confirmation list.
+
 Template authors can add `.ign-overwrite-ignore` to the template root to protect user-owned files during selective overwrite. The file uses gitignore-style patterns and is included in the template hash.
 
 ```gitignore

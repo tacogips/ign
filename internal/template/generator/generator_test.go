@@ -447,6 +447,105 @@ func TestGenerator_GenerateWithOverwrite(t *testing.T) {
 	}
 }
 
+func TestGenerator_OverwriteSkipsUnchangedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	existingPath := filepath.Join(tmpDir, "existing.txt")
+	if err := os.WriteFile(existingPath, []byte("same content"), 0644); err != nil {
+		t.Fatalf("failed to write existing file: %v", err)
+	}
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "existing.txt",
+				Content: []byte("same content"),
+				Mode:    0644,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	opts := GenerateOptions{
+		Template:      template,
+		Variables:     parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir:     tmpDir,
+		Overwrite:     true,
+		SkipUnchanged: true,
+	}
+
+	dryRunResult, err := gen.DryRun(ctx, opts)
+	if err != nil {
+		t.Fatalf("DryRun() error = %v", err)
+	}
+	if dryRunResult.FilesOverwritten != 0 {
+		t.Fatalf("DryRun FilesOverwritten = %d, want 0", dryRunResult.FilesOverwritten)
+	}
+	if len(dryRunResult.DryRunFiles) != 0 {
+		t.Fatalf("DryRunFiles length = %d, want 0", len(dryRunResult.DryRunFiles))
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.FilesOverwritten != 0 {
+		t.Fatalf("FilesOverwritten = %d, want 0", result.FilesOverwritten)
+	}
+	if len(result.WrittenFiles) != 0 {
+		t.Fatalf("WrittenFiles length = %d, want 0", len(result.WrittenFiles))
+	}
+}
+
+func TestGenerator_WriteFileSetsExpectedMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name: "test",
+			Settings: &model.TemplateSettings{
+				PreserveExecutable: true,
+			},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "script.sh",
+				Content: []byte("#!/bin/sh\n"),
+				Mode:    0755,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir: tmpDir,
+	}
+
+	if _, err := gen.Generate(ctx, opts); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(tmpDir, "script.sh"))
+	if err != nil {
+		t.Fatalf("failed to stat generated file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0755 {
+		t.Fatalf("generated file mode = %o, want 0755", got)
+	}
+}
+
 func TestGenerator_GenerateWithSelectiveOverwrite(t *testing.T) {
 	tmpDir := t.TempDir()
 	gen := NewGenerator()

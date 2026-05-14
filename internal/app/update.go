@@ -352,6 +352,7 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		Overwrite:     opts.Overwrite,
 		OverwriteMode: opts.OverwriteMode,
 		Verbose:       opts.Verbose,
+		SkipUnchanged: true,
 	}
 
 	// Generate or dry run
