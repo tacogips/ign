@@ -1,0 +1,11 @@
+{
+  "id": "workflow-output",
+  "description": "Publish the accepted feature-local design and implementation-plan branch result.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplate": "You are the feature-local workflow output step. Summarize the accepted feature design and implementation-plan branch. Include workflowMode, issueReference, featureId, featureTitle, designDocPaths, implPlanPaths, reviewDecisions, codexAgentReferences, verification, addressedFeedback, and risks. Return JSON only.",
+  "variables": {},
+  "output": {
+    "description": "Return the accepted feature-local planning handoff with file paths, review decisions, verification, and risks."
+  }
+}

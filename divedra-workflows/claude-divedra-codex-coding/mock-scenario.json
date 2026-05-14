@@ -1,0 +1,104 @@
+{
+  "divedra-manager": {
+    "provider": "scenario-mock",
+    "model": "claude-haiku-4-5",
+    "when": {
+      "always": true
+    },
+    "payload": {
+      "stage": "root-dispatch",
+      "backendPolicy": "divedra-on-claude-code"
+    }
+  },
+  "main-divedra": {
+    "provider": "scenario-mock",
+    "model": "claude-haiku-4-5",
+    "when": {
+      "always": true
+    },
+    "payload": {
+      "stage": "delivery-dispatch",
+      "delegationPolicy": "codex-only-for-coding"
+    }
+  },
+  "workflow-input": {
+    "provider": "scenario-mock",
+    "model": "claude-haiku-4-5",
+    "when": {
+      "always": true
+    },
+    "payload": {
+      "normalizedRequest": "Add an examples workflow that demonstrates mixed backends.",
+      "constraints": [
+        "Keep divedra on claude-code",
+        "Use codex for code production",
+        "Make the workflow directly reusable as a reference"
+      ],
+      "acceptanceChecks": [
+        "workflow validates from ./examples",
+        "backend split is explicit in node files"
+      ]
+    }
+  },
+  "implementation-brief": {
+    "provider": "scenario-mock",
+    "model": "claude-haiku-4-5",
+    "when": {
+      "always": true
+    },
+    "payload": {
+      "filesToTouch": [
+        "examples/README.md",
+        "examples/claude-divedra-codex-coding/workflow.json"
+      ],
+      "implementationPlan": [
+        "Create a workflow bundle under examples/",
+        "Assign claude-code to divedra nodes",
+        "Assign codex to the coding node",
+        "Provide a deterministic mock scenario"
+      ],
+      "verificationCommands": [
+        "bun run src/main.ts workflow validate claude-divedra-codex-coding --workflow-definition-dir ./examples",
+        "bun run src/main.ts workflow inspect claude-divedra-codex-coding --workflow-definition-dir ./examples --output json"
+      ]
+    }
+  },
+  "implement": {
+    "provider": "scenario-mock",
+    "model": "gpt-5-nano",
+    "when": {
+      "always": true
+    },
+    "payload": {
+      "changedFiles": [
+        "examples/README.md",
+        "examples/claude-divedra-codex-coding/workflow.json",
+        "examples/claude-divedra-codex-coding/node-implement.json"
+      ],
+      "summary": "Created a mixed-backend reference workflow with claude-code managers and a codex implementation node.",
+      "verification": ["workflow validate", "workflow inspect"],
+      "risks": []
+    }
+  },
+  "workflow-output": {
+    "provider": "scenario-mock",
+    "model": "claude-haiku-4-5",
+    "when": {
+      "always": true
+    },
+    "payload": {
+      "summary": "Reference workflow bundle is ready under examples/ with an explicit claude-code and codex split.",
+      "status": "ready",
+      "changedFiles": [
+        "examples/README.md",
+        "examples/claude-divedra-codex-coding/"
+      ],
+      "verification": [
+        "workflow validate",
+        "workflow inspect",
+        "workflow run --mock-scenario"
+      ],
+      "risks": []
+    }
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Divedra Workflow Test"
+  short_description: "Verify workflows with mock scenarios"
+  default_prompt: "Use $divedra-workflow-test to verify this divedra workflow with its mock scenario."

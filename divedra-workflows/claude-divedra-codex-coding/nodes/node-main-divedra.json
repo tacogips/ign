@@ -1,0 +1,9 @@
+{
+  "id": "main-divedra",
+  "executionBackend": "claude-code-agent",
+  "model": "claude-haiku-4-5",
+  "promptTemplateFile": "prompts/main-divedra.md",
+  "variables": {
+    "workflowId": "claude-divedra-codex-coding"
+  }
+}

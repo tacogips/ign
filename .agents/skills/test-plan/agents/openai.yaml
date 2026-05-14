@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-plan"
+  short_description: "Use when creating test plans from implementation and design documents. Provides test plan structure, test case tracking, and coverage guidelines."

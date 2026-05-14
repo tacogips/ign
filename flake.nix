@@ -5,6 +5,14 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    divedra = {
+      # Keep the CLI pinned before the upstream workflow-runner split that
+      # currently references a missing result-finalization module.
+      url = "github:tacogips/divedra/c141361";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs-unstable.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
 
   outputs =
@@ -12,6 +20,7 @@
       self,
       nixpkgs,
       flake-utils,
+      divedra,
     }:
     let
       # Single source of truth for version
@@ -64,6 +73,7 @@
             gotools
             golangci-lint
             go-task
+            divedra.packages.${system}.default
           ];
 
           shellHook = ''
@@ -76,6 +86,7 @@
             echo "Go version: $(go version)"
             echo "Task version: $(task --version)"
             echo "golangci-lint version: $(golangci-lint --version)"
+            echo "Divedra CLI: available"
           '';
         };
       }

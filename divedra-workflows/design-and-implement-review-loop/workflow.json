@@ -1,0 +1,295 @@
+{
+  "workflowId": "design-and-implement-review-loop",
+  "description": "Shared workflow for either full issue resolution or planning-only Codex-reference design and implementation-plan handoff, with explicit design, implementation-plan, implementation, and review gates plus return paths.",
+  "defaults": {
+    "fanoutConcurrency": 20,
+    "maxLoopIterations": 3,
+    "nodeTimeoutMs": 3600000
+  },
+  "prompts": {
+    "divedraPromptTemplate": "Coordinate {{workflowId}}. Run Step 1 intake first. If Step 1 classifies independent feature fanout items, dispatch feature-local design and implementation-plan work through the bounded fanout transition, join at Step 5 feature-plan join, then continue to Step 6 for issue-resolution mode or finish for planning-only mode. If Step 1 does not classify fanout items, run the sequential path: Step 2 design-doc update, Step 2 self-review, Step 3 design review, Step 4 implementation-plan creation, Step 4 self-review, and Step 5 implementation-plan review. If a self-review reports blocking findings, route back to its authoring step before running the independent review. If Step 3 reports any high or mid findings, route back to Step 2. If Step 5 reports design changes are required, route back to Step 2. If Step 5 reports plan-only changes are required, route back to Step 4. After Step 5 acceptance for a planning-only run, finish with workflow output. Otherwise run Step 6 implementation, Step 6 self-review, then Step 7 implementation review. If Step 6 self-review or Step 7 reports any high or mid findings, route back to Step 6. After Step 7 acceptance, run Step 8 user-facing documentation refresh, then finish. Finish only when the required self-review and independent review gates are accepted for the selected mode.",
+    "workerSystemPromptTemplate": "Return concise business JSON only. Keep workflow mode, issue references, codex-agent references, file paths, findings, review decisions, and verification commands explicit."
+  },
+  "managerStepId": "divedra-manager",
+  "entryStepId": "divedra-manager",
+  "nodes": [
+    {
+      "id": "divedra-manager",
+      "nodeFile": "nodes/node-divedra-manager.json"
+    },
+    {
+      "id": "step1-issue-intake",
+      "nodeFile": "nodes/node-step1-issue-intake.json"
+    },
+    {
+      "id": "step2-design-doc-update",
+      "nodeFile": "nodes/node-step2-design-doc-update.json"
+    },
+    {
+      "id": "step3-design-review",
+      "nodeFile": "nodes/node-step3-design-review.json"
+    },
+    {
+      "id": "step4-impl-plan-create",
+      "nodeFile": "nodes/node-step4-impl-plan-create.json"
+    },
+    {
+      "id": "step5-impl-plan-review",
+      "nodeFile": "nodes/node-step5-impl-plan-review.json"
+    },
+    {
+      "id": "step5-feature-plan-join",
+      "nodeFile": "nodes/node-step5-feature-plan-join.json"
+    },
+    {
+      "id": "step6-implement",
+      "nodeFile": "nodes/node-step6-implement.json"
+    },
+    {
+      "id": "step7-review",
+      "nodeFile": "nodes/node-step7-review.json"
+    },
+    {
+      "id": "step8-docs-refresh",
+      "nodeFile": "nodes/node-step8-docs-refresh.json"
+    },
+    {
+      "id": "workflow-output",
+      "kind": "output",
+      "nodeFile": "nodes/node-workflow-output.json"
+    }
+  ],
+  "steps": [
+    {
+      "id": "divedra-manager",
+      "nodeId": "divedra-manager",
+      "description": "Start the shared workflow and hand execution to the intake worker.",
+      "role": "manager",
+      "transitions": [
+        {
+          "toStepId": "step1-issue-intake"
+        }
+      ]
+    },
+    {
+      "id": "step1-issue-intake",
+      "nodeId": "step1-issue-intake",
+      "description": "Normalize the request into a shared intake brief for either issue resolution or planning-only reference work.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "!(has_feature_fanout)"
+        },
+        {
+          "toStepId": "step2-design-doc-update",
+          "toWorkflowId": "design-and-implement-review-loop-feature-plan",
+          "resumeStepId": "step5-feature-plan-join",
+          "label": "has_feature_fanout",
+          "fanout": {
+            "groupId": "feature-local-planning",
+            "itemsFrom": "/payload/featureFanoutItems",
+            "itemVariable": "feature",
+            "concurrency": 20,
+            "joinStepId": "step5-feature-plan-join",
+            "failurePolicy": "fail-fast",
+            "resultOrder": "input",
+            "writeOwnership": {
+              "mode": "disjoint-paths",
+              "directories": ["design-docs/specs", "impl-plans/active"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "step2-design-doc-update",
+      "nodeId": "step2-design-doc-update",
+      "description": "Update the design documents from the accepted intake brief before planning or implementation.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-self-review"
+        }
+      ]
+    },
+    {
+      "id": "step2-design-self-review",
+      "nodeId": "step2-design-doc-update",
+      "description": "Self-review the design update before the independent design review.",
+      "role": "worker",
+      "promptVariant": "self-review",
+      "sessionPolicy": {
+        "mode": "reuse",
+        "inheritFromStepId": "step2-design-doc-update"
+      },
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step3-design-review",
+          "label": "!(needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step3-design-review",
+      "nodeId": "step3-design-review",
+      "description": "Review the design update and return to Step 2 when any high or mid finding exists.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step4-impl-plan-create",
+          "label": "!(needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step4-impl-plan-create",
+      "nodeId": "step4-impl-plan-create",
+      "description": "Create or revise the implementation plan from the accepted design.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step4-impl-plan-self-review"
+        }
+      ]
+    },
+    {
+      "id": "step4-impl-plan-self-review",
+      "nodeId": "step4-impl-plan-create",
+      "description": "Self-review the implementation plan and design-plan consistency before the independent implementation-plan review.",
+      "role": "worker",
+      "promptVariant": "self-review",
+      "sessionPolicy": {
+        "mode": "reuse",
+        "inheritFromStepId": "step4-impl-plan-create"
+      },
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_design_revision"
+        },
+        {
+          "toStepId": "step4-impl-plan-create",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step5-impl-plan-review",
+          "label": "!(needs_design_revision || needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step5-impl-plan-review",
+      "nodeId": "step5-impl-plan-review",
+      "description": "Review the implementation plan and final design-plan consistency, then return to the correct authoring step when blocking findings exist.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_design_revision"
+        },
+        {
+          "toStepId": "step4-impl-plan-create",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "workflow-output",
+          "label": "planning_only && !(needs_design_revision || needs_revision)"
+        },
+        {
+          "toStepId": "step6-implement",
+          "label": "!(planning_only || needs_design_revision || needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step5-feature-plan-join",
+      "nodeId": "step5-feature-plan-join",
+      "description": "Join feature-local design and implementation-plan branch outputs before planning-only completion or dependency-aware implementation.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "workflow-output",
+          "label": "planning_only"
+        },
+        {
+          "toStepId": "step6-implement",
+          "label": "!(planning_only)"
+        }
+      ]
+    },
+    {
+      "id": "step6-implement",
+      "nodeId": "step6-implement",
+      "description": "Implement the accepted plan, run verification, and update plan progress.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step6-implement-self-review"
+        }
+      ]
+    },
+    {
+      "id": "step6-implement-self-review",
+      "nodeId": "step6-implement",
+      "description": "Self-review the implementation diff and verification evidence before the independent implementation review.",
+      "role": "worker",
+      "promptVariant": "self-review",
+      "sessionPolicy": {
+        "mode": "reuse",
+        "inheritFromStepId": "step6-implement"
+      },
+      "transitions": [
+        {
+          "toStepId": "step6-implement",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step7-review",
+          "label": "!(needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step7-review",
+      "nodeId": "step7-review",
+      "description": "Review the implementation diff and return to Step 6 when any high or mid finding exists.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step6-implement",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step8-docs-refresh",
+          "label": "!(needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step8-docs-refresh",
+      "nodeId": "step8-docs-refresh",
+      "description": "Refresh the user-facing repository documentation after implementation acceptance.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "workflow-output"
+        }
+      ]
+    },
+    {
+      "id": "workflow-output",
+      "nodeId": "workflow-output",
+      "description": "Publish the accepted planning handoff or the final accepted issue-resolution summary.",
+      "role": "worker"
+    }
+  ]
+}

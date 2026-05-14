@@ -1,0 +1,4 @@
+interface:
+  display_name: "Divedra Workflow Run"
+  short_description: "Run and monitor divedra workflows"
+  default_prompt: "Use $divedra-workflow-run to run this divedra workflow and inspect the resulting session."
