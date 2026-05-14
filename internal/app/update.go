@@ -22,6 +22,8 @@ type UpdateOptions struct {
 	OutputDir string
 	// Overwrite determines whether to overwrite existing files.
 	Overwrite bool
+	// OverwriteMode determines how existing files are overwritten.
+	OverwriteMode generator.OverwriteMode
 	// DryRun simulates generation without writing files.
 	DryRun bool
 	// Verbose enables detailed logging.
@@ -247,6 +249,8 @@ type CompleteUpdateOptions struct {
 	OutputDir string
 	// Overwrite determines whether to overwrite existing files.
 	Overwrite bool
+	// OverwriteMode determines how existing files are overwritten.
+	OverwriteMode generator.OverwriteMode
 	// DryRun simulates generation without writing files.
 	DryRun bool
 	// Verbose enables detailed logging.
@@ -342,11 +346,12 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	// Prepare generate options
 	genOpts := generator.GenerateOptions{
-		Template:  prep.Template,
-		Variables: vars,
-		OutputDir: opts.OutputDir,
-		Overwrite: opts.Overwrite,
-		Verbose:   opts.Verbose,
+		Template:      prep.Template,
+		Variables:     vars,
+		OutputDir:     opts.OutputDir,
+		Overwrite:     opts.Overwrite,
+		OverwriteMode: opts.OverwriteMode,
+		Verbose:       opts.Verbose,
 	}
 
 	// Generate or dry run

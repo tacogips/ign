@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tacogips/ign/internal/config"
+	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
 )
 
@@ -1119,6 +1120,89 @@ func TestCompleteUpdate_OverwriteFlag(t *testing.T) {
 			t.Errorf("File content should have been overwritten. Got: %s, Expected: %s", string(content), string(newContent))
 		}
 	})
+}
+
+func TestCompleteUpdate_SelectiveOverwriteRespectsTemplateIgnore(t *testing.T) {
+	tempDir := t.TempDir()
+	ignDir := filepath.Join(tempDir, ".ign")
+	if err := os.MkdirAll(ignDir, 0755); err != nil {
+		t.Fatalf("Failed to create .ign directory: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(tempDir, "config"), 0755); err != nil {
+		t.Fatalf("Failed to create config directory: %v", err)
+	}
+
+	readmePath := filepath.Join(tempDir, "README.md")
+	configPath := filepath.Join(tempDir, "config", "local.yaml")
+	if err := os.WriteFile(readmePath, []byte("old readme"), 0644); err != nil {
+		t.Fatalf("Failed to write README: %v", err)
+	}
+	if err := os.WriteFile(configPath, []byte("old local"), 0644); err != nil {
+		t.Fatalf("Failed to write config: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: model.IgnOverwriteIgnoreFile, Content: []byte("config/\n"), Mode: 0644},
+			{Path: "README.md", Content: []byte("new readme"), Mode: 0644},
+			{Path: "config/local.yaml", Content: []byte("new local"), Mode: 0644},
+		},
+		RootPath: tempDir,
+	}
+
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{URL: "https://github.com/test/template"},
+		Hash:     testHash1,
+	}
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(ignDir, model.IgnProjectConfigFile),
+		IgnVarPath:    filepath.Join(ignDir, model.IgnVarFile),
+		IgnConfig:     ignConfig,
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteSelective,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+	if result.FilesOverwritten != 1 {
+		t.Fatalf("FilesOverwritten = %d, want 1", result.FilesOverwritten)
+	}
+	if result.FilesSkipped != 1 {
+		t.Fatalf("FilesSkipped = %d, want 1", result.FilesSkipped)
+	}
+
+	readme, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("Failed to read README: %v", err)
+	}
+	if string(readme) != "new readme" {
+		t.Fatalf("README.md = %q, want new readme", string(readme))
+	}
+
+	config, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read config: %v", err)
+	}
+	if string(config) != "old local" {
+		t.Fatalf("config/local.yaml = %q, want old local", string(config))
+	}
 }
 
 func TestCompleteUpdate_DryRunWithOverwrite(t *testing.T) {

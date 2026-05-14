@@ -613,8 +613,10 @@ func CalculateTemplateHashFromDir(dirPath string, ignorePatterns []string) (stri
 			return nil
 		}
 
-		// Skip files matching ignore patterns
-		if len(ignorePatterns) > 0 {
+		// Skip files matching ignore patterns. The overwrite ignore file is
+		// template metadata, but it is intentionally hashable so update behavior
+		// changes are detected by project users.
+		if relPath != model.IgnOverwriteIgnoreFile && len(ignorePatterns) > 0 {
 			if generator.ShouldIgnoreFile(relPath, ignorePatterns) {
 				debug.Debug("[app] Skipping ignored file during hash: %s", relPath)
 				return nil

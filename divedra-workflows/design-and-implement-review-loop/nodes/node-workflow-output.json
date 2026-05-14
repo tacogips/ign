@@ -1,0 +1,11 @@
+{
+  "id": "workflow-output",
+  "description": "Publish either the accepted planning handoff or the final accepted issue-resolution handoff after the required review gates pass and the issue-resolution documentation refresh runs when required.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/workflow-output.md",
+  "variables": {},
+  "output": {
+    "description": "Return either the accepted design-and-plan handoff or the final issue-resolution handoff, with review summaries, documentation refresh details, verification, and residual risks."
+  }
+}

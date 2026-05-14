@@ -1,0 +1,3 @@
+interface:
+  display_name: "ts-coding-standards"
+  short_description: "Use when writing, reviewing, or refactoring TypeScript code. Provides type safety patterns, error handling, project layout, and async programming guidelines."

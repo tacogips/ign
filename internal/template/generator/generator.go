@@ -22,6 +22,19 @@ type Generator interface {
 	DryRun(ctx context.Context, opts GenerateOptions) (*GenerateResult, error)
 }
 
+// OverwriteMode controls how existing output files are handled.
+type OverwriteMode string
+
+const (
+	// OverwriteNone skips all existing output files.
+	OverwriteNone OverwriteMode = "none"
+	// OverwriteSelective overwrites existing files unless the template's
+	// .ign-overwrite-ignore file excludes the generated path.
+	OverwriteSelective OverwriteMode = "selective"
+	// OverwriteAll overwrites all existing output files.
+	OverwriteAll OverwriteMode = "all"
+)
+
 // GenerateOptions configures project generation.
 type GenerateOptions struct {
 	// Template is the template to generate from.
@@ -36,6 +49,10 @@ type GenerateOptions struct {
 	// Overwrite determines whether to overwrite existing files.
 	// If false, existing files are skipped.
 	Overwrite bool
+
+	// OverwriteMode determines how existing files are overwritten.
+	// If empty, Overwrite preserves the historical boolean behavior.
+	OverwriteMode OverwriteMode
 
 	// Verbose enables detailed logging during generation.
 	Verbose bool
@@ -128,6 +145,7 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 	}
 	debug.Debug("[generator] Starting generation: template=%s, outputDir=%s, dryRun=%v, overwrite=%v",
 		templateName, opts.OutputDir, dryRun, opts.Overwrite)
+	overwriteMode := normalizeOverwriteMode(opts)
 
 	// Initialize result
 	result := &GenerateResult{
@@ -144,6 +162,7 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Get template settings
 	settings := getTemplateSettings(opts.Template)
+	overwriteIgnorePatterns := overwriteIgnorePatternsFromTemplate(opts.Template)
 	debug.Debug("[generator] Template settings: preserveExecutable=%v, ignorePatterns=%v, binaryExtensions=%d",
 		settings.PreserveExecutable, settings.IgnorePatterns, len(settings.BinaryExtensions))
 
@@ -211,7 +230,7 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			_, lstatErr := os.Lstat(outputPath)
 			fileExists := lstatErr == nil
 
-			if fileExists && !opts.Overwrite {
+			if fileExists && !shouldOverwritePath(processedFilePath, overwriteMode, overwriteIgnorePatterns) {
 				debug.Debug("[generator] Skipping existing symlink: %s", outputPath)
 				result.FilesSkipped++
 				if dryRun {
@@ -261,7 +280,7 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		fileExists := writer.Exists(outputPath)
 
 		// Determine action
-		if fileExists && !opts.Overwrite {
+		if fileExists && !shouldOverwritePath(processedFilePath, overwriteMode, overwriteIgnorePatterns) {
 			// Skip existing file
 			debug.Debug("[generator] Skipping existing file: %s", outputPath)
 			result.FilesSkipped++
@@ -338,6 +357,39 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 	}
 
 	return result, nil
+}
+
+func normalizeOverwriteMode(opts GenerateOptions) OverwriteMode {
+	if opts.OverwriteMode != "" {
+		return opts.OverwriteMode
+	}
+	if opts.Overwrite {
+		return OverwriteAll
+	}
+	return OverwriteNone
+}
+
+func overwriteIgnorePatternsFromTemplate(template *model.Template) []string {
+	if template == nil {
+		return nil
+	}
+	for _, file := range template.Files {
+		if filepath.ToSlash(file.Path) == model.IgnOverwriteIgnoreFile {
+			return ParseIgnoreFilePatterns(file.Content)
+		}
+	}
+	return nil
+}
+
+func shouldOverwritePath(path string, mode OverwriteMode, overwriteIgnorePatterns []string) bool {
+	switch mode {
+	case OverwriteAll:
+		return true
+	case OverwriteSelective:
+		return !MatchesGitIgnorePattern(path, overwriteIgnorePatterns)
+	default:
+		return false
+	}
 }
 
 // sortPaths sorts paths in a way that parent directories come before children.

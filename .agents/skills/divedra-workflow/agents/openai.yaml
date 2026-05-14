@@ -1,0 +1,4 @@
+interface:
+  display_name: "Divedra Workflow"
+  short_description: "Create step-addressed divedra workflows"
+  default_prompt: "Use $divedra-workflow to create a portable divedra workflow bundle from this process description."

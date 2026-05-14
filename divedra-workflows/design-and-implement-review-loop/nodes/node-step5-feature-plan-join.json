@@ -1,0 +1,11 @@
+{
+  "id": "step5-feature-plan-join",
+  "description": "Join bounded feature-local design and implementation-plan branch outputs before dependency-aware implementation or planning-only completion.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/step5-feature-plan-join.md",
+  "variables": {},
+  "output": {
+    "description": "Return adapter JSON with planning_only routing, joined feature-plan summaries, branch output references, and residual integration risks."
+  }
+}
