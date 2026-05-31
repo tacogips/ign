@@ -77,7 +77,12 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 			cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to compare removed managed path %s against output directory %s: %w", canonicalPath, opts.OutputDir, err))
 			continue
 		}
-		if !shouldRemoveManagedPathDuringUpdate(relPath, overwriteMode, overwriteIgnorePatterns) {
+
+		shouldRemove := shouldRemoveManagedPathDuringUpdate(relPath, overwriteMode, overwriteIgnorePatterns)
+		if !shouldRemove {
+			if _, statErr := os.Lstat(canonicalPath); os.IsNotExist(statErr) {
+				result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
+			}
 			continue
 		}
 

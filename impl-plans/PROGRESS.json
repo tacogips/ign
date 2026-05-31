@@ -1,9 +1,51 @@
 {
-  "plans": [
-    {
+  "lastUpdated": "2026-05-31T13:38:28Z",
+  "plans": {
+    "selective-overwrite": {
       "path": "impl-plans/selective-overwrite.md",
+      "phase": 2,
       "status": "Completed",
-      "updated": "2026-05-14"
+      "updated": "2026-05-14",
+      "tasks": {}
+    },
+    "update-overwrite-cleanup-review": {
+      "path": "impl-plans/update-overwrite-cleanup-review.md",
+      "phase": 2,
+      "status": "Completed",
+      "updated": "2026-05-31",
+      "tasks": {
+        "TASK-001": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-002": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-003": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-004": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001",
+            "TASK-002",
+            "TASK-003"
+          ]
+        },
+        "TASK-005": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-004"
+          ]
+        }
+      }
     }
-  ]
+  }
 }
