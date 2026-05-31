@@ -234,6 +234,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if result.FilesOverwritten > 0 {
 			printInfo(fmt.Sprintf("  Overwritten: %d files", result.FilesOverwritten))
 		}
+		if result.FilesDeleted > 0 {
+			printInfo(fmt.Sprintf("  Deleted: %d files", result.FilesDeleted))
+		}
 
 		// Print any non-fatal errors
 		if len(result.Errors) > 0 {
@@ -278,13 +281,13 @@ func updateOverwriteMode(overwrite, overwriteAll, force bool) generator.Overwrit
 
 func printUpdateWritePreview(result *app.UpdateResult) {
 	printSeparator()
-	printInfo("Files to write:")
-	if result == nil || len(result.DryRunFiles) == 0 {
+	printInfo("Files to change:")
+	if result == nil || (len(result.DryRunFiles) == 0 && len(result.DeletedFiles) == 0) {
 		printInfo("  (none)")
 		return
 	}
 
-	written := 0
+	changed := 0
 	for _, file := range result.DryRunFiles {
 		if file.WouldSkip {
 			continue
@@ -294,9 +297,13 @@ func printUpdateWritePreview(result *app.UpdateResult) {
 			status = "M"
 		}
 		printInfo(fmt.Sprintf("  %s %s", status, file.Path))
-		written++
+		changed++
 	}
-	if written == 0 {
+	for _, path := range result.DeletedFiles {
+		printInfo(fmt.Sprintf("  D %s", path))
+		changed++
+	}
+	if changed == 0 {
 		printInfo("  (none)")
 	}
 }
@@ -380,6 +387,9 @@ func printUpdateDryRunPatch(result *app.UpdateResult) {
 	if result.FilesOverwritten > 0 {
 		fmt.Printf(", %d to overwrite", result.FilesOverwritten)
 	}
+	if result.FilesDeleted > 0 {
+		fmt.Printf(", %d to delete", result.FilesDeleted)
+	}
 	if result.FilesSkipped > 0 {
 		fmt.Printf(", %d to skip (already exist)", result.FilesSkipped)
 	}
@@ -408,5 +418,8 @@ func printUpdateDryRunPatch(result *app.UpdateResult) {
 
 		printPatchContent(file.Content)
 		fmt.Println()
+	}
+	for _, path := range result.DeletedFiles {
+		fmt.Printf("# DELETE: %s\n", path)
 	}
 }

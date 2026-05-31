@@ -19,8 +19,12 @@ gitignore-style patterns against generated output paths. During
   overwrite confirmation prompt.
 - `--yes` affects confirmation only. It does not alter overwrite mode, hash
   comparison, or dry-run behavior.
-- Without `--yes`, a writing update in overwrite mode previews planned writes
-  before mutation using `A` for new files and `M` for overwritten existing files.
+- Without `--yes`, a writing update in overwrite mode previews planned changes
+  before mutation using `A` for new files, `M` for overwritten existing files,
+  and `D` for removed managed files.
+- In overwrite mode, update removes files recorded in `.ign/ign-files.json` when
+  the current template no longer generates them. Selective overwrite preserves
+  removed template paths matched by `.ign-overwrite-ignore`.
 
 ## Template Metadata
 

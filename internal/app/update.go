@@ -72,10 +72,16 @@ type UpdateResult struct {
 	FilesSkipped int
 	// FilesOverwritten is the number of existing files overwritten.
 	FilesOverwritten int
+	// FilesDeleted is the number of previously managed files removed because
+	// they no longer exist in the template during an overwrite update.
+	FilesDeleted int
 	// Errors contains non-fatal errors encountered during generation.
 	Errors []error
 	// Files contains the paths of all files processed.
 	Files []string
+	// DeletedFiles contains previously managed paths removed because they no
+	// longer exist in the template during an overwrite update.
+	DeletedFiles []string
 	// DryRunFiles contains detailed information for dry-run mode.
 	DryRunFiles []DryRunFile
 	// Directories contains directories that would be created (dry-run only).
@@ -371,8 +377,23 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 	}
 	debug.Debug("[app] Generation completed successfully")
 
+	manifestPath := manifestPathFromConfigPath(prep.IgnConfigPath)
+	removedManagedFiles, err := cleanupRemovedManagedFilesForUpdate(ctx, cleanupRemovedManagedFilesOptions{
+		ManifestPath:   manifestPath,
+		OutputDir:      opts.OutputDir,
+		Template:       prep.Template,
+		GenerateResult: genResult,
+		OverwriteMode:  opts.OverwriteMode,
+		Overwrite:      opts.Overwrite,
+		DryRun:         opts.DryRun,
+	})
+	if err != nil {
+		debug.Debug("[app] Failed to remove stale managed files: %v", err)
+		return nil, NewCheckoutError("failed to remove files no longer present in template", err)
+	}
+
 	if !opts.DryRun {
-		if err := saveManifestFromGenerateResult(manifestPathFromConfigPath(prep.IgnConfigPath), genResult); err != nil {
+		if err := saveManifestFromGenerateResultExcluding(manifestPath, genResult, removedManagedFiles.RemovedCanonicalPaths); err != nil {
 			debug.Debug("[app] Failed to save ign-files.json: %v", err)
 			return nil, NewCheckoutError("failed to save ign-files.json", err)
 		}
@@ -386,8 +407,10 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		FilesCreated:     genResult.FilesCreated,
 		FilesSkipped:     genResult.FilesSkipped,
 		FilesOverwritten: genResult.FilesOverwritten,
+		FilesDeleted:     removedManagedFiles.FilesDeleted,
 		Errors:           genResult.Errors,
 		Files:            genResult.Files,
+		DeletedFiles:     removedManagedFiles.DeletedFiles,
 		Directories:      genResult.Directories,
 	}
 

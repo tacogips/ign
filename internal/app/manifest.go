@@ -41,6 +41,10 @@ func backupManifestIfExists() error {
 }
 
 func saveManifestFromGenerateResult(path string, result *generator.GenerateResult) error {
+	return saveManifestFromGenerateResultExcluding(path, result, nil)
+}
+
+func saveManifestFromGenerateResultExcluding(path string, result *generator.GenerateResult, excludedCanonicalPaths map[string]struct{}) error {
 	if result == nil {
 		return nil
 	}
@@ -50,13 +54,18 @@ func saveManifestFromGenerateResult(path string, result *generator.GenerateResul
 		return err
 	}
 
+	files := make([]string, 0, len(manifest.Files)+len(result.WrittenFiles)+len(result.CreatedFiles))
 	seen := make(map[string]struct{}, len(manifest.Files))
-	for _, path := range manifest.Files {
-		clean := filepath.Clean(path)
+	for _, manifestFile := range manifest.Files {
+		if isExcludedManifestPath(manifestFile, excludedCanonicalPaths) {
+			continue
+		}
+		clean := filepath.Clean(manifestFile)
 		if clean == "" || clean == "." {
 			continue
 		}
 		seen[clean] = struct{}{}
+		files = append(files, clean)
 	}
 
 	writtenPaths := result.WrittenFiles
@@ -72,12 +81,25 @@ func saveManifestFromGenerateResult(path string, result *generator.GenerateResul
 		if _, exists := seen[clean]; exists {
 			continue
 		}
-		manifest.Files = append(manifest.Files, clean)
+		files = append(files, clean)
 		seen[clean] = struct{}{}
 	}
 
+	manifest.Files = files
 	sort.Strings(manifest.Files)
 	return config.SaveIgnManifest(path, manifest)
+}
+
+func isExcludedManifestPath(path string, excludedCanonicalPaths map[string]struct{}) bool {
+	if len(excludedCanonicalPaths) == 0 {
+		return false
+	}
+	canonical, err := canonicalManagedPathForComparison(path)
+	if err != nil {
+		return false
+	}
+	_, ok := excludedCanonicalPaths[canonical]
+	return ok
 }
 
 func loadManifestOrEmpty(path string) (*model.IgnManifest, error) {

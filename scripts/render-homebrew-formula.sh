@@ -18,7 +18,7 @@ Environment:
 
 Example:
   scripts/build-homebrew-release.sh darwin-arm64 darwin-x64 linux-arm64 linux-x64
-  scripts/render-homebrew-formula.sh 0.1.16 Formula/ign.rb
+  scripts/render-homebrew-formula.sh <version> Formula/ign.rb
 EOF
 }
 

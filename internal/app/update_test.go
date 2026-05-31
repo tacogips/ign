@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/tacogips/ign/internal/config"
@@ -1202,6 +1203,358 @@ func TestCompleteUpdate_SelectiveOverwriteRespectsTemplateIgnore(t *testing.T) {
 	}
 	if string(config) != "old local" {
 		t.Fatalf("config/local.yaml = %q, want old local", string(config))
+	}
+}
+
+func TestCompleteUpdate_OverwriteDeletesRemovedManagedFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	ignDir := filepath.Join(tempDir, ".ign")
+	if err := os.MkdirAll(ignDir, 0755); err != nil {
+		t.Fatalf("Failed to create .ign directory: %v", err)
+	}
+
+	readmePath := filepath.Join(tempDir, "README.md")
+	removedPath := filepath.Join(tempDir, "obsolete.txt")
+	if err := os.WriteFile(readmePath, []byte("old readme"), 0644); err != nil {
+		t.Fatalf("Failed to write README: %v", err)
+	}
+	if err := os.WriteFile(removedPath, []byte("old obsolete"), 0644); err != nil {
+		t.Fatalf("Failed to write obsolete file: %v", err)
+	}
+
+	manifestPath := filepath.Join(ignDir, model.IgnManifestFile)
+	if err := config.SaveIgnManifest(manifestPath, &model.IgnManifest{
+		Files: []string{readmePath, removedPath},
+	}); err != nil {
+		t.Fatalf("Failed to save manifest: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: "README.md", Content: []byte("new readme"), Mode: 0644},
+		},
+		RootPath: tempDir,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(ignDir, model.IgnProjectConfigFile),
+		IgnVarPath:    filepath.Join(ignDir, model.IgnVarFile),
+		IgnConfig: &model.IgnConfig{
+			Template: model.TemplateSource{URL: "https://github.com/test/template"},
+			Hash:     testHash1,
+		},
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteSelective,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+	if result.FilesDeleted != 1 {
+		t.Fatalf("FilesDeleted = %d, want 1", result.FilesDeleted)
+	}
+	if _, err := os.Stat(removedPath); !os.IsNotExist(err) {
+		t.Fatalf("obsolete.txt should be deleted, stat error = %v", err)
+	}
+
+	manifest, err := config.LoadIgnManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("Failed to load manifest: %v", err)
+	}
+	if slices.Contains(manifest.Files, removedPath) {
+		t.Fatalf("manifest should not contain removed file %s: %v", removedPath, manifest.Files)
+	}
+	if !slices.Contains(manifest.Files, readmePath) {
+		t.Fatalf("manifest should still contain README %s: %v", readmePath, manifest.Files)
+	}
+}
+
+func TestCompleteUpdate_OverwriteDeleteReportsOutputRelativePath(t *testing.T) {
+	workspaceDir := t.TempDir()
+	t.Chdir(workspaceDir)
+
+	outputDir := "project"
+	ignDir := filepath.Join(outputDir, ".ign")
+	if err := os.MkdirAll(ignDir, 0755); err != nil {
+		t.Fatalf("Failed to create .ign directory: %v", err)
+	}
+
+	readmePath := filepath.Join(outputDir, "README.md")
+	removedPath := filepath.Join(outputDir, "obsolete.txt")
+	if err := os.WriteFile(readmePath, []byte("old readme"), 0644); err != nil {
+		t.Fatalf("Failed to write README: %v", err)
+	}
+	if err := os.WriteFile(removedPath, []byte("old obsolete"), 0644); err != nil {
+		t.Fatalf("Failed to write obsolete file: %v", err)
+	}
+
+	manifestPath := filepath.Join(ignDir, model.IgnManifestFile)
+	if err := config.SaveIgnManifest(manifestPath, &model.IgnManifest{
+		Files: []string{readmePath, removedPath},
+	}); err != nil {
+		t.Fatalf("Failed to save manifest: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: "README.md", Content: []byte("new readme"), Mode: 0644},
+		},
+		RootPath: outputDir,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(ignDir, model.IgnProjectConfigFile),
+		IgnVarPath:    filepath.Join(ignDir, model.IgnVarFile),
+		IgnConfig: &model.IgnConfig{
+			Template: model.TemplateSource{URL: "https://github.com/test/template"},
+			Hash:     testHash1,
+		},
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     outputDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteSelective,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+	if result.FilesDeleted != 1 {
+		t.Fatalf("FilesDeleted = %d, want 1", result.FilesDeleted)
+	}
+	if got, want := result.DeletedFiles, []string{removedPath}; !slices.Equal(got, want) {
+		t.Fatalf("DeletedFiles = %v, want %v", got, want)
+	}
+	if _, err := os.Stat(removedPath); !os.IsNotExist(err) {
+		t.Fatalf("obsolete.txt should be deleted, stat error = %v", err)
+	}
+}
+
+func TestCompleteUpdate_DoesNotDeleteRemovedManagedFilesWithoutOverwrite(t *testing.T) {
+	tempDir := t.TempDir()
+	ignDir := filepath.Join(tempDir, ".ign")
+	if err := os.MkdirAll(ignDir, 0755); err != nil {
+		t.Fatalf("Failed to create .ign directory: %v", err)
+	}
+
+	removedPath := filepath.Join(tempDir, "obsolete.txt")
+	if err := os.WriteFile(removedPath, []byte("old obsolete"), 0644); err != nil {
+		t.Fatalf("Failed to write obsolete file: %v", err)
+	}
+
+	manifestPath := filepath.Join(ignDir, model.IgnManifestFile)
+	if err := config.SaveIgnManifest(manifestPath, &model.IgnManifest{
+		Files: []string{removedPath},
+	}); err != nil {
+		t.Fatalf("Failed to save manifest: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: "README.md", Content: []byte("current readme"), Mode: 0644},
+		},
+		RootPath: tempDir,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(ignDir, model.IgnProjectConfigFile),
+		IgnVarPath:    filepath.Join(ignDir, model.IgnVarFile),
+		IgnConfig: &model.IgnConfig{
+			Template: model.TemplateSource{URL: "https://github.com/test/template"},
+			Hash:     testHash1,
+		},
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+	if result.FilesDeleted != 0 {
+		t.Fatalf("FilesDeleted = %d, want 0", result.FilesDeleted)
+	}
+	if _, err := os.Stat(removedPath); err != nil {
+		t.Fatalf("obsolete.txt should be preserved, stat error = %v", err)
+	}
+
+	manifest, err := config.LoadIgnManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("Failed to load manifest: %v", err)
+	}
+	if !slices.Contains(manifest.Files, removedPath) {
+		t.Fatalf("manifest should still contain removed template file %s: %v", removedPath, manifest.Files)
+	}
+}
+
+func TestCompleteUpdate_OverwriteDeleteRespectsTemplateIgnore(t *testing.T) {
+	tempDir := t.TempDir()
+	ignDir := filepath.Join(tempDir, ".ign")
+	if err := os.MkdirAll(filepath.Join(tempDir, "config"), 0755); err != nil {
+		t.Fatalf("Failed to create config directory: %v", err)
+	}
+	if err := os.MkdirAll(ignDir, 0755); err != nil {
+		t.Fatalf("Failed to create .ign directory: %v", err)
+	}
+
+	removedPath := filepath.Join(tempDir, "config", "local.yaml")
+	if err := os.WriteFile(removedPath, []byte("old local"), 0644); err != nil {
+		t.Fatalf("Failed to write local config: %v", err)
+	}
+
+	manifestPath := filepath.Join(ignDir, model.IgnManifestFile)
+	if err := config.SaveIgnManifest(manifestPath, &model.IgnManifest{
+		Files: []string{removedPath},
+	}); err != nil {
+		t.Fatalf("Failed to save manifest: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: model.IgnOverwriteIgnoreFile, Content: []byte("config/\n"), Mode: 0644},
+			{Path: "README.md", Content: []byte("new readme"), Mode: 0644},
+		},
+		RootPath: tempDir,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(ignDir, model.IgnProjectConfigFile),
+		IgnVarPath:    filepath.Join(ignDir, model.IgnVarFile),
+		IgnConfig: &model.IgnConfig{
+			Template: model.TemplateSource{URL: "https://github.com/test/template"},
+			Hash:     testHash1,
+		},
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteSelective,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+	if result.FilesDeleted != 0 {
+		t.Fatalf("FilesDeleted = %d, want 0", result.FilesDeleted)
+	}
+	if _, err := os.Stat(removedPath); err != nil {
+		t.Fatalf("config/local.yaml should be preserved, stat error = %v", err)
+	}
+}
+
+func TestCompleteUpdate_DryRunDoesNotReportMissingRemovedManagedFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	ignDir := filepath.Join(tempDir, ".ign")
+	if err := os.MkdirAll(ignDir, 0755); err != nil {
+		t.Fatalf("Failed to create .ign directory: %v", err)
+	}
+
+	missingPath := filepath.Join(tempDir, "already-missing.txt")
+	manifestPath := filepath.Join(ignDir, model.IgnManifestFile)
+	if err := config.SaveIgnManifest(manifestPath, &model.IgnManifest{
+		Files: []string{missingPath},
+	}); err != nil {
+		t.Fatalf("Failed to save manifest: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: "README.md", Content: []byte("current readme"), Mode: 0644},
+		},
+		RootPath: tempDir,
+	}
+
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(ignDir, model.IgnProjectConfigFile),
+		IgnVarPath:    filepath.Join(ignDir, model.IgnVarFile),
+		IgnConfig: &model.IgnConfig{
+			Template: model.TemplateSource{URL: "https://github.com/test/template"},
+			Hash:     testHash1,
+		},
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteSelective,
+		DryRun:        true,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate failed: %v", err)
+	}
+	if result.FilesDeleted != 0 {
+		t.Fatalf("FilesDeleted = %d, want 0", result.FilesDeleted)
+	}
+	if len(result.DeletedFiles) != 0 {
+		t.Fatalf("DeletedFiles = %v, want empty", result.DeletedFiles)
 	}
 }
 

@@ -135,11 +135,14 @@ ign update --overwrite-all
 | `--dry-run` | `-d` | Preview what would be generated without writing |
 | `--verbose` | `-v` | Show detailed processing information |
 
-When `--overwrite` or `--overwrite-all` is used without `--yes`, `ign update` displays files that will be written before prompting:
+When `--overwrite` or `--overwrite-all` is used, `ign update` also removes project files recorded in `.ign/ign-files.json` when the current template no longer generates them. The manifest is pruned after removal. Selective overwrite does not remove paths matched by `.ign-overwrite-ignore`.
+
+When `--overwrite` or `--overwrite-all` is used without `--yes`, `ign update` displays files that will change before prompting:
 
 ```text
 A new-file.txt
 M existing-file.txt
+D obsolete-file.txt
 ```
 
 Existing files whose generated content and permissions are unchanged are omitted from the confirmation list.
