@@ -80,6 +80,17 @@ The workflow is responsible for:
 13. commit-message generation
 14. built-in git commit and git push add-on steps
 
+For release or installation work, keep the supported Homebrew surface in scope:
+
+- `README.md` must show the user install path:
+  `brew tap tacogips/tap`, `brew install ign`, and `ign version`.
+- `packaging/homebrew/README.md` is the release runbook for archive creation,
+  GitHub Release asset upload, tap formula rendering, tap commit/push, and
+  smoke testing.
+- `tacogips/homebrew-tap` owns the published `Formula/ign.rb`; verify the tap
+  formula with `brew audit --formula --strict tacogips/tap/ign` and
+  `brew test tacogips/tap/ign` when Homebrew behavior changes.
+
 Because the workflow ends with commit/push, do not use it when the user has
 explicitly asked to avoid workflow-driven commits or wants manual local edits
 only.
@@ -94,6 +105,7 @@ After the workflow finishes, report:
 - commit message
 - commit hash
 - pushed remote and branch
+- for release work, GitHub Release URL and Homebrew tap/formula status
 
 If the workflow fails because `divedra` appears incorrect, switch to the
 `divedra-fix` skill.

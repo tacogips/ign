@@ -310,12 +310,20 @@ export GITHUB_TOKEN=ghp_xxx
 ## Installation
 
 ```bash
+# Using Homebrew
+brew tap tacogips/tap
+brew install ign
+ign version
+
 # Using Nix
 nix run github:tacogips/ign
 
 # From source
 go install github.com/tacogips/ign@latest
 ```
+
+The Homebrew formula is maintained in `tacogips/homebrew-tap` and installs the
+latest published GitHub Release artifact for the current platform.
 
 ## License
 
