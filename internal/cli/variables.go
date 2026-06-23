@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -47,15 +46,6 @@ func ValidateVariableAssignmentSyntax(assignments []string) error {
 		}
 	}
 	return nil
-}
-
-func cleanupPreparedConfigOnVariableError(configExists bool) {
-	if configExists {
-		return
-	}
-	if err := os.RemoveAll(".ign"); err != nil {
-		printWarning(fmt.Sprintf("Failed to clean up .ign after variable parsing error: %v", err))
-	}
 }
 
 func parseVariableValue(name string, rawValue string, varDef model.VarDef) (interface{}, error) {

@@ -99,11 +99,12 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 
 	// Prepare template and get variable definitions
 	prepResult, err := app.PrepareCheckout(cmd.Context(), app.PrepareCheckoutOptions{
-		URL:          url,
-		Ref:          checkoutRef,
-		Force:        checkoutForce,
-		ConfigExists: configExists,
-		GitHubToken:  githubToken,
+		URL:             url,
+		Ref:             checkoutRef,
+		Force:           checkoutForce,
+		ConfigExists:    configExists,
+		GitHubToken:     githubToken,
+		SkipConfigSetup: true,
 	})
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Preparation failed: %v", err))
@@ -113,7 +114,6 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	resolvedIgnJSON := templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath)
 	providedVars, err := ParseVariableAssignments(checkoutVars, resolvedIgnJSON.Variables)
 	if err != nil {
-		cleanupPreparedConfigOnVariableError(configExists)
 		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
 		return err
 	}
@@ -129,6 +129,10 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	if checkoutDryRun {
 		printInfo("[DRY RUN] Would generate project from template")
 	} else {
+		if err := app.PrepareCheckoutConfigDir(configExists); err != nil {
+			printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
+			return err
+		}
 		printInfo("Generating project from template...")
 	}
 

@@ -61,11 +61,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	prepResult, err := app.PrepareCheckout(cmd.Context(), app.PrepareCheckoutOptions{
-		URL:          url,
-		Ref:          initRef,
-		Force:        initForce,
-		ConfigExists: configExists,
-		GitHubToken:  githubToken,
+		URL:             url,
+		Ref:             initRef,
+		Force:           initForce,
+		ConfigExists:    configExists,
+		GitHubToken:     githubToken,
+		SkipConfigSetup: true,
 	})
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Initialization failed: %v", err))
@@ -75,7 +76,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	resolvedIgnJSON := templatedefaults.ResolveIgnJSON(prepResult.IgnJson, ".")
 	providedVars, err := ParseVariableAssignments(initVars, resolvedIgnJSON.Variables)
 	if err != nil {
-		cleanupPreparedConfigOnVariableError(configExists)
 		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
 		return err
 	}
@@ -83,6 +83,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	vars, err := PromptForVariablesWithProvided(resolvedIgnJSON, providedVars)
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
+		return err
+	}
+
+	if err := app.PrepareCheckoutConfigDir(configExists); err != nil {
+		printErrorMsg(fmt.Sprintf("Initialization failed: %v", err))
 		return err
 	}
 

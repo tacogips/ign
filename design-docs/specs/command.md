@@ -22,8 +22,10 @@ ign checkout ./template ./out -V project_name=my-app -V enable_feature=true
 - Values are parsed after template preparation, so assignments can be validated
   against `ign-template.json` variable definitions.
 - Unknown variable names fail early to catch typos.
-- If variable parsing fails after template preparation and the command created
-  `.ign/`, the new `.ign/` directory is removed before returning the error.
+- `.ign` creation and force-mode backup are deferred until after variable
+  parsing and prompting succeed, so invalid non-interactive variables do not
+  modify existing configuration.
+- `ign checkout --dry-run` does not create or back up `.ign`.
 - String values preserve everything after the first `=`.
 - `int`, `number`, and `bool` values are converted to their configured Go types.
 - String patterns and numeric min/max constraints are enforced for supplied
