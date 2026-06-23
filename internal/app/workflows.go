@@ -63,11 +63,20 @@ func ValidateOutputDir(path string) error {
 // CreateEmptyVariablesMap creates an initial variables map from IgnJson variable definitions.
 // Declared defaults are preserved as authored so runtime-only placeholders can be resolved later.
 func CreateEmptyVariablesMap(ignJson *model.IgnJson) map[string]interface{} {
+	return CreateVariablesMap(ignJson, nil)
+}
+
+// CreateVariablesMap creates an initial variables map and overlays provided values.
+func CreateVariablesMap(ignJson *model.IgnJson, providedVars map[string]interface{}) map[string]interface{} {
 	if ignJson == nil {
-		return map[string]interface{}{}
+		vars := make(map[string]interface{}, len(providedVars))
+		for name, value := range providedVars {
+			vars[name] = value
+		}
+		return vars
 	}
 
-	vars := mergeVariableDefaults(ignJson.Variables, nil)
+	vars := mergeVariableDefaults(ignJson.Variables, providedVars)
 
 	for name, varDef := range ignJson.Variables {
 		if _, ok := vars[name]; ok {

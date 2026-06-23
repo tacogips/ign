@@ -21,6 +21,7 @@ const (
 	FlagNoColor   = "no-color"
 	FlagQuiet     = "quiet"
 	FlagDebug     = "debug"
+	FlagVar       = "var"
 
 	// Flag descriptions
 	DescOutput    = "Output directory"
@@ -33,6 +34,7 @@ const (
 	DescNoColor   = "Disable colored output"
 	DescQuiet     = "Suppress output"
 	DescDebug     = "Enable debug logging"
+	DescVar       = "Set a template variable as key=value (repeatable)"
 )
 
 // URL validation patterns

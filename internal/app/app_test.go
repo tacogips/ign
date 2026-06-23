@@ -134,6 +134,41 @@ func TestCreateEmptyVariablesMap(t *testing.T) {
 	}
 }
 
+func TestCreateVariablesMap_ProvidedValues(t *testing.T) {
+	ignJson := &model.IgnJson{
+		Name:    "test-template",
+		Version: "1.0.0",
+		Variables: map[string]model.VarDef{
+			"project_name": {
+				Type:    model.VarTypeString,
+				Default: "default-name",
+			},
+			"port": {
+				Type:    model.VarTypeInt,
+				Default: 8080,
+			},
+			"enable_tls": {
+				Type: model.VarTypeBool,
+			},
+		},
+	}
+
+	vars := CreateVariablesMap(ignJson, map[string]interface{}{
+		"project_name": "provided-name",
+		"enable_tls":   true,
+	})
+
+	if got := vars["project_name"]; got != "provided-name" {
+		t.Fatalf("project_name = %v, want provided-name", got)
+	}
+	if got := vars["port"]; got != 8080 {
+		t.Fatalf("port = %v, want default 8080", got)
+	}
+	if got := vars["enable_tls"]; got != true {
+		t.Fatalf("enable_tls = %v, want true", got)
+	}
+}
+
 func TestCountVariablesByType_NilIgnJSON(t *testing.T) {
 	stringCount, intCount, boolCount := CountVariablesByType(nil)
 	if stringCount != 0 || intCount != 0 || boolCount != 0 {

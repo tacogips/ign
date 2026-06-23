@@ -1,0 +1,68 @@
+{
+  "workflowId": "ign-variable-options",
+  "description": "Design, implement, review, and document non-interactive variable passing for ign init and ign checkout.",
+  "defaults": {
+    "maxLoopIterations": 4,
+    "nodeTimeoutMs": 600000
+  },
+  "entryStepId": "intake-or-plan",
+  "nodes": [
+    {
+      "id": "intake-or-plan",
+      "nodeFile": "nodes/node-intake-or-plan.json"
+    },
+    {
+      "id": "work",
+      "nodeFile": "nodes/node-work.json"
+    },
+    {
+      "id": "review",
+      "nodeFile": "nodes/node-review.json"
+    },
+    {
+      "id": "workflow-output",
+      "nodeFile": "nodes/node-workflow-output.json"
+    }
+  ],
+  "steps": [
+    {
+      "id": "intake-or-plan",
+      "nodeId": "intake-or-plan",
+      "role": "worker",
+      "description": "Inspect current behavior and produce an implementation plan.",
+      "transitions": [
+        {
+          "toStepId": "work"
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "nodeId": "work",
+      "role": "worker",
+      "description": "Implement the requested CLI variable options and documentation.",
+      "transitions": [
+        {
+          "toStepId": "review"
+        }
+      ]
+    },
+    {
+      "id": "review",
+      "nodeId": "review",
+      "role": "worker",
+      "description": "Review implementation quality and verification coverage.",
+      "transitions": [
+        {
+          "toStepId": "workflow-output"
+        }
+      ]
+    },
+    {
+      "id": "workflow-output",
+      "nodeId": "workflow-output",
+      "role": "worker",
+      "description": "Summarize outcome, changed files, and remaining risks."
+    }
+  ]
+}

@@ -53,6 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&globalDebug, FlagDebug, false, DescDebug)
 
 	// Add subcommands
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(checkoutCmd)
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(rewindCmd)

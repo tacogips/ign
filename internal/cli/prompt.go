@@ -13,7 +13,15 @@ import (
 // PromptForVariables interactively prompts the user for variable values.
 // Returns a map of variable names to their values.
 func PromptForVariables(ignJson *model.IgnJson) (map[string]interface{}, error) {
-	vars := make(map[string]interface{})
+	return PromptForVariablesWithProvided(ignJson, nil)
+}
+
+// PromptForVariablesWithProvided prompts for variable values that were not already provided.
+func PromptForVariablesWithProvided(ignJson *model.IgnJson, providedVars map[string]interface{}) (map[string]interface{}, error) {
+	vars := make(map[string]interface{}, len(providedVars))
+	for name, value := range providedVars {
+		vars[name] = value
+	}
 
 	if ignJson == nil {
 		return vars, nil
@@ -30,11 +38,23 @@ func PromptForVariables(ignJson *model.IgnJson) (map[string]interface{}, error) 
 	}
 	sort.Strings(varNames)
 
+	missingVarNames := make([]string, 0, len(varNames))
+	for _, name := range varNames {
+		if _, provided := vars[name]; provided {
+			continue
+		}
+		missingVarNames = append(missingVarNames, name)
+	}
+
+	if len(missingVarNames) == 0 {
+		return vars, nil
+	}
+
 	fmt.Println()
 	fmt.Println("Please provide values for template variables:")
 	fmt.Println()
 
-	for _, name := range varNames {
+	for _, name := range missingVarNames {
 		varDef := ignJson.Variables[name]
 
 		value, err := promptForVariable(name, varDef)

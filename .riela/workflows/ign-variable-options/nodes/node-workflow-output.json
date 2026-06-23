@@ -1,0 +1,8 @@
+{
+  "id": "workflow-output",
+  "description": "Summarize non-interactive variable support workflow outcome.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/workflow-output.md",
+  "variables": {}
+}
