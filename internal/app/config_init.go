@@ -25,6 +25,18 @@ type InitOptions struct {
 	Config string
 	// GitHubToken is the GitHub personal access token (optional).
 	GitHubToken string
+	// Variables contains user-provided variable values.
+	Variables map[string]interface{}
+}
+
+// CompleteInitOptions contains options for saving initialized configuration.
+type CompleteInitOptions struct {
+	// PrepareResult is the result from PrepareCheckout.
+	PrepareResult *PrepareCheckoutResult
+	// Variables contains user-provided variable values.
+	Variables map[string]interface{}
+	// GeneratedBy identifies the command that generated metadata.
+	GeneratedBy string
 }
 
 // Init initializes configuration from a template.
@@ -66,19 +78,33 @@ func Init(ctx context.Context, opts InitOptions) error {
 		return err
 	}
 
-	// Get hash from template's ign-template.json
-	// The hash must be present (calculated by 'ign template update' on the template side)
+	return CompleteInit(ctx, CompleteInitOptions{
+		PrepareResult: prepResult,
+		Variables:     opts.Variables,
+		GeneratedBy:   "ign init",
+	})
+}
+
+// CompleteInit saves initialization configuration after template preparation.
+func CompleteInit(ctx context.Context, opts CompleteInitOptions) error {
+	_ = ctx
+
+	configDir := model.IgnConfigDir
+	prepResult := opts.PrepareResult
+	if prepResult == nil {
+		return NewValidationError("prepare result cannot be nil", nil)
+	}
+
 	templateHash := prepResult.IgnJson.Hash
 	debug.DebugValue("[app] Template hash from ign-template.json", templateHash)
 
-	// Validate hash is present
-	if templateHash == "" {
-		debug.Debug("[app] Template hash is missing in ign-template.json")
-		return NewCheckoutError(
-			"template is missing hash in ign-template.json.\n"+
-				"The template author needs to run 'ign template update' to generate the hash.",
-			nil,
-		)
+	if err := validateTemplateHash(templateHash); err != nil {
+		return err
+	}
+
+	generatedBy := opts.GeneratedBy
+	if generatedBy == "" {
+		generatedBy = "ign init"
 	}
 
 	// Save ign.json (template source and hash)
@@ -93,7 +119,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 		Hash: templateHash,
 		Metadata: &model.FileMetadata{
 			GeneratedAt:     time.Now(),
-			GeneratedBy:     "ign init",
+			GeneratedBy:     generatedBy,
 			TemplateName:    prepResult.IgnJson.Name,
 			TemplateVersion: prepResult.IgnJson.Version,
 			IgnVersion:      build.Version(),
@@ -103,7 +129,7 @@ func Init(ctx context.Context, opts InitOptions) error {
 	// Create ign-var.json with empty/default variables (no metadata as it's already in ign.json)
 	debug.Debug("[app] Creating ign-var.json with default variables")
 	ignVarJson := &model.IgnVarJson{
-		Variables: CreateEmptyVariablesMap(prepResult.IgnJson),
+		Variables: CreateVariablesMap(prepResult.IgnJson, opts.Variables),
 	}
 
 	ignVarPath := filepath.Join(configDir, model.IgnVarFile)

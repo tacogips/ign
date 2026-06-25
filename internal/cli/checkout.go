@@ -34,6 +34,7 @@ Examples:
   ign checkout github.com/owner/repo
   ign checkout github.com/owner/repo ./my-project
   ign checkout github.com/owner/repo --ref v1.2.0
+  ign checkout github.com/owner/repo --var project_name=my-app --var port=8080
   ign checkout ./my-local-template ./output
   ign checkout github.com/owner/repo --force
   ign checkout github.com/owner/repo --dry-run`,
@@ -47,6 +48,7 @@ var (
 	checkoutForce   bool
 	checkoutDryRun  bool
 	checkoutVerbose bool
+	checkoutVars    []string
 )
 
 func init() {
@@ -55,10 +57,15 @@ func init() {
 	checkoutCmd.Flags().BoolVarP(&checkoutForce, "force", "f", false, "Backup and reinitialize existing config, overwrite files")
 	checkoutCmd.Flags().BoolVarP(&checkoutDryRun, "dry-run", "d", false, "Show what would be generated without writing files")
 	checkoutCmd.Flags().BoolVarP(&checkoutVerbose, "verbose", "v", false, "Show detailed processing information")
+	checkoutCmd.Flags().StringArrayVarP(&checkoutVars, FlagVar, "V", nil, DescVar)
 }
 
 func runCheckout(cmd *cobra.Command, args []string) error {
 	url := args[0]
+	if err := ValidateVariableAssignmentSyntax(checkoutVars); err != nil {
+		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
+		return err
+	}
 
 	// Output path defaults to current directory
 	outputPath := "."
@@ -92,19 +99,27 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 
 	// Prepare template and get variable definitions
 	prepResult, err := app.PrepareCheckout(cmd.Context(), app.PrepareCheckoutOptions{
-		URL:          url,
-		Ref:          checkoutRef,
-		Force:        checkoutForce,
-		ConfigExists: configExists,
-		GitHubToken:  githubToken,
+		URL:             url,
+		Ref:             checkoutRef,
+		Force:           checkoutForce,
+		ConfigExists:    configExists,
+		GitHubToken:     githubToken,
+		SkipConfigSetup: true,
 	})
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Preparation failed: %v", err))
 		return err
 	}
 
-	// Prompt for variables interactively
-	vars, err := PromptForVariables(templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath))
+	resolvedIgnJSON := templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath)
+	providedVars, err := ParseVariableAssignments(checkoutVars, resolvedIgnJSON.Variables)
+	if err != nil {
+		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
+		return err
+	}
+
+	// Prompt only for variables that were not supplied by flag.
+	vars, err := PromptForVariablesWithProvided(resolvedIgnJSON, providedVars)
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
 		return err
@@ -114,6 +129,10 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	if checkoutDryRun {
 		printInfo("[DRY RUN] Would generate project from template")
 	} else {
+		if err := app.PrepareCheckoutConfigDir(configExists); err != nil {
+			printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
+			return err
+		}
 		printInfo("Generating project from template...")
 	}
 

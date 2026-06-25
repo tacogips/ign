@@ -46,6 +46,7 @@ Initialize configuration from a template source.
 ign init github.com/owner/repo
 ign init github.com/owner/repo/path/to/template
 ign init github.com/owner/repo --ref v1.0.0
+ign init github.com/owner/repo --var app_name=my-app --var port=8080
 
 # From local path
 ign init ./my-local-template
@@ -58,6 +59,7 @@ ign init /absolute/path/to/template
 |------|-------|-------------|
 | `--ref` | `-r` | Git branch, tag, or commit SHA (default: main) |
 | `--force` | `-f` | Backup existing config and reinitialize |
+| `--var` | `-V` | Set a template variable as `key=value` (repeatable) |
 
 **Behavior:**
 
@@ -69,6 +71,9 @@ ign init /absolute/path/to/template
 
 **Backup naming:** When `--force` is used, existing `ign-var.json` is backed up as `ign-var.json.bk1`, `ign-var.json.bk2`, etc.
 
+Variables supplied with `--var` are written to `.ign/ign-var.json`. Missing
+variables are still prompted interactively.
+
 ```bash
 # Force reinitialize with backup
 ign init github.com/owner/repo --force
@@ -79,19 +84,22 @@ ign init github.com/owner/repo --force
 #   ign-var.json.bk1   <- Previous config
 ```
 
-### `ign checkout <path>`
+### `ign checkout <url-or-path> [output-path]`
 
-Generate project files to the specified path using existing `.ign/`.
+Initialize configuration and generate project files from a template in one step.
 
 ```bash
-ign checkout .              # Generate to current directory
-ign checkout ./my-project   # Generate to specific directory
-ign checkout sub_dir        # Generate to subdirectory
-ign checkout . --dry-run    # Preview without writing files
-ign checkout . --verbose    # Show detailed processing info
+ign checkout github.com/owner/repo              # Generate to current directory
+ign checkout github.com/owner/repo ./my-project # Generate to specific directory
+ign checkout ./my-local-template ./my-project   # Generate from local template
+ign checkout github.com/owner/repo --dry-run    # Preview without writing files
+ign checkout github.com/owner/repo --verbose    # Show detailed processing info
+ign checkout github.com/owner/repo --var app_name=my-app --var port=8080
 ```
 
-**Requires:** `.ign/ign-var.json` must exist (run `ign init` first).
+If `.ign/` already exists, checkout does nothing unless `--force` is used.
+Variables supplied with `--var` are used for generation and saved to
+`.ign/ign-var.json`. Missing variables are still prompted interactively.
 
 **Flags:**
 
@@ -100,6 +108,7 @@ ign checkout . --verbose    # Show detailed processing info
 | `--force` | `-f` | Overwrite existing files |
 | `--dry-run` | `-d` | Show what would be generated without writing |
 | `--verbose` | `-v` | Show detailed processing information |
+| `--var` | `-V` | Set a template variable as `key=value` (repeatable, one-shot checkout) |
 
 **File handling:**
 

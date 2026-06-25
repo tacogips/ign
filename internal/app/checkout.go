@@ -27,6 +27,8 @@ type PrepareCheckoutOptions struct {
 	ConfigExists bool
 	// GitHubToken is the GitHub personal access token (optional).
 	GitHubToken string
+	// SkipConfigSetup skips .ign creation/backup during preparation.
+	SkipConfigSetup bool
 }
 
 // PrepareCheckoutResult contains the result of checkout preparation.
@@ -193,55 +195,10 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 	debug.DebugValue("[app] Template name", template.Config.Name)
 	debug.DebugValue("[app] Template version", template.Config.Version)
 
-	// Handle config directory
-	if opts.ConfigExists {
-		// Directory exists and Force is true (checked in CLI layer)
-		debug.Debug("[app] Config directory exists, Force mode - backing up")
-
-		// Backup existing ign.json if it exists
-		ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
-		if _, err := os.Stat(ignConfigPath); err == nil {
-			backupNum, err := findNextBackupNumber(configDir, model.IgnProjectConfigFile)
-			if err != nil {
-				return nil, NewCheckoutError(err.Error(), nil)
-			}
-			backupPath := filepath.Join(configDir, fmt.Sprintf("%s.bk%d", model.IgnProjectConfigFile, backupNum))
-			debug.Debug("[app] Backing up existing ign.json to: %s", backupPath)
-			if err := os.Rename(ignConfigPath, backupPath); err != nil {
-				debug.Debug("[app] Failed to backup existing ign.json: %v", err)
-				return nil, NewCheckoutError("failed to backup existing ign.json", err)
-			}
-			debug.Debug("[app] Existing ign.json backed up successfully")
+	if !opts.SkipConfigSetup {
+		if err := PrepareCheckoutConfigDir(opts.ConfigExists); err != nil {
+			return nil, err
 		}
-
-		// Backup existing ign-var.json if it exists
-		ignVarPath := filepath.Join(configDir, model.IgnVarFile)
-		if _, err := os.Stat(ignVarPath); err == nil {
-			backupNum, err := findNextBackupNumber(configDir, model.IgnVarFile)
-			if err != nil {
-				return nil, NewCheckoutError(err.Error(), nil)
-			}
-			backupPath := filepath.Join(configDir, fmt.Sprintf("%s.bk%d", model.IgnVarFile, backupNum))
-			debug.Debug("[app] Backing up existing ign-var.json to: %s", backupPath)
-			if err := os.Rename(ignVarPath, backupPath); err != nil {
-				debug.Debug("[app] Failed to backup existing ign-var.json: %v", err)
-				return nil, NewCheckoutError("failed to backup existing ign-var.json", err)
-			}
-			debug.Debug("[app] Existing ign-var.json backed up successfully")
-		}
-
-		if err := backupManifestIfExists(); err != nil {
-			debug.Debug("[app] Failed to backup existing ign-files.json: %v", err)
-			return nil, NewCheckoutError("failed to backup existing ign-files.json", err)
-		}
-	} else {
-		// Create config directory
-		debug.Debug("[app] Creating config directory: %s", configDir)
-		if err := os.MkdirAll(configDir, 0755); err != nil {
-			debug.Debug("[app] Failed to create config directory: %v", err)
-			return nil, NewCheckoutError("failed to create config directory", err)
-		}
-		debug.Debug("[app] Config directory created successfully")
 	}
 
 	debug.Debug("[app] PrepareCheckout completed successfully")
@@ -251,6 +208,65 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 		TemplateRef:   templateRef,
 		NormalizedURL: normalizedURL,
 	}, nil
+}
+
+// PrepareCheckoutConfigDir creates or backs up .ign before writing checkout/init files.
+func PrepareCheckoutConfigDir(configExists bool) error {
+	configDir := model.IgnConfigDir
+
+	if configExists {
+		// Directory exists and Force is true (checked in CLI layer)
+		debug.Debug("[app] Config directory exists, Force mode - backing up")
+
+		// Backup existing ign.json if it exists
+		ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
+		if _, err := os.Stat(ignConfigPath); err == nil {
+			backupNum, err := findNextBackupNumber(configDir, model.IgnProjectConfigFile)
+			if err != nil {
+				return NewCheckoutError(err.Error(), nil)
+			}
+			backupPath := filepath.Join(configDir, fmt.Sprintf("%s.bk%d", model.IgnProjectConfigFile, backupNum))
+			debug.Debug("[app] Backing up existing ign.json to: %s", backupPath)
+			if err := os.Rename(ignConfigPath, backupPath); err != nil {
+				debug.Debug("[app] Failed to backup existing ign.json: %v", err)
+				return NewCheckoutError("failed to backup existing ign.json", err)
+			}
+			debug.Debug("[app] Existing ign.json backed up successfully")
+		}
+
+		// Backup existing ign-var.json if it exists
+		ignVarPath := filepath.Join(configDir, model.IgnVarFile)
+		if _, err := os.Stat(ignVarPath); err == nil {
+			backupNum, err := findNextBackupNumber(configDir, model.IgnVarFile)
+			if err != nil {
+				return NewCheckoutError(err.Error(), nil)
+			}
+			backupPath := filepath.Join(configDir, fmt.Sprintf("%s.bk%d", model.IgnVarFile, backupNum))
+			debug.Debug("[app] Backing up existing ign-var.json to: %s", backupPath)
+			if err := os.Rename(ignVarPath, backupPath); err != nil {
+				debug.Debug("[app] Failed to backup existing ign-var.json: %v", err)
+				return NewCheckoutError("failed to backup existing ign-var.json", err)
+			}
+			debug.Debug("[app] Existing ign-var.json backed up successfully")
+		}
+
+		if err := backupManifestIfExists(); err != nil {
+			debug.Debug("[app] Failed to backup existing ign-files.json: %v", err)
+			return NewCheckoutError("failed to backup existing ign-files.json", err)
+		}
+
+		return nil
+	}
+
+	// Create config directory
+	debug.Debug("[app] Creating config directory: %s", configDir)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		debug.Debug("[app] Failed to create config directory: %v", err)
+		return NewCheckoutError("failed to create config directory", err)
+	}
+	debug.Debug("[app] Config directory created successfully")
+
+	return nil
 }
 
 // CompleteCheckout completes checkout by saving configuration and generating files.

@@ -239,6 +239,43 @@ func TestInit_ConditionalTemplate(t *testing.T) {
 	}
 }
 
+func TestPrepareCheckout_SkipConfigSetup(t *testing.T) {
+	tempDir := t.TempDir()
+	configDir := filepath.Join(tempDir, ".ign")
+
+	templatePath := copyFixtureToTemp(t, "simple-template", tempDir)
+
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	prep, err := app.PrepareCheckout(context.Background(), app.PrepareCheckoutOptions{
+		URL:             templatePath,
+		SkipConfigSetup: true,
+	})
+	if err != nil {
+		t.Fatalf("PrepareCheckout with SkipConfigSetup failed: %v", err)
+	}
+	if prep == nil || prep.IgnJson == nil {
+		t.Fatalf("PrepareCheckout returned incomplete result: %#v", prep)
+	}
+	if _, err := os.Stat(configDir); !os.IsNotExist(err) {
+		t.Fatalf("config directory exists after SkipConfigSetup, stat error: %v", err)
+	}
+
+	if err := app.PrepareCheckoutConfigDir(false); err != nil {
+		t.Fatalf("PrepareCheckoutConfigDir failed: %v", err)
+	}
+	if _, err := os.Stat(configDir); err != nil {
+		t.Fatalf("config directory was not created: %v", err)
+	}
+}
+
 // TestInit_Force tests the --force flag for backup and reinitialize
 func TestInit_Force(t *testing.T) {
 	tempDir := t.TempDir()
