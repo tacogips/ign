@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/tacogips/ign/internal/build"
@@ -295,58 +297,6 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	vars := preparedInputs.RuntimeVariables
 	prep := opts.PrepareResult
 
-	// Create and save configuration files (unless dry-run)
-	if !opts.DryRun {
-		templateHash := prep.IgnJson.Hash
-
-		// Save ign.json (template source and hash)
-		ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
-		debug.Debug("[app] Creating ign.json")
-		ignConfig := &model.IgnConfig{
-			Template: model.TemplateSource{
-				URL:  prep.NormalizedURL,
-				Path: prep.TemplateRef.Path,
-				Ref:  prep.TemplateRef.Ref,
-			},
-			Hash: templateHash,
-			Metadata: &model.FileMetadata{
-				GeneratedAt:     time.Now(),
-				GeneratedBy:     "ign checkout",
-				TemplateName:    prep.IgnJson.Name,
-				TemplateVersion: prep.IgnJson.Version,
-				IgnVersion:      build.Version(),
-			},
-		}
-
-		// Save ign-var.json (variables only, no metadata as it's already in ign.json)
-		debug.Debug("[app] Creating ign-var.json")
-		ignVarJson := &model.IgnVarJson{
-			Variables: rawVars,
-		}
-
-		// Save both configuration files with rollback on failure.
-		// Write ign.json first, then ign-var.json.
-		// If ign-var.json save fails, remove ign.json to maintain consistent state.
-		debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
-		if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
-			debug.Debug("[app] Failed to save ign.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign.json", err)
-		}
-		debug.Debug("[app] ign.json saved successfully")
-
-		debug.DebugValue("[app] Saving ign-var.json to", ignVarPath)
-		if err := config.SaveIgnVarJson(ignVarPath, ignVarJson); err != nil {
-			debug.Debug("[app] Failed to save ign-var.json: %v", err)
-			// Rollback: remove ign.json to avoid inconsistent state
-			debug.Debug("[app] Rolling back ign.json due to ign-var.json save failure")
-			if removeErr := os.Remove(ignConfigPath); removeErr != nil {
-				debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
-			}
-			return nil, NewCheckoutError("failed to save ign-var.json (rolled back ign.json)", err)
-		}
-		debug.Debug("[app] ign-var.json saved successfully")
-	}
-
 	// Create generator
 	gen := generator.NewGenerator()
 
@@ -361,6 +311,14 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	// Generate or dry run
 	var genResult *generator.GenerateResult
+	var rollback *checkoutGenerationRollback
+	if !opts.DryRun {
+		rollback, err = prepareCheckoutGenerationRollback(ctx, gen, genOpts)
+		if err != nil {
+			return nil, err
+		}
+		defer rollback.cleanup()
+	}
 	if opts.DryRun {
 		debug.Debug("[app] Starting dry run generation")
 		genResult, err = gen.DryRun(ctx, genOpts)
@@ -371,6 +329,9 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	if err != nil {
 		debug.Debug("[app] Generation failed: %v", err)
+		if rollback != nil {
+			rollback.rollback(genResult)
+		}
 		return nil, NewCheckoutError("generation failed", err)
 	}
 	debug.Debug("[app] Generation completed successfully")
@@ -379,9 +340,8 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
 
 	if !opts.DryRun {
-		if err := saveManifestFromGenerateResult(manifestPath(), genResult); err != nil {
-			debug.Debug("[app] Failed to save ign-files.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		if err := saveCompleteCheckoutArtifacts(configDir, prep, rawVars, genResult, rollback); err != nil {
+			return nil, err
 		}
 	}
 
@@ -411,6 +371,341 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 
 	debug.Debug("[app] CompleteCheckout workflow completed successfully")
 	return result, nil
+}
+
+func saveCompleteCheckoutArtifacts(configDir string, prep *PrepareCheckoutResult, rawVars map[string]interface{}, genResult *generator.GenerateResult, rollback *checkoutGenerationRollback) error {
+	templateHash := prep.IgnJson.Hash
+	ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
+	ignVarPath := filepath.Join(configDir, model.IgnVarFile)
+
+	debug.Debug("[app] Creating ign.json")
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{
+			URL:  prep.NormalizedURL,
+			Path: prep.TemplateRef.Path,
+			Ref:  prep.TemplateRef.Ref,
+		},
+		Hash: templateHash,
+		Metadata: &model.FileMetadata{
+			GeneratedAt:     time.Now(),
+			GeneratedBy:     "ign checkout",
+			TemplateName:    prep.IgnJson.Name,
+			TemplateVersion: prep.IgnJson.Version,
+			IgnVersion:      build.Version(),
+		},
+	}
+
+	debug.Debug("[app] Creating ign-var.json")
+	ignVarJson := &model.IgnVarJson{
+		Variables: rawVars,
+	}
+
+	debug.DebugValue("[app] Saving ign.json to", ignConfigPath)
+	if err := config.SaveIgnConfig(ignConfigPath, ignConfig); err != nil {
+		debug.Debug("[app] Failed to save ign.json: %v", err)
+		debug.Debug("[app] Rolling back generated files due to ign.json save failure")
+		rollback.rollback(genResult)
+		return NewCheckoutError("failed to save ign.json", err)
+	}
+	debug.Debug("[app] ign.json saved successfully")
+
+	debug.DebugValue("[app] Saving ign-var.json to", ignVarPath)
+	if err := config.SaveIgnVarJson(ignVarPath, ignVarJson); err != nil {
+		debug.Debug("[app] Failed to save ign-var.json: %v", err)
+		debug.Debug("[app] Rolling back checkout artifacts due to ign-var.json save failure")
+		rollback.rollback(genResult)
+		if removeErr := os.Remove(ignConfigPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
+		}
+		return NewCheckoutError("failed to save ign-var.json (rolled back ign.json)", err)
+	}
+	debug.Debug("[app] ign-var.json saved successfully")
+
+	manifestPath := manifestPathFromConfigPath(ignConfigPath)
+	manifestSnapshot, err := rollback.snapshotPath(manifestPath)
+	if err != nil {
+		debug.Debug("[app] Failed to prepare ign-files.json rollback: %v", err)
+		rollback.rollback(genResult)
+		if removeErr := os.Remove(ignVarPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign-var.json: %v (original error: %v)", removeErr, err)
+		}
+		if removeErr := os.Remove(ignConfigPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
+		}
+		return NewCheckoutError("failed to prepare ign-files.json rollback", err)
+	}
+
+	if err := saveManifestFromGenerateResult(manifestPath, genResult); err != nil {
+		debug.Debug("[app] Failed to save ign-files.json: %v", err)
+		debug.Debug("[app] Rolling back checkout artifacts due to ign-files.json save failure")
+		rollback.rollback(genResult)
+		if restoreErr := restoreCheckoutRollbackEntry(manifestSnapshot); restoreErr != nil {
+			debug.Debug("[app] Failed to restore ign-files.json after save failure: %v", restoreErr)
+		}
+		if removeErr := os.Remove(ignVarPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign-var.json: %v (original error: %v)", removeErr, err)
+		}
+		if removeErr := os.Remove(ignConfigPath); removeErr != nil {
+			debug.Debug("[app] Failed to rollback ign.json: %v (original error: %v)", removeErr, err)
+		}
+		return NewCheckoutError("failed to save ign-files.json (rolled back ign.json and ign-var.json)", err)
+	}
+	debug.Debug("[app] ign-files.json saved successfully")
+
+	return nil
+}
+
+type checkoutGenerationRollback struct {
+	outputDir                      string
+	outputDirExistedBeforeGenerate bool
+	overwritten                    []checkoutRollbackEntry
+	backupDir                      string
+}
+
+type checkoutRollbackEntry struct {
+	path       string
+	existed    bool
+	mode       os.FileMode
+	backupPath string
+	linkTarget string
+	isSymlink  bool
+	isDir      bool
+}
+
+func prepareCheckoutGenerationRollback(ctx context.Context, gen generator.Generator, genOpts generator.GenerateOptions) (*checkoutGenerationRollback, error) {
+	rollback := &checkoutGenerationRollback{
+		outputDir:                      genOpts.OutputDir,
+		outputDirExistedBeforeGenerate: pathExists(genOpts.OutputDir),
+	}
+
+	dryRunResult, err := gen.DryRun(ctx, genOpts)
+	if err != nil {
+		return nil, NewCheckoutError("generation failed", err)
+	}
+
+	if err := rollback.captureOverwrittenFiles(dryRunResult); err != nil {
+		rollback.cleanup()
+		return nil, NewCheckoutError("failed to prepare checkout rollback", err)
+	}
+
+	return rollback, nil
+}
+
+func (r *checkoutGenerationRollback) captureOverwrittenFiles(genResult *generator.GenerateResult) error {
+	if r == nil || genResult == nil {
+		return nil
+	}
+	for _, file := range genResult.DryRunFiles {
+		if !file.WouldOverwrite {
+			continue
+		}
+		entry, err := r.snapshotPath(file.Path)
+		if err != nil {
+			return err
+		}
+		if entry.existed {
+			r.overwritten = append(r.overwritten, entry)
+		}
+	}
+	return nil
+}
+
+func (r *checkoutGenerationRollback) snapshotPath(path string) (checkoutRollbackEntry, error) {
+	entry := checkoutRollbackEntry{path: path}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return entry, nil
+		}
+		return entry, err
+	}
+
+	entry.existed = true
+	entry.mode = info.Mode()
+	entry.isSymlink = info.Mode()&os.ModeSymlink != 0
+	entry.isDir = info.IsDir()
+
+	switch {
+	case entry.isSymlink:
+		target, err := os.Readlink(path)
+		if err != nil {
+			return entry, err
+		}
+		entry.linkTarget = target
+	case entry.isDir:
+		return entry, nil
+	default:
+		backupPath, err := r.backupFile(path, info.Mode().Perm())
+		if err != nil {
+			return entry, err
+		}
+		entry.backupPath = backupPath
+	}
+
+	return entry, nil
+}
+
+func (r *checkoutGenerationRollback) backupFile(path string, mode os.FileMode) (string, error) {
+	if r.backupDir == "" {
+		dir, err := os.MkdirTemp("", "ign-checkout-rollback-*")
+		if err != nil {
+			return "", err
+		}
+		r.backupDir = dir
+	}
+
+	src, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = src.Close() }()
+
+	dst, err := os.CreateTemp(r.backupDir, "file-*")
+	if err != nil {
+		return "", err
+	}
+	dstPath := dst.Name()
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		_ = os.Remove(dstPath)
+		return "", err
+	}
+	if err := dst.Close(); err != nil {
+		_ = os.Remove(dstPath)
+		return "", err
+	}
+	if err := os.Chmod(dstPath, mode); err != nil {
+		_ = os.Remove(dstPath)
+		return "", err
+	}
+
+	return dstPath, nil
+}
+
+func (r *checkoutGenerationRollback) rollback(genResult *generator.GenerateResult) {
+	if r == nil {
+		return
+	}
+	r.rollbackCreatedFiles(genResult)
+	for i := len(r.overwritten) - 1; i >= 0; i-- {
+		if err := restoreCheckoutRollbackEntry(r.overwritten[i]); err != nil {
+			debug.Debug("[app] Failed to restore overwritten path %s: %v", r.overwritten[i].path, err)
+		}
+	}
+}
+
+func (r *checkoutGenerationRollback) rollbackCreatedFiles(genResult *generator.GenerateResult) {
+	if genResult == nil {
+		return
+	}
+	for _, path := range genResult.CreatedFiles {
+		if path == "" {
+			continue
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			debug.Debug("[app] Failed to rollback generated file %s: %v", path, err)
+		}
+	}
+
+	rollbackEmptyGeneratedDirs(genResult.CreatedFiles, r.outputDir, !r.outputDirExistedBeforeGenerate)
+}
+
+func (r *checkoutGenerationRollback) cleanup() {
+	if r == nil || r.backupDir == "" {
+		return
+	}
+	if err := os.RemoveAll(r.backupDir); err != nil {
+		debug.Debug("[app] Failed to remove checkout rollback backup directory %s: %v", r.backupDir, err)
+	}
+}
+
+func restoreCheckoutRollbackEntry(entry checkoutRollbackEntry) error {
+	if !entry.existed {
+		if err := os.Remove(entry.path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	if err := os.Remove(entry.path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(entry.path), 0755); err != nil {
+		return err
+	}
+
+	switch {
+	case entry.isSymlink:
+		return os.Symlink(entry.linkTarget, entry.path)
+	case entry.isDir:
+		if err := os.Mkdir(entry.path, entry.mode.Perm()); err != nil && !os.IsExist(err) {
+			return err
+		}
+		return os.Chmod(entry.path, entry.mode.Perm())
+	default:
+		return restoreCheckoutRollbackFile(entry.backupPath, entry.path, entry.mode.Perm())
+	}
+}
+
+func restoreCheckoutRollbackFile(srcPath, dstPath string, mode os.FileMode) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = src.Close() }()
+
+	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		_ = dst.Close()
+		return err
+	}
+	if err := dst.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(dstPath, mode)
+}
+
+func rollbackEmptyGeneratedDirs(createdFiles []string, outputDir string, removeOutputDir bool) {
+	outputDir = filepath.Clean(outputDir)
+	for _, path := range createdFiles {
+		dir := filepath.Dir(filepath.Clean(path))
+		for dir != "." && dir != string(filepath.Separator) {
+			if !pathWithinOrEqual(dir, outputDir) {
+				break
+			}
+			if dir == outputDir && !removeOutputDir {
+				break
+			}
+			if err := os.Remove(dir); err != nil {
+				if !os.IsNotExist(err) && !os.IsExist(err) {
+					debug.Debug("[app] Failed to rollback generated directory %s: %v", dir, err)
+				}
+				break
+			}
+			if dir == outputDir {
+				break
+			}
+			dir = filepath.Dir(dir)
+		}
+	}
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return !os.IsNotExist(err)
+}
+
+func pathWithinOrEqual(path, base string) bool {
+	path = filepath.Clean(path)
+	base = filepath.Clean(base)
+	if path == base {
+		return true
+	}
+	rel, err := filepath.Rel(base, path)
+	return err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // CheckoutOptions contains options for project checkout (backward-compatible).
@@ -557,27 +852,8 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 		return nil, err
 	}
 
-	// Get and update template hash in ign.json (unless dry-run)
-	if !opts.DryRun {
-		templateHash := template.Config.Hash
-
-		// Load existing ign.json
-		existingConfig, err := config.LoadIgnConfig(ignConfigPath)
-		if err != nil {
-			debug.Debug("[app] Could not load existing ign.json (will skip hash update): %v", err)
-		} else {
-			// Update hash in ign.json
-			existingConfig.Hash = templateHash
-			debug.Debug("[app] Updating template hash in ign.json")
-			if err := config.SaveIgnConfig(ignConfigPath, existingConfig); err != nil {
-				debug.Debug("[app] Failed to update hash in ign.json: %v", err)
-				return nil, NewCheckoutError("failed to update template hash in ign.json", err)
-			}
-			debug.Debug("[app] Template hash updated in ign.json")
-		}
-	}
-
-	// Validate that all required variables are set
+	// Validate required variables before mutating ign.json. A validation failure
+	// should leave the existing checkout configuration unchanged.
 	debug.Debug("[app] Validating required variables")
 	if err := ValidateVariables(&template.Config, vars); err != nil {
 		debug.Debug("[app] Variable validation failed: %v", err)
@@ -599,6 +875,14 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 
 	// Generate or dry run
 	var genResult *generator.GenerateResult
+	var rollback *checkoutGenerationRollback
+	if !opts.DryRun {
+		rollback, err = prepareCheckoutGenerationRollback(ctx, gen, genOpts)
+		if err != nil {
+			return nil, err
+		}
+		defer rollback.cleanup()
+	}
 	if opts.DryRun {
 		debug.Debug("[app] Starting dry run generation")
 		genResult, err = gen.DryRun(ctx, genOpts)
@@ -609,6 +893,9 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 
 	if err != nil {
 		debug.Debug("[app] Generation failed: %v", err)
+		if rollback != nil {
+			rollback.rollback(genResult)
+		}
 		return nil, NewCheckoutError("generation failed", err)
 	}
 	debug.Debug("[app] Generation completed successfully")
@@ -617,9 +904,40 @@ func Checkout(ctx context.Context, opts CheckoutOptions) (*CheckoutResult, error
 	debug.DebugValue("[app] Files overwritten", genResult.FilesOverwritten)
 
 	if !opts.DryRun {
-		if err := saveManifestFromGenerateResult(manifestPathFromConfigPath(ignConfigPath), genResult); err != nil {
+		manifestPath := manifestPathFromConfigPath(ignConfigPath)
+		manifestSnapshot, err := rollback.snapshotPath(manifestPath)
+		if err != nil {
+			return nil, NewCheckoutError("failed to prepare manifest rollback", err)
+		}
+
+		if err := saveManifestFromGenerateResult(manifestPath, genResult); err != nil {
 			debug.Debug("[app] Failed to save ign-files.json: %v", err)
+			rollback.rollback(genResult)
+			if restoreErr := restoreCheckoutRollbackEntry(manifestSnapshot); restoreErr != nil {
+				debug.Debug("[app] Failed to restore ign-files.json after save failure: %v", restoreErr)
+			}
 			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		}
+
+		templateHash := template.Config.Hash
+
+		// Load existing ign.json
+		existingConfig, err := config.LoadIgnConfig(ignConfigPath)
+		if err != nil {
+			debug.Debug("[app] Could not load existing ign.json (will skip hash update): %v", err)
+		} else {
+			// Update hash in ign.json only after generation and manifest save succeed.
+			existingConfig.Hash = templateHash
+			debug.Debug("[app] Updating template hash in ign.json")
+			if err := config.SaveIgnConfig(ignConfigPath, existingConfig); err != nil {
+				debug.Debug("[app] Failed to update hash in ign.json: %v", err)
+				rollback.rollback(genResult)
+				if restoreErr := restoreCheckoutRollbackEntry(manifestSnapshot); restoreErr != nil {
+					debug.Debug("[app] Failed to restore ign-files.json after ign.json update failure: %v", restoreErr)
+				}
+				return nil, NewCheckoutError("failed to update template hash in ign.json", err)
+			}
+			debug.Debug("[app] Template hash updated in ign.json")
 		}
 	}
 

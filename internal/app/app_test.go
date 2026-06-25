@@ -3,11 +3,13 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/tacogips/ign/internal/config"
 	"github.com/tacogips/ign/internal/template/model"
 	"github.com/tacogips/ign/internal/template/parser"
 )
@@ -484,6 +486,646 @@ func TestValidateCompleteCheckoutOptionsRequiresTemplate(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("ValidateCompleteCheckoutOptions expected nil template error")
+	}
+}
+
+func TestCompleteCheckout_GenerationFailureDoesNotWriteConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "empty-template",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+			Hash:      strings.Repeat("b", 64),
+		},
+	}
+	prep := &PrepareCheckoutResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		TemplateRef:   model.TemplateRef{Provider: "local", Repo: "empty-template"},
+		NormalizedURL: "./template",
+	}
+
+	_, err := CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: prep,
+		Variables:     map[string]interface{}{},
+		OutputDir:     "output",
+	})
+	if err == nil {
+		t.Fatalf("CompleteCheckout expected generation error")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("CompleteCheckout error type = %T, want *AppError", err)
+	}
+	if appErr.Type != CheckoutFailed {
+		t.Fatalf("CompleteCheckout error app type = %v, want %v", appErr.Type, CheckoutFailed)
+	}
+	if !strings.Contains(err.Error(), "template has no files") {
+		t.Fatalf("CompleteCheckout error = %q, want template has no files generation error", err.Error())
+	}
+
+	for _, path := range []string{
+		filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile),
+		filepath.Join(model.IgnConfigDir, model.IgnVarFile),
+		filepath.Join(model.IgnConfigDir, model.IgnManifestFile),
+		"output",
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s was written before generation completed: %v", path, err)
+		}
+	}
+}
+
+func TestCompleteCheckout_ManifestFailureRollsBackConfigFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	manifestPath := filepath.Join(model.IgnConfigDir, model.IgnManifestFile)
+	if err := os.MkdirAll(manifestPath, 0755); err != nil {
+		t.Fatalf("failed to create manifest directory fixture: %v", err)
+	}
+
+	_, err := CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: singleFilePreparedCheckout(),
+		Variables:     map[string]interface{}{},
+		OutputDir:     "output",
+	})
+	if err == nil {
+		t.Fatalf("CompleteCheckout expected manifest save error")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("CompleteCheckout error type = %T, want *AppError", err)
+	}
+	if appErr.Type != CheckoutFailed {
+		t.Fatalf("CompleteCheckout error app type = %v, want %v", appErr.Type, CheckoutFailed)
+	}
+	if !strings.Contains(err.Error(), "failed to save ign-files.json") {
+		t.Fatalf("CompleteCheckout error = %q, want manifest save error", err.Error())
+	}
+
+	for _, path := range []string{
+		filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile),
+		filepath.Join(model.IgnConfigDir, model.IgnVarFile),
+		filepath.Join("output", "docs", "README.md"),
+		"output",
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s was not rolled back after manifest save failure: %v", path, err)
+		}
+	}
+}
+
+func TestCompleteCheckout_ManifestFailureRestoresOverwrittenFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	if err := os.MkdirAll(filepath.Join("output", "docs"), 0755); err != nil {
+		t.Fatalf("failed to create output fixture: %v", err)
+	}
+	overwrittenPath := filepath.Join("output", "docs", "README.md")
+	if err := os.WriteFile(overwrittenPath, []byte("original"), 0644); err != nil {
+		t.Fatalf("failed to create existing output file: %v", err)
+	}
+	manifestPath := filepath.Join(model.IgnConfigDir, model.IgnManifestFile)
+	if err := os.MkdirAll(manifestPath, 0755); err != nil {
+		t.Fatalf("failed to create manifest directory fixture: %v", err)
+	}
+
+	_, err := CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: twoFilePreparedCheckout(),
+		Variables:     map[string]interface{}{},
+		OutputDir:     "output",
+		Overwrite:     true,
+	})
+	if err == nil {
+		t.Fatalf("CompleteCheckout expected manifest save error")
+	}
+	if !strings.Contains(err.Error(), "failed to save ign-files.json") {
+		t.Fatalf("CompleteCheckout error = %q, want manifest save error", err.Error())
+	}
+
+	content, err := os.ReadFile(overwrittenPath)
+	if err != nil {
+		t.Fatalf("failed to read restored output file: %v", err)
+	}
+	if string(content) != "original" {
+		t.Fatalf("overwritten file content = %q, want original", content)
+	}
+	if _, err := os.Stat(filepath.Join("output", "docs", "NEW.md")); !os.IsNotExist(err) {
+		t.Fatalf("newly created file was not rolled back after manifest save failure: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)); !os.IsNotExist(err) {
+		t.Fatalf("ign.json was not rolled back after manifest save failure: %v", err)
+	}
+}
+
+func TestCompleteCheckout_ConfigSaveFailureRollsBackGeneratedFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+	if err := os.MkdirAll(ignConfigPath, 0755); err != nil {
+		t.Fatalf("failed to create ign.json directory fixture: %v", err)
+	}
+
+	_, err := CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: singleFilePreparedCheckout(),
+		Variables:     map[string]interface{}{},
+		OutputDir:     "output",
+	})
+	if err == nil {
+		t.Fatalf("CompleteCheckout expected ign.json save error")
+	}
+	if !strings.Contains(err.Error(), "failed to save ign.json") {
+		t.Fatalf("CompleteCheckout error = %q, want ign.json save error", err.Error())
+	}
+	if _, err := os.Stat(filepath.Join("output", "docs", "README.md")); !os.IsNotExist(err) {
+		t.Fatalf("generated file was not rolled back after ign.json save failure: %v", err)
+	}
+	if _, err := os.Stat("output"); !os.IsNotExist(err) {
+		t.Fatalf("generated output directory was not rolled back after ign.json save failure: %v", err)
+	}
+}
+
+func TestCompleteCheckout_VarSaveFailureRollsBackGeneratedFilesAndConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+	if err := os.MkdirAll(ignVarPath, 0755); err != nil {
+		t.Fatalf("failed to create ign-var.json directory fixture: %v", err)
+	}
+
+	_, err := CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: singleFilePreparedCheckout(),
+		Variables:     map[string]interface{}{},
+		OutputDir:     "output",
+	})
+	if err == nil {
+		t.Fatalf("CompleteCheckout expected ign-var.json save error")
+	}
+	if !strings.Contains(err.Error(), "failed to save ign-var.json") {
+		t.Fatalf("CompleteCheckout error = %q, want ign-var.json save error", err.Error())
+	}
+	for _, path := range []string{
+		filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile),
+		filepath.Join("output", "docs", "README.md"),
+		"output",
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s was not rolled back after ign-var.json save failure: %v", path, err)
+		}
+	}
+}
+
+func TestCheckout_MissingRequiredVariableDoesNotUpdateConfigHash(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	oldHash := strings.Repeat("a", 64)
+	newHash := strings.Repeat("b", 64)
+	templateDir := "template"
+	templateConfig := &model.IgnJson{
+		Name:    "required-variable-template",
+		Version: "1.0.0",
+		Variables: map[string]model.VarDef{
+			"project_name": {
+				Type:     model.VarTypeString,
+				Required: true,
+			},
+		},
+		Hash: newHash,
+	}
+	writeLocalTemplate(t, templateDir, templateConfig, map[string]string{
+		"README.md": "@ign-var:project_name@",
+	})
+
+	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+	if err := config.SaveIgnConfig(ignConfigPath, &model.IgnConfig{
+		Template: model.TemplateSource{URL: "./" + templateDir},
+		Hash:     oldHash,
+	}); err != nil {
+		t.Fatalf("failed to write ign config: %v", err)
+	}
+	oldConfigData, err := os.ReadFile(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read initial ign config: %v", err)
+	}
+	oldVariables := map[string]interface{}{
+		"project_name": "",
+		"preserved":    "keep-me",
+	}
+	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+	if err := config.SaveIgnVarJson(ignVarPath, &model.IgnVarJson{
+		Variables: oldVariables,
+	}); err != nil {
+		t.Fatalf("failed to write ign vars: %v", err)
+	}
+	oldVarData, err := os.ReadFile(ignVarPath)
+	if err != nil {
+		t.Fatalf("failed to read initial ign vars: %v", err)
+	}
+
+	_, err = Checkout(context.Background(), CheckoutOptions{
+		OutputDir: "output",
+	})
+	if err == nil {
+		t.Fatalf("Checkout expected missing required variable error")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("Checkout error type = %T, want *AppError", err)
+	}
+	if appErr.Type != ValidationFailed {
+		t.Fatalf("Checkout error app type = %v, want %v", appErr.Type, ValidationFailed)
+	}
+	if !strings.Contains(err.Error(), "missing required variables: project_name") {
+		t.Fatalf("Checkout error = %q, want missing project_name validation error", err.Error())
+	}
+
+	gotConfig, err := config.LoadIgnConfig(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to load ign config after failed checkout: %v", err)
+	}
+	if gotConfig.Hash != oldHash {
+		t.Fatalf("checkout updated ign.json hash before variable validation, got %q want %q", gotConfig.Hash, oldHash)
+	}
+	gotConfigData, err := os.ReadFile(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read ign config after failed checkout: %v", err)
+	}
+	if string(gotConfigData) != string(oldConfigData) {
+		t.Fatalf("checkout changed ign.json before variable validation")
+	}
+	gotVars, err := config.LoadIgnVarJson(ignVarPath)
+	if err != nil {
+		t.Fatalf("failed to load ign vars after failed checkout: %v", err)
+	}
+	if gotVars.Variables["preserved"] != oldVariables["preserved"] {
+		t.Fatalf("checkout changed ign-var.json before variable validation, got %v want %v", gotVars.Variables["preserved"], oldVariables["preserved"])
+	}
+	gotVarData, err := os.ReadFile(ignVarPath)
+	if err != nil {
+		t.Fatalf("failed to read ign vars after failed checkout: %v", err)
+	}
+	if string(gotVarData) != string(oldVarData) {
+		t.Fatalf("checkout changed ign-var.json before variable validation")
+	}
+	if _, err := os.Stat(filepath.Join(model.IgnConfigDir, model.IgnManifestFile)); !os.IsNotExist(err) {
+		t.Fatalf("checkout wrote manifest after variable validation failure: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join("output", "README.md")); !os.IsNotExist(err) {
+		t.Fatalf("checkout generated output after variable validation failure: %v", err)
+	}
+}
+
+func TestCheckout_GenerationFailureDoesNotUpdateConfigHash(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	oldHash := strings.Repeat("a", 64)
+	newHash := strings.Repeat("b", 64)
+	templateDir := "template"
+	templateConfig := &model.IgnJson{
+		Name:      "empty-template",
+		Version:   "1.0.0",
+		Variables: map[string]model.VarDef{},
+		Hash:      newHash,
+	}
+	writeLocalTemplate(t, templateDir, templateConfig, nil)
+
+	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+	if err := config.SaveIgnConfig(ignConfigPath, &model.IgnConfig{
+		Template: model.TemplateSource{URL: "./" + templateDir},
+		Hash:     oldHash,
+	}); err != nil {
+		t.Fatalf("failed to write ign config: %v", err)
+	}
+	oldConfigData, err := os.ReadFile(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read initial ign config: %v", err)
+	}
+	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+	if err := config.SaveIgnVarJson(ignVarPath, &model.IgnVarJson{
+		Variables: map[string]interface{}{},
+	}); err != nil {
+		t.Fatalf("failed to write ign vars: %v", err)
+	}
+
+	_, err = Checkout(context.Background(), CheckoutOptions{
+		OutputDir: "output",
+	})
+	if err == nil {
+		t.Fatalf("Checkout expected generation error")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("Checkout error type = %T, want *AppError", err)
+	}
+	if appErr.Type != CheckoutFailed {
+		t.Fatalf("Checkout error app type = %v, want %v", appErr.Type, CheckoutFailed)
+	}
+	if !strings.Contains(err.Error(), "template has no files") {
+		t.Fatalf("Checkout error = %q, want template has no files generation error", err.Error())
+	}
+
+	gotConfig, err := config.LoadIgnConfig(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to load ign config after failed checkout: %v", err)
+	}
+	if gotConfig.Hash != oldHash {
+		t.Fatalf("checkout updated ign.json hash before successful generation, got %q want %q", gotConfig.Hash, oldHash)
+	}
+	gotConfigData, err := os.ReadFile(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to read ign config after failed checkout: %v", err)
+	}
+	if string(gotConfigData) != string(oldConfigData) {
+		t.Fatalf("checkout changed ign.json before successful generation")
+	}
+	if _, err := os.Stat(filepath.Join(model.IgnConfigDir, model.IgnManifestFile)); !os.IsNotExist(err) {
+		t.Fatalf("checkout wrote manifest after generation failure: %v", err)
+	}
+	if _, err := os.Stat("output"); !os.IsNotExist(err) {
+		t.Fatalf("checkout created output directory after generation failure: %v", err)
+	}
+}
+
+func TestCheckout_ManifestFailureRollsBackCreatedFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	oldHash := strings.Repeat("a", 64)
+	newHash := strings.Repeat("b", 64)
+	templateDir := "template"
+	templateConfig := &model.IgnJson{
+		Name:      "single-file-template",
+		Version:   "1.0.0",
+		Variables: map[string]model.VarDef{},
+		Hash:      newHash,
+	}
+	writeLocalTemplate(t, templateDir, templateConfig, map[string]string{
+		filepath.Join("docs", "README.md"): "generated",
+	})
+
+	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+	if err := config.SaveIgnConfig(ignConfigPath, &model.IgnConfig{
+		Template: model.TemplateSource{URL: "./" + templateDir},
+		Hash:     oldHash,
+	}); err != nil {
+		t.Fatalf("failed to write ign config: %v", err)
+	}
+	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+	if err := config.SaveIgnVarJson(ignVarPath, &model.IgnVarJson{
+		Variables: map[string]interface{}{},
+	}); err != nil {
+		t.Fatalf("failed to write ign vars: %v", err)
+	}
+	manifestPath := filepath.Join(model.IgnConfigDir, model.IgnManifestFile)
+	if err := os.MkdirAll(manifestPath, 0755); err != nil {
+		t.Fatalf("failed to create manifest directory fixture: %v", err)
+	}
+
+	_, err := Checkout(context.Background(), CheckoutOptions{
+		OutputDir: "output",
+	})
+	if err == nil {
+		t.Fatalf("Checkout expected manifest save error")
+	}
+	var appErr *AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("Checkout error type = %T, want *AppError", err)
+	}
+	if appErr.Type != CheckoutFailed {
+		t.Fatalf("Checkout error app type = %v, want %v", appErr.Type, CheckoutFailed)
+	}
+	if !strings.Contains(err.Error(), "failed to save ign-files.json") {
+		t.Fatalf("Checkout error = %q, want manifest save error", err.Error())
+	}
+
+	gotConfig, err := config.LoadIgnConfig(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to load ign config after failed checkout: %v", err)
+	}
+	if gotConfig.Hash != oldHash {
+		t.Fatalf("checkout updated ign.json hash after manifest save failure, got %q want %q", gotConfig.Hash, oldHash)
+	}
+	if _, err := os.Stat(filepath.Join("output", "docs", "README.md")); !os.IsNotExist(err) {
+		t.Fatalf("checkout did not roll back generated file after manifest save failure: %v", err)
+	}
+	if _, err := os.Stat("output"); !os.IsNotExist(err) {
+		t.Fatalf("checkout did not roll back generated output directory after manifest save failure: %v", err)
+	}
+}
+
+func TestCheckout_ManifestFailureRestoresOverwrittenFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	oldHash := strings.Repeat("a", 64)
+	newHash := strings.Repeat("b", 64)
+	templateDir := "template"
+	templateConfig := &model.IgnJson{
+		Name:      "two-file-template",
+		Version:   "1.0.0",
+		Variables: map[string]model.VarDef{},
+		Hash:      newHash,
+	}
+	writeLocalTemplate(t, templateDir, templateConfig, map[string]string{
+		filepath.Join("docs", "README.md"): "generated",
+		filepath.Join("docs", "NEW.md"):    "new",
+	})
+
+	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+	if err := config.SaveIgnConfig(ignConfigPath, &model.IgnConfig{
+		Template: model.TemplateSource{URL: "./" + templateDir},
+		Hash:     oldHash,
+	}); err != nil {
+		t.Fatalf("failed to write ign config: %v", err)
+	}
+	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+	if err := config.SaveIgnVarJson(ignVarPath, &model.IgnVarJson{
+		Variables: map[string]interface{}{},
+	}); err != nil {
+		t.Fatalf("failed to write ign vars: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join("output", "docs"), 0755); err != nil {
+		t.Fatalf("failed to create output fixture: %v", err)
+	}
+	overwrittenPath := filepath.Join("output", "docs", "README.md")
+	if err := os.WriteFile(overwrittenPath, []byte("original"), 0644); err != nil {
+		t.Fatalf("failed to create existing output file: %v", err)
+	}
+	manifestPath := filepath.Join(model.IgnConfigDir, model.IgnManifestFile)
+	if err := os.MkdirAll(manifestPath, 0755); err != nil {
+		t.Fatalf("failed to create manifest directory fixture: %v", err)
+	}
+
+	_, err := Checkout(context.Background(), CheckoutOptions{
+		OutputDir: "output",
+		Overwrite: true,
+	})
+	if err == nil {
+		t.Fatalf("Checkout expected manifest save error")
+	}
+	if !strings.Contains(err.Error(), "failed to save ign-files.json") {
+		t.Fatalf("Checkout error = %q, want manifest save error", err.Error())
+	}
+
+	content, err := os.ReadFile(overwrittenPath)
+	if err != nil {
+		t.Fatalf("failed to read restored output file: %v", err)
+	}
+	if string(content) != "original" {
+		t.Fatalf("overwritten file content = %q, want original", content)
+	}
+	if _, err := os.Stat(filepath.Join("output", "docs", "NEW.md")); !os.IsNotExist(err) {
+		t.Fatalf("newly created file was not rolled back after manifest save failure: %v", err)
+	}
+	gotConfig, err := config.LoadIgnConfig(ignConfigPath)
+	if err != nil {
+		t.Fatalf("failed to load ign config after failed checkout: %v", err)
+	}
+	if gotConfig.Hash != oldHash {
+		t.Fatalf("checkout updated ign.json hash after manifest save failure, got %q want %q", gotConfig.Hash, oldHash)
+	}
+}
+
+func TestCheckout_ManifestFailurePreservesPreexistingOutputDir(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	oldHash := strings.Repeat("a", 64)
+	newHash := strings.Repeat("b", 64)
+	templateDir := "template"
+	templateConfig := &model.IgnJson{
+		Name:      "nested-file-template",
+		Version:   "1.0.0",
+		Variables: map[string]model.VarDef{},
+		Hash:      newHash,
+	}
+	writeLocalTemplate(t, templateDir, templateConfig, map[string]string{
+		filepath.Join("docs", "README.md"): "generated",
+	})
+
+	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+	if err := config.SaveIgnConfig(ignConfigPath, &model.IgnConfig{
+		Template: model.TemplateSource{URL: "./" + templateDir},
+		Hash:     oldHash,
+	}); err != nil {
+		t.Fatalf("failed to write ign config: %v", err)
+	}
+	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+	if err := config.SaveIgnVarJson(ignVarPath, &model.IgnVarJson{
+		Variables: map[string]interface{}{},
+	}); err != nil {
+		t.Fatalf("failed to write ign vars: %v", err)
+	}
+	if err := os.Mkdir("output", 0755); err != nil {
+		t.Fatalf("failed to create preexisting output directory: %v", err)
+	}
+	manifestPath := filepath.Join(model.IgnConfigDir, model.IgnManifestFile)
+	if err := os.MkdirAll(manifestPath, 0755); err != nil {
+		t.Fatalf("failed to create manifest directory fixture: %v", err)
+	}
+
+	_, err := Checkout(context.Background(), CheckoutOptions{
+		OutputDir: "output",
+	})
+	if err == nil {
+		t.Fatalf("Checkout expected manifest save error")
+	}
+
+	if _, err := os.Stat(filepath.Join("output", "docs", "README.md")); !os.IsNotExist(err) {
+		t.Fatalf("checkout did not roll back generated file after manifest save failure: %v", err)
+	}
+	if info, err := os.Stat("output"); err != nil || !info.IsDir() {
+		t.Fatalf("checkout removed preexisting output directory, info=%v err=%v", info, err)
+	}
+	if _, err := os.Stat(filepath.Join("output", "docs")); !os.IsNotExist(err) {
+		t.Fatalf("checkout left empty generated subdirectory after manifest save failure: %v", err)
+	}
+}
+
+func writeLocalTemplate(t *testing.T, templateDir string, templateConfig *model.IgnJson, files map[string]string) {
+	t.Helper()
+
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template directory: %v", err)
+	}
+	templateConfigData, err := json.MarshalIndent(templateConfig, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal template config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, model.IgnTemplateConfigFile), templateConfigData, 0644); err != nil {
+		t.Fatalf("failed to write template config: %v", err)
+	}
+
+	for path, content := range files {
+		fullPath := filepath.Join(templateDir, path)
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+			t.Fatalf("failed to create template file directory: %v", err)
+		}
+		if err := os.WriteFile(fullPath, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write template file: %v", err)
+		}
+	}
+}
+
+func singleFilePreparedCheckout() *PrepareCheckoutResult {
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "single-file-template",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+			Hash:      strings.Repeat("b", 64),
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    filepath.Join("docs", "README.md"),
+				Content: []byte("generated"),
+				Mode:    0644,
+			},
+		},
+	}
+	return &PrepareCheckoutResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		TemplateRef:   model.TemplateRef{Provider: "local", Repo: "single-file-template"},
+		NormalizedURL: "./template",
+	}
+}
+
+func twoFilePreparedCheckout() *PrepareCheckoutResult {
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "two-file-template",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+			Hash:      strings.Repeat("b", 64),
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    filepath.Join("docs", "README.md"),
+				Content: []byte("generated"),
+				Mode:    0644,
+			},
+			{
+				Path:    filepath.Join("docs", "NEW.md"),
+				Content: []byte("new"),
+				Mode:    0644,
+			},
+		},
+	}
+	return &PrepareCheckoutResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		TemplateRef:   model.TemplateRef{Provider: "local", Repo: "two-file-template"},
+		NormalizedURL: "./template",
 	}
 }
 
