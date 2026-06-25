@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
 	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
+	"github.com/tacogips/ign/internal/template/model"
 )
 
 var (
@@ -40,7 +41,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	configDir := ".ign"
+	configDir := model.IgnConfigDir
 	configExists := false
 
 	if _, err := os.Stat(configDir); err == nil {

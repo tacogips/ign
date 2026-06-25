@@ -15,6 +15,7 @@
 - [x] Added app-layer init completion that stores provided variables without generation (`internal/app/config_init.go`, `internal/app/workflows.go`)
 - [x] Added unit coverage for parsing, malformed assignments, no-prompt supplied values, and init variable map overlay (`internal/cli/variables_test.go`, `internal/app/app_test.go`)
 - [x] Deferred `.ign` creation/backups until after variable parsing and prompting succeed (`internal/app/checkout.go`, `internal/cli/init.go`, `internal/cli/checkout.go`)
+- [x] Added checkout preflight validation for runtime variable loading and template hashes before `.ign` is created or backed up, and reused the validated runtime inputs after force backups (`internal/app/variables.go`, `internal/app/app_test.go`, `internal/cli/checkout.go`, `internal/cli/checkout_test.go`)
 - [x] Added integration coverage for side-effect-free template preparation (`test/integration/config_init_test.go`)
 - [x] Documented user-facing usage (`README.md`)
 

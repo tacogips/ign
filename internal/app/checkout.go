@@ -49,6 +49,8 @@ type CompleteCheckoutOptions struct {
 	PrepareResult *PrepareCheckoutResult
 	// Variables contains the user-provided variable values.
 	Variables map[string]interface{}
+	// PreparedInputs contains prevalidated variable inputs from PrepareCompleteCheckoutInputs.
+	PreparedInputs *PreparedCompleteCheckoutInputs
 	// OutputDir is the directory where project files will be generated.
 	OutputDir string
 	// Overwrite determines whether to overwrite existing files.
@@ -195,6 +197,10 @@ func PrepareCheckout(ctx context.Context, opts PrepareCheckoutOptions) (*Prepare
 	debug.DebugValue("[app] Template name", template.Config.Name)
 	debug.DebugValue("[app] Template version", template.Config.Version)
 
+	if err := validateTemplateHash(template.Config.Hash); err != nil {
+		return nil, err
+	}
+
 	if !opts.SkipConfigSetup {
 		if err := PrepareCheckoutConfigDir(opts.ConfigExists); err != nil {
 			return nil, err
@@ -281,35 +287,13 @@ func CompleteCheckout(ctx context.Context, opts CompleteCheckoutOptions) (*Check
 	debug.DebugValue("[app] DryRun", opts.DryRun)
 	debug.DebugValue("[app] Verbose", opts.Verbose)
 
-	// Validate options
-	if opts.OutputDir == "" {
-		return nil, NewValidationError("output directory cannot be empty", nil)
-	}
-	if err := ValidateOutputDir(opts.OutputDir); err != nil {
-		return nil, NewValidationError("invalid output directory", err)
-	}
-
-	prep := opts.PrepareResult
-	if prep == nil {
-		return nil, NewValidationError("prepare result cannot be nil", nil)
-	}
-
-	rawVars, vars, err := prepareVariablesForGeneration(prep.IgnJson.Variables, opts.Variables, configDir, opts.OutputDir)
+	preparedInputs, err := checkoutInputsForCompletion(opts)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := validateTemplateHash(prep.IgnJson.Hash); err != nil {
-		return nil, err
-	}
-
-	// Validate that all required variables are set
-	debug.Debug("[app] Validating required variables")
-	if err := ValidateVariables(prep.IgnJson, vars); err != nil {
-		debug.Debug("[app] Variable validation failed: %v", err)
-		return nil, err
-	}
-	debug.Debug("[app] Variables validated successfully")
+	rawVars := preparedInputs.RawVariables
+	vars := preparedInputs.RuntimeVariables
+	prep := opts.PrepareResult
 
 	// Create and save configuration files (unless dry-run)
 	if !opts.DryRun {

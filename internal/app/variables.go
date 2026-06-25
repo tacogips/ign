@@ -12,6 +12,14 @@ import (
 	"github.com/tacogips/ign/internal/template/parser"
 )
 
+// PreparedCompleteCheckoutInputs contains checkout inputs validated before config files are modified.
+type PreparedCompleteCheckoutInputs struct {
+	// RawVariables are the values persisted to ign-var.json.
+	RawVariables map[string]interface{}
+	// RuntimeVariables are the resolved values used by the template generator.
+	RuntimeVariables parser.Variables
+}
+
 func prepareVariablesForGeneration(varDefs map[string]model.VarDef, providedVars map[string]interface{}, buildDir string, currentDir string) (map[string]interface{}, parser.Variables, error) {
 	rawVars := mergeVariableDefaults(varDefs, providedVars)
 	runtimeInput := resolveRuntimeVariables(varDefs, rawVars, currentDir)
@@ -22,6 +30,95 @@ func prepareVariablesForGeneration(varDefs map[string]model.VarDef, providedVars
 	}
 
 	return rawVars, parser.NewMapVariablesWithCurrentDir(runtimeVars.All(), currentDir), nil
+}
+
+// ValidateCompleteCheckoutOptions validates checkout inputs before config files are modified.
+func ValidateCompleteCheckoutOptions(opts CompleteCheckoutOptions) error {
+	_, err := PrepareCompleteCheckoutInputs(opts)
+	return err
+}
+
+// PrepareCompleteCheckoutInputs validates and resolves checkout inputs before config files are modified.
+func PrepareCompleteCheckoutInputs(opts CompleteCheckoutOptions) (*PreparedCompleteCheckoutInputs, error) {
+	rawVars, vars, err := prepareCompleteCheckoutInputs(opts)
+	if err != nil {
+		return nil, err
+	}
+	return &PreparedCompleteCheckoutInputs{
+		RawVariables:     rawVars,
+		RuntimeVariables: vars,
+	}, nil
+}
+
+func checkoutInputsForCompletion(opts CompleteCheckoutOptions) (*PreparedCompleteCheckoutInputs, error) {
+	if opts.PreparedInputs == nil {
+		return PrepareCompleteCheckoutInputs(opts)
+	}
+
+	if err := validateCompleteCheckoutBaseOptions(opts); err != nil {
+		return nil, err
+	}
+	if opts.PreparedInputs.RawVariables == nil {
+		return nil, NewValidationError("prepared raw variables cannot be nil", nil)
+	}
+	if opts.PreparedInputs.RuntimeVariables == nil {
+		return nil, NewValidationError("prepared runtime variables cannot be nil", nil)
+	}
+
+	debug.Debug("[app] Validating prepared required variables")
+	if err := ValidateVariables(opts.PrepareResult.IgnJson, opts.PreparedInputs.RuntimeVariables); err != nil {
+		debug.Debug("[app] Prepared variable validation failed: %v", err)
+		return nil, err
+	}
+	debug.Debug("[app] Prepared variables validated successfully")
+
+	return opts.PreparedInputs, nil
+}
+
+func validateCompleteCheckoutBaseOptions(opts CompleteCheckoutOptions) error {
+	if opts.OutputDir == "" {
+		return NewValidationError("output directory cannot be empty", nil)
+	}
+	if err := ValidateOutputDir(opts.OutputDir); err != nil {
+		return NewValidationError("invalid output directory", err)
+	}
+
+	prep := opts.PrepareResult
+	if prep == nil {
+		return NewValidationError("prepare result cannot be nil", nil)
+	}
+	if prep.IgnJson == nil {
+		return NewValidationError("template config cannot be nil", nil)
+	}
+	if prep.Template == nil {
+		return NewValidationError("template cannot be nil", nil)
+	}
+	if err := validateTemplateHash(prep.IgnJson.Hash); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func prepareCompleteCheckoutInputs(opts CompleteCheckoutOptions) (map[string]interface{}, parser.Variables, error) {
+	if err := validateCompleteCheckoutBaseOptions(opts); err != nil {
+		return nil, nil, err
+	}
+
+	prep := opts.PrepareResult
+	rawVars, vars, err := prepareVariablesForGeneration(prep.IgnJson.Variables, opts.Variables, model.IgnConfigDir, opts.OutputDir)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	debug.Debug("[app] Validating required variables")
+	if err := ValidateVariables(prep.IgnJson, vars); err != nil {
+		debug.Debug("[app] Variable validation failed: %v", err)
+		return nil, nil, err
+	}
+	debug.Debug("[app] Variables validated successfully")
+
+	return rawVars, vars, nil
 }
 
 func resolveRuntimeVariables(varDefs map[string]model.VarDef, rawVars map[string]interface{}, currentDir string) map[string]interface{} {

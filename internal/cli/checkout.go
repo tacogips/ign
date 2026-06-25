@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
 	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
+	"github.com/tacogips/ign/internal/template/model"
 )
 
 // checkoutCmd represents the checkout command
@@ -73,7 +74,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		outputPath = args[1]
 	}
 
-	configDir := ".ign"
+	configDir := model.IgnConfigDir
 	configExists := false
 
 	// Check if .ign already exists
@@ -125,6 +126,22 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	completeOpts := app.CompleteCheckoutOptions{
+		PrepareResult: prepResult,
+		Variables:     vars,
+		OutputDir:     outputPath,
+		Overwrite:     checkoutForce,
+		DryRun:        checkoutDryRun,
+		Verbose:       checkoutVerbose,
+		GitHubToken:   githubToken,
+	}
+	preparedInputs, err := app.PrepareCompleteCheckoutInputs(completeOpts)
+	if err != nil {
+		printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
+		return err
+	}
+	completeOpts.PreparedInputs = preparedInputs
+
 	// Complete checkout with collected variables
 	if checkoutDryRun {
 		printInfo("[DRY RUN] Would generate project from template")
@@ -136,16 +153,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		printInfo("Generating project from template...")
 	}
 
-	result, err := app.CompleteCheckout(cmd.Context(), app.CompleteCheckoutOptions{
-		PrepareResult: prepResult,
-		Variables:     vars,
-		OutputDir:     outputPath,
-		Overwrite:     checkoutForce,
-		DryRun:        checkoutDryRun,
-		Verbose:       checkoutVerbose,
-		GitHubToken:   githubToken,
-	})
-
+	result, err := app.CompleteCheckout(cmd.Context(), completeOpts)
 	if err != nil {
 		printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
 		return err

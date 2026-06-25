@@ -402,6 +402,91 @@ func TestCompleteCheckout_PreparesRuntimeVariables(t *testing.T) {
 	}
 }
 
+func TestCompleteCheckout_InvalidRuntimeVariableDoesNotWriteConfigOrGenerate(t *testing.T) {
+	tempDir := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get current directory: %v", err)
+	}
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change to temp directory: %v", err)
+	}
+	defer func() { _ = os.Chdir(origDir) }()
+
+	if err := os.Mkdir(model.IgnConfigDir, 0755); err != nil {
+		t.Fatalf("failed to create config directory: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:    "invalid-runtime-variable",
+			Version: "1.0.0",
+			Hash:    strings.Repeat("a", 64),
+			Variables: map[string]model.VarDef{
+				"license_text": {
+					Type:     model.VarTypeString,
+					Required: true,
+				},
+			},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "README.md",
+				Content: []byte("@ign-var:license_text@"),
+				Mode:    0644,
+			},
+		},
+	}
+
+	outputDir := filepath.Join(tempDir, "out")
+	prep := &PrepareCheckoutResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		TemplateRef:   model.TemplateRef{Provider: "local", Repo: "invalid-runtime-variable"},
+		NormalizedURL: "./template",
+	}
+
+	_, err = CompleteCheckout(context.Background(), CompleteCheckoutOptions{
+		PrepareResult: prep,
+		Variables: map[string]interface{}{
+			"license_text": "@file:missing.txt",
+		},
+		OutputDir: outputDir,
+	})
+	if err == nil {
+		t.Fatalf("CompleteCheckout expected missing @file variable error")
+	}
+
+	for _, path := range []string{
+		filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile),
+		filepath.Join(model.IgnConfigDir, model.IgnVarFile),
+		filepath.Join(model.IgnConfigDir, model.IgnManifestFile),
+		filepath.Join(outputDir, "README.md"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s was written before runtime variable validation completed: %v", path, err)
+		}
+	}
+}
+
+func TestValidateCompleteCheckoutOptionsRequiresTemplate(t *testing.T) {
+	err := ValidateCompleteCheckoutOptions(CompleteCheckoutOptions{
+		PrepareResult: &PrepareCheckoutResult{
+			IgnJson: &model.IgnJson{
+				Name:      "missing-template",
+				Version:   "1.0.0",
+				Hash:      strings.Repeat("a", 64),
+				Variables: map[string]model.VarDef{},
+			},
+		},
+		Variables: map[string]interface{}{},
+		OutputDir: ".",
+	})
+	if err == nil {
+		t.Fatalf("ValidateCompleteCheckoutOptions expected nil template error")
+	}
+}
+
 func TestValidateVariables(t *testing.T) {
 	ignJson := &model.IgnJson{
 		Variables: map[string]model.VarDef{
