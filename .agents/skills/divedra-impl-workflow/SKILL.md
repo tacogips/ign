@@ -1,6 +1,6 @@
 ---
 name: divedra-impl-workflow
-description: Use when implementation work in this repository changes behavior, adds functionality, or fixes bugs and the user has not explicitly asked to avoid workflows. Routes the work through the project-local divedra workflow `.divedra/workflows/design-and-implement-review-loop`, including design/plan alignment, implementation, review, user-facing documentation refresh, commit-message generation, and built-in git commit/push steps.
+description: Use when implementation work in this repository changes behavior, adds functionality, or fixes bugs and the user has not explicitly asked to avoid workflows. Routes the work through the project-local divedra workflow `divedra-workflows/design-and-implement-review-loop`, including design/plan alignment, implementation, review, user-facing documentation refresh, and final handoff.
 ---
 
 # Divedra Implementation Workflow
@@ -25,18 +25,12 @@ Use this skill as the default path for implementation work in this repository.
 Use the project-local workflow bundle:
 
 - Workflow id: `design-and-implement-review-loop`
-- Catalog path: `.divedra/workflows/design-and-implement-review-loop`
+- Workflow definition path: `divedra-workflows/design-and-implement-review-loop`
 
-Preferred entry point from the repository root:
-
-```bash
-task divedra-design-implement -- --output json
-```
-
-Equivalent direct command:
+Run from the repository root:
 
 ```bash
-nix run .#divedra -- workflow run design-and-implement-review-loop --output json
+divedra workflow run design-and-implement-review-loop --workflow-definition-dir ./divedra-workflows
 ```
 
 ## Runtime Inputs
@@ -76,9 +70,7 @@ The workflow is responsible for:
 9. implementation self-review
 10. implementation review
 11. user-facing documentation refresh (`README.md` and exposed workflow skill docs)
-12. staged secret scan with `gitleaks git --pre-commit --redact --staged --verbose`
-13. commit-message generation
-14. built-in git commit and git push add-on steps
+12. final workflow output for the accepted planning handoff or issue-resolution handoff
 
 For release or installation work, keep the supported Homebrew surface in scope:
 
@@ -91,16 +83,15 @@ For release or installation work, keep the supported Homebrew surface in scope:
   formula with `brew audit --formula --strict tacogips/tap/ign` and
   `brew test tacogips/tap/ign` when Homebrew behavior changes.
 
-Because the workflow ends with commit/push, do not use it when the user has
-explicitly asked to avoid workflow-driven commits or wants manual local edits
-only.
+The workflow does not commit or push changes automatically. If the user asks to
+commit afterward, follow the repository git commit policy.
 
 ## Documentation Refresh Gate
 
 In full `issue-resolution` mode, after implementation review accepts the code,
-refresh user-facing documentation before commit-message generation. Always
-review `README.md` and this workflow skill, and update any other README or
-workflow skill whose documented behavior changed.
+refresh user-facing documentation before final workflow output. Always review
+`README.md` and this workflow skill, and update any other README or workflow
+skill whose documented behavior changed.
 
 For defect-remediation work, the docs refresh should reflect shipped behavior
 such as CLI exit/error semantics, supported flags, safety guarantees, and
@@ -114,9 +105,8 @@ After the workflow finishes, report:
 - workflow mode
 - changed files
 - verification commands
-- commit message
-- commit hash
-- pushed remote and branch
+- documentation refresh summary
+- residual risks
 - for release work, GitHub Release URL and Homebrew tap/formula status
 
 If the workflow fails because `divedra` appears incorrect, switch to the

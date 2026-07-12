@@ -120,6 +120,27 @@ Variables supplied with `--var` are used for generation and saved to
 
 After a successful checkout, ign stores the created file list in `.ign/ign-files.json`.
 
+### `ign vars`
+
+Inspect template variables and the current values stored in `.ign/ign-var.json`.
+
+```bash
+ign vars
+ign vars --json
+ign vars --unset
+ign vars --json --unset
+```
+
+The table output includes `NAME`, `TYPE`, `REQUIRED`, `DEFAULT`, `CURRENT`, and
+`DESCRIPTION`. JSON mode prints the same rows with unset counts for scripts.
+
+`--unset` shows only variables without a current value. If any known required
+variable is unset, the command exits with code `1`; otherwise it exits with code
+`0`.
+
+If template declarations cannot be fetched, `ign vars` falls back to local
+`.ign/ign-var.json` values and prints a warning outside JSON stdout.
+
 ### `ign update [output-path]`
 
 Fetch the checked-out template again and regenerate project files when the template hash has changed.
@@ -131,6 +152,9 @@ ign update --dry-run
 ign update --overwrite
 ign update --overwrite --yes
 ign update --overwrite-all
+ign update --ref v2.0.0
+ign update --ref v2.0.0 --dry-run
+ign update --ref v2.0.0 --overwrite --yes
 ```
 
 **Flags:**
@@ -143,6 +167,14 @@ ign update --overwrite-all
 | `--yes` | `-y` | Skip the overwrite confirmation prompt |
 | `--dry-run` | `-d` | Preview what would be generated without writing |
 | `--verbose` | `-v` | Show detailed processing information |
+| `--ref` | `-r` | Retarget the tracked template branch, tag, or commit SHA |
+
+`ign update --ref <ref>` fetches the stored template URL and path at the
+requested ref, then uses the normal update flow and overwrite protections. On
+successful non-dry-run completion, `.ign/ign.json` is updated to pin the
+requested ref. If the new ref has identical template content, ign still persists
+the requested ref and leaves generated files unchanged unless overwrite or force
+options request regeneration. Dry runs never change the stored ref.
 
 When `--overwrite` or `--overwrite-all` is used, `ign update` also removes project files recorded in `.ign/ign-files.json` when the current template no longer generates them. The manifest is pruned after removal, and stale manifest entries for files that are already missing are pruned without reporting a deletion. Selective overwrite does not remove paths matched by `.ign-overwrite-ignore`.
 

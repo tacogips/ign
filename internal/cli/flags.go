@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/tacogips/ign/internal/app"
 )
 
 // Common flag names and descriptions
@@ -82,18 +84,7 @@ func ValidateGitHubURL(url string) (string, error) {
 
 // ValidateGitRef validates a git reference (branch, tag, or commit)
 func ValidateGitRef(ref string) error {
-	if ref == "" {
-		return fmt.Errorf("git reference cannot be empty")
-	}
-
-	// Check if it matches any valid pattern
-	if refBranchPattern.MatchString(ref) ||
-		refTagPattern.MatchString(ref) ||
-		refCommitPattern.MatchString(ref) {
-		return nil
-	}
-
-	return fmt.Errorf("invalid git reference: %s", ref)
+	return app.ValidateGitRef(ref)
 }
 
 // ValidateOutputPath validates an output directory path

@@ -90,6 +90,159 @@ func TestPrepareUpdateRejectsInvalidTemplateHash(t *testing.T) {
 	}
 }
 
+func TestPrepareUpdate_TargetRefOverridesStoredRef(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	templatePath := writeVarsTemplate(t, tempDir, map[string]model.VarDef{})
+	writeProjectConfig(t, templatePath, "main", map[string]interface{}{})
+
+	result, err := PrepareUpdate(context.Background(), UpdateOptions{
+		OutputDir: tempDir,
+		TargetRef: "v2.0.0",
+	})
+	if err != nil {
+		t.Fatalf("PrepareUpdate returned error: %v", err)
+	}
+	if !result.RefOverrideRequested {
+		t.Fatal("RefOverrideRequested = false, want true")
+	}
+	if !result.RefChanged {
+		t.Fatal("RefChanged = false, want true")
+	}
+	if result.PreviousRef != "main" {
+		t.Fatalf("PreviousRef = %q, want main", result.PreviousRef)
+	}
+	if result.RequestedRef != "v2.0.0" {
+		t.Fatalf("RequestedRef = %q, want v2.0.0", result.RequestedRef)
+	}
+}
+
+func TestPrepareUpdate_InvalidTargetRefFailsBeforeFetch(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	writeProjectConfig(t, "./missing-template", "main", map[string]interface{}{})
+
+	_, err := PrepareUpdate(context.Background(), UpdateOptions{
+		OutputDir: tempDir,
+		TargetRef: "bad..ref",
+	})
+	if err == nil {
+		t.Fatal("PrepareUpdate expected invalid ref error")
+	}
+	if !strings.Contains(err.Error(), "invalid update ref") {
+		t.Fatalf("PrepareUpdate error = %v, want invalid update ref", err)
+	}
+}
+
+func TestCompleteUpdate_IdenticalHashRefRetargetPersistsConfigOnly(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	writeProjectConfig(t, "./template", "main", map[string]interface{}{"project_name": "demo"})
+	existingFile := filepath.Join(tempDir, "README.md")
+	if err := os.WriteFile(existingFile, []byte("existing"), 0644); err != nil {
+		t.Fatalf("failed to write existing file: %v", err)
+	}
+
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test-template",
+			Version:   "1.0.0",
+			Hash:      testHash1,
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{{Path: "README.md", Content: []byte("new content")}},
+	}
+	prep := &PrepareUpdateResult{
+		Template:             template,
+		IgnJson:              &template.Config,
+		ExistingVars:         map[string]interface{}{"project_name": "demo"},
+		CurrentHash:          testHash1,
+		NewHash:              testHash1,
+		HashChanged:          false,
+		IgnConfigPath:        filepath.Join(tempDir, ".ign", "ign.json"),
+		IgnVarPath:           filepath.Join(tempDir, ".ign", "ign-var.json"),
+		IgnConfig:            &model.IgnConfig{Template: model.TemplateSource{URL: "./template", Ref: "main"}, Hash: testHash1},
+		PreviousRef:          "main",
+		RequestedRef:         "v2.0.0",
+		RefOverrideRequested: true,
+		RefChanged:           true,
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		OutputDir:     tempDir,
+		Overwrite:     false,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate returned error: %v", err)
+	}
+	if !result.RefChanged {
+		t.Fatal("RefChanged = false, want true")
+	}
+
+	loaded, err := config.LoadIgnConfig(filepath.Join(tempDir, ".ign", "ign.json"))
+	if err != nil {
+		t.Fatalf("failed to load ign config: %v", err)
+	}
+	if loaded.Template.Ref != "v2.0.0" {
+		t.Fatalf("stored ref = %q, want v2.0.0", loaded.Template.Ref)
+	}
+	content, err := os.ReadFile(existingFile)
+	if err != nil {
+		t.Fatalf("failed to read existing file: %v", err)
+	}
+	if string(content) != "existing" {
+		t.Fatalf("existing file content = %q, want unchanged", content)
+	}
+}
+
+func TestCompleteUpdate_DryRunRefRetargetDoesNotPersist(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	writeProjectConfig(t, "./template", "main", map[string]interface{}{})
+	template := &model.Template{
+		Config: model.IgnJson{
+			Name:      "test-template",
+			Version:   "1.0.0",
+			Hash:      testHash1,
+			Variables: map[string]model.VarDef{},
+		},
+	}
+	prep := &PrepareUpdateResult{
+		Template:             template,
+		IgnJson:              &template.Config,
+		ExistingVars:         map[string]interface{}{},
+		CurrentHash:          testHash1,
+		NewHash:              testHash1,
+		IgnConfigPath:        filepath.Join(tempDir, ".ign", "ign.json"),
+		IgnVarPath:           filepath.Join(tempDir, ".ign", "ign-var.json"),
+		IgnConfig:            &model.IgnConfig{Template: model.TemplateSource{URL: "./template", Ref: "main"}, Hash: testHash1},
+		RequestedRef:         "v2.0.0",
+		RefOverrideRequested: true,
+		RefChanged:           true,
+	}
+
+	if _, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		OutputDir:     tempDir,
+		DryRun:        true,
+	}); err != nil {
+		t.Fatalf("CompleteUpdate returned error: %v", err)
+	}
+
+	loaded, err := config.LoadIgnConfig(filepath.Join(tempDir, ".ign", "ign.json"))
+	if err != nil {
+		t.Fatalf("failed to load ign config: %v", err)
+	}
+	if loaded.Template.Ref != "main" {
+		t.Fatalf("stored ref = %q, want main", loaded.Template.Ref)
+	}
+}
+
 func TestCompleteUpdatePersistsManifestWhenCleanupPartiallyFails(t *testing.T) {
 	tempDir := t.TempDir()
 	t.Chdir(tempDir)
