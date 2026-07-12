@@ -43,17 +43,20 @@ func ParseGitHubURL(url string) (*model.TemplateRef, error) {
 			if len(parts) > 1 {
 				branchPath := parts[1]
 				slashIdx := strings.Index(branchPath, "/")
+				ref2, err := parseOwnerRepoPath(ownerRepo)
+				if err != nil {
+					return nil, err
+				}
 				if slashIdx != -1 {
 					ref := branchPath[:slashIdx]
 					path := branchPath[slashIdx+1:]
-					ref2, err := parseOwnerRepoPath(ownerRepo)
-					if err != nil {
-						return nil, err
-					}
 					ref2.Ref = ref
 					ref2.Path = path
 					return ref2, nil
 				}
+				ref2.Ref = branchPath
+				ref2.Path = ""
+				return ref2, nil
 			}
 		}
 		return parseOwnerRepoPath(url)
@@ -83,7 +86,7 @@ func parseOwnerRepoPath(s string) (*model.TemplateRef, error) {
 	}
 
 	owner := parts[0]
-	repo := parts[1]
+	repo := strings.TrimSuffix(parts[1], ".git")
 
 	if owner == "" || repo == "" {
 		return nil, fmt.Errorf("owner and repo cannot be empty: %s", s)

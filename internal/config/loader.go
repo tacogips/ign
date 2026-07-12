@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,7 +164,7 @@ func SaveIgnVarJson(path string, ignVar *model.IgnVarJson) error {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-var.json", err)
 	}
 
-	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
+	if err := writeFileAtomic(cleanPath, data, 0644); err != nil {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-var.json", err)
 	}
 
@@ -197,7 +198,7 @@ func SaveIgnManifest(path string, manifest *model.IgnManifest) error {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-files.json", err)
 	}
 
-	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
+	if err := writeFileAtomic(cleanPath, data, 0644); err != nil {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-files.json", err)
 	}
 
@@ -279,10 +280,61 @@ func SaveIgnConfig(path string, ignConfig *model.IgnConfig) error {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign.json", err)
 	}
 
-	if err := os.WriteFile(cleanPath, data, 0644); err != nil {
+	if err := writeFileAtomic(cleanPath, data, 0644); err != nil {
 		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign.json", err)
 	}
 
+	return nil
+}
+
+// WriteFileAtomic writes data to path using a same-directory temporary file and rename.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return writeFileAtomic(path, data, perm)
+}
+
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tempFile, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tempPath := tempFile.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	if _, err := tempFile.Write(data); err != nil {
+		_ = tempFile.Close()
+		return err
+	}
+	if err := tempFile.Chmod(perm); err != nil {
+		_ = tempFile.Close()
+		return err
+	}
+	if err := tempFile.Sync(); err != nil {
+		_ = tempFile.Close()
+		return err
+	}
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	cleanup = false
+
+	dirFile, err := os.Open(dir)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = dirFile.Close() }()
+	if err := dirFile.Sync(); err != nil && err != io.ErrClosedPipe {
+		return err
+	}
 	return nil
 }
 

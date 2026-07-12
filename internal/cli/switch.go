@@ -12,6 +12,7 @@ var (
 	switchRef     string
 	switchForce   bool
 	switchVerbose bool
+	switchVars    []string
 )
 
 var switchCmd = &cobra.Command{
@@ -33,10 +34,15 @@ func init() {
 	switchCmd.Flags().StringVarP(&switchRef, "ref", "r", "main", "Git branch, tag, or commit SHA")
 	switchCmd.Flags().BoolVarP(&switchForce, "force", "f", false, "Overwrite existing files when applying the new template")
 	switchCmd.Flags().BoolVarP(&switchVerbose, "verbose", "v", false, "Show detailed processing information")
+	switchCmd.Flags().StringArrayVarP(&switchVars, FlagVar, "V", nil, DescVar)
 }
 
 func runSwitch(cmd *cobra.Command, args []string) error {
 	url := args[0]
+	if err := ValidateVariableAssignmentSyntax(switchVars); err != nil {
+		return err
+	}
+
 	outputPath := "."
 	if len(args) > 1 {
 		outputPath = args[1]
@@ -51,20 +57,25 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 	printInfo(fmt.Sprintf("Output: %s", outputPath))
 
 	prepResult, err := app.PrepareCheckout(cmd.Context(), app.PrepareCheckoutOptions{
-		URL:          url,
-		Ref:          switchRef,
-		Force:        false,
-		ConfigExists: false,
-		GitHubToken:  githubToken,
+		URL:             url,
+		Ref:             switchRef,
+		Force:           false,
+		ConfigExists:    false,
+		GitHubToken:     githubToken,
+		SkipConfigSetup: true,
 	})
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Switch preparation failed: %v", err))
 		return err
 	}
 
-	vars, err := PromptForVariables(templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath))
+	resolvedIgnJSON := templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath)
+	providedVars, err := ParseVariableAssignments(switchVars, resolvedIgnJSON.Variables)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
+		return err
+	}
+
+	vars, err := PromptForVariablesWithProvided(resolvedIgnJSON, providedVars)
+	if err != nil {
 		return err
 	}
 
@@ -78,7 +89,6 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		Verbose:       switchVerbose,
 		GitHubToken:   githubToken,
 	}); err != nil {
-		printErrorMsg(fmt.Sprintf("Switch validation failed: %v", err))
 		return err
 	}
 
@@ -87,7 +97,10 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		OutputDir:   outputPath,
 		GitHubToken: githubToken,
 	}); err != nil {
-		printErrorMsg(fmt.Sprintf("Switch failed during rewind: %v", err))
+		return err
+	}
+
+	if err := app.PrepareCheckoutConfigDir(false); err != nil {
 		return err
 	}
 
@@ -100,7 +113,6 @@ func runSwitch(cmd *cobra.Command, args []string) error {
 		GitHubToken:   githubToken,
 	})
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Switch failed: %v", err))
 		return err
 	}
 

@@ -37,7 +37,6 @@ func init() {
 func runInit(cmd *cobra.Command, args []string) error {
 	url := args[0]
 	if err := ValidateVariableAssignmentSyntax(initVars); err != nil {
-		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
 		return err
 	}
 
@@ -48,7 +47,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		configExists = true
 		if !initForce {
 			err := fmt.Errorf("configuration already exists at %s (use --force to reinitialize)", configDir)
-			printErrorMsg(err.Error())
 			return err
 		}
 		printWarning("Force mode enabled - will backup existing configuration")
@@ -70,25 +68,21 @@ func runInit(cmd *cobra.Command, args []string) error {
 		SkipConfigSetup: true,
 	})
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Initialization failed: %v", err))
 		return err
 	}
 
 	resolvedIgnJSON := templatedefaults.ResolveIgnJSON(prepResult.IgnJson, ".")
 	providedVars, err := ParseVariableAssignments(initVars, resolvedIgnJSON.Variables)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
 		return err
 	}
 
 	vars, err := PromptForVariablesWithProvided(resolvedIgnJSON, providedVars)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
 		return err
 	}
 
 	if err := app.PrepareCheckoutConfigDir(configExists); err != nil {
-		printErrorMsg(fmt.Sprintf("Initialization failed: %v", err))
 		return err
 	}
 
@@ -97,7 +91,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		Variables:     vars,
 		GeneratedBy:   "ign init",
 	}); err != nil {
-		printErrorMsg(fmt.Sprintf("Initialization failed: %v", err))
 		return err
 	}
 

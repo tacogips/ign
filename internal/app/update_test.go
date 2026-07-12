@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/tacogips/ign/internal/config"
@@ -47,6 +48,109 @@ func setupTestTemplate(t *testing.T, dir string, hash string) {
 	ignVarPath := filepath.Join(ignDir, "ign-var.json")
 	if err := config.SaveIgnVarJson(ignVarPath, ignVar); err != nil {
 		t.Fatalf("Failed to save ign-var.json: %v", err)
+	}
+}
+
+func TestPrepareUpdateRejectsInvalidTemplateHash(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	templateDir := filepath.Join(tempDir, "template")
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template directory: %v", err)
+	}
+	templateConfig := `{"name":"bad-hash-template","version":"1.0.0","hash":"not-a-sha","variables":{}}`
+	if err := os.WriteFile(filepath.Join(templateDir, model.IgnTemplateConfigFile), []byte(templateConfig), 0644); err != nil {
+		t.Fatalf("failed to write template config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "README.md"), []byte("content"), 0644); err != nil {
+		t.Fatalf("failed to write template file: %v", err)
+	}
+
+	if err := os.MkdirAll(model.IgnConfigDir, 0755); err != nil {
+		t.Fatalf("failed to create .ign: %v", err)
+	}
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{URL: templateDir, Ref: "main"},
+		Hash:     testHash1,
+	}
+	if err := config.SaveIgnConfig(filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile), ignConfig); err != nil {
+		t.Fatalf("failed to save ign config: %v", err)
+	}
+	if err := config.SaveIgnVarJson(filepath.Join(model.IgnConfigDir, model.IgnVarFile), &model.IgnVarJson{Variables: map[string]interface{}{}}); err != nil {
+		t.Fatalf("failed to save ign vars: %v", err)
+	}
+
+	_, err := PrepareUpdate(context.Background(), UpdateOptions{OutputDir: tempDir})
+	if err == nil {
+		t.Fatal("PrepareUpdate expected invalid hash error")
+	}
+	if !strings.Contains(err.Error(), "valid SHA256") {
+		t.Fatalf("PrepareUpdate error = %v, want valid SHA256 message", err)
+	}
+}
+
+func TestCompleteUpdatePersistsManifestWhenCleanupPartiallyFails(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	setupTestTemplate(t, tempDir, testHash1)
+	blockingDir := filepath.Join(tempDir, "stale.txt")
+	if err := os.MkdirAll(blockingDir, 0755); err != nil {
+		t.Fatalf("failed to create blocking directory: %v", err)
+	}
+	manifestPath := filepath.Join(tempDir, ".ign", model.IgnManifestFile)
+	if err := config.SaveIgnManifest(manifestPath, &model.IgnManifest{Files: []string{blockingDir}}); err != nil {
+		t.Fatalf("failed to save manifest: %v", err)
+	}
+
+	template := &model.Template{
+		RootPath: tempDir,
+		Config: model.IgnJson{
+			Name:      "test-template",
+			Version:   "2.0.0",
+			Hash:      testHash2,
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{{Path: "new.txt", Content: []byte("new content")}},
+	}
+	prep := &PrepareUpdateResult{
+		Template:      template,
+		IgnJson:       &template.Config,
+		ExistingVars:  map[string]interface{}{},
+		CurrentHash:   testHash1,
+		NewHash:       testHash2,
+		HashChanged:   true,
+		IgnConfigPath: filepath.Join(tempDir, ".ign", "ign.json"),
+		IgnVarPath:    filepath.Join(tempDir, ".ign", "ign-var.json"),
+		IgnConfig: &model.IgnConfig{
+			Template: model.TemplateSource{URL: "https://github.com/test/template"},
+			Hash:     testHash1,
+		},
+	}
+
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteAll,
+	})
+	if err == nil {
+		t.Fatal("CompleteUpdate expected cleanup error for stale directory")
+	}
+	if result == nil || result.FilesCreated != 1 {
+		t.Fatalf("CompleteUpdate result = %#v, want one created file", result)
+	}
+
+	manifest, err := config.LoadIgnManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("failed to load manifest after partial cleanup: %v", err)
+	}
+	if !slices.Contains(manifest.Files, filepath.Join(tempDir, "new.txt")) {
+		t.Fatalf("manifest files = %v, want generated file recorded", manifest.Files)
+	}
+	if !slices.Contains(manifest.Files, blockingDir) {
+		t.Fatalf("manifest files = %v, want failed cleanup path retained", manifest.Files)
 	}
 }
 

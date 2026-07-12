@@ -100,3 +100,57 @@ func TestRewind_RejectsManagedPathsOutsideOutputDir(t *testing.T) {
 		t.Fatalf(".ign should be preserved after rewind failure: %v", statErr)
 	}
 }
+
+func TestRewind_MissingManifestSkipsDifferentPreexistingFile(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	templateDir := filepath.Join(tempDir, "template")
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template directory: %v", err)
+	}
+	templateConfig := `{"name":"rewind-template","version":"1.0.0","hash":"` + testHash1 + `","variables":{}}`
+	if err := os.WriteFile(filepath.Join(templateDir, model.IgnTemplateConfigFile), []byte(templateConfig), 0644); err != nil {
+		t.Fatalf("failed to write template config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "README.md"), []byte("template content\n"), 0644); err != nil {
+		t.Fatalf("failed to write template README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "README.md"), []byte("user content\n"), 0644); err != nil {
+		t.Fatalf("failed to write user README: %v", err)
+	}
+
+	if err := os.MkdirAll(model.IgnConfigDir, 0755); err != nil {
+		t.Fatalf("failed to create .ign directory: %v", err)
+	}
+	if err := config.SaveIgnConfig(
+		filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile),
+		&model.IgnConfig{Template: model.TemplateSource{URL: templateDir, Ref: "main"}, Hash: testHash1},
+	); err != nil {
+		t.Fatalf("failed to save ign config: %v", err)
+	}
+	if err := config.SaveIgnVarJson(
+		filepath.Join(model.IgnConfigDir, model.IgnVarFile),
+		&model.IgnVarJson{Variables: map[string]interface{}{}},
+	); err != nil {
+		t.Fatalf("failed to save ign vars: %v", err)
+	}
+
+	result, err := Rewind(context.Background(), RewindOptions{OutputDir: tempDir})
+	if err != nil {
+		t.Fatalf("Rewind failed: %v", err)
+	}
+	if result.FilesRemoved != 0 {
+		t.Fatalf("FilesRemoved = %d, want 0", result.FilesRemoved)
+	}
+	if result.FilesSkipped != 1 {
+		t.Fatalf("FilesSkipped = %d, want 1", result.FilesSkipped)
+	}
+	content, err := os.ReadFile(filepath.Join(tempDir, "README.md"))
+	if err != nil {
+		t.Fatalf("failed to read README after rewind: %v", err)
+	}
+	if string(content) != "user content\n" {
+		t.Fatalf("README content = %q, want user content", content)
+	}
+}

@@ -97,7 +97,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		GitHubToken:   githubToken,
 	})
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Update preparation failed: %v", err))
 		return err
 	}
 
@@ -162,7 +161,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			printInfo("Please provide values for the following new variables:")
 			promptedVars, err := PromptForNewVariables(varsNeedingPrompt)
 			if err != nil {
-				printErrorMsg(fmt.Sprintf("Failed to collect variable values: %v", err))
 				return err
 			}
 			newVarValues = app.ApplyDefaults(newVarDefs, promptedVars)
@@ -183,7 +181,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			Verbose:       updateVerbose,
 		})
 		if err != nil {
-			printErrorMsg(fmt.Sprintf("Update preview failed: %v", err))
 			return err
 		}
 		printUpdateWritePreview(preview)
@@ -216,7 +213,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	})
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Update failed: %v", err))
 		return err
 	}
 

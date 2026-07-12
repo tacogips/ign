@@ -64,8 +64,5 @@ func init() {
 
 // printError prints an error message to stderr
 func printError(err error) {
-	if globalQuiet {
-		return
-	}
 	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 }

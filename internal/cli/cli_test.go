@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"errors"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -71,6 +74,36 @@ func TestValidateGitHubURL(t *testing.T) {
 				t.Errorf("ValidateGitHubURL() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPrintErrorIgnoresQuiet(t *testing.T) {
+	origQuiet := globalQuiet
+	origStderr := os.Stderr
+	defer func() {
+		globalQuiet = origQuiet
+		os.Stderr = origStderr
+	}()
+
+	readEnd, writeEnd, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create stderr pipe: %v", err)
+	}
+	os.Stderr = writeEnd
+	globalQuiet = true
+
+	printError(errors.New("boom"))
+	if err := writeEnd.Close(); err != nil {
+		t.Fatalf("failed to close stderr pipe: %v", err)
+	}
+	buf := make([]byte, 1024)
+	n, err := readEnd.Read(buf)
+	if err != nil {
+		t.Fatalf("failed to read stderr pipe: %v", err)
+	}
+	output := buf[:n]
+	if !strings.Contains(string(output), "Error: boom") {
+		t.Fatalf("stderr = %q, want error output", output)
 	}
 }
 

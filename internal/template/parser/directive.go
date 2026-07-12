@@ -75,7 +75,7 @@ var (
 	// The trick: content should match up to and including embedded directives
 	// Example: @ign-raw:@ign-var:name@@ has content "@ign-var:name@" and closes with final @
 	// We use non-greedy (.*?) followed by @ to capture content, then match the closing @
-	rawDirectivePattern = regexp.MustCompile(`@ign-raw:(.*@)@`)
+	rawDirectivePattern = regexp.MustCompile(`@ign-raw:(.*?@)@`)
 )
 
 // findDirectives scans input and returns all directive matches in order.

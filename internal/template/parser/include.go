@@ -98,11 +98,6 @@ func processIncludes(ctx context.Context, input []byte, pctx *ParseContext) ([]b
 // - Relative paths: relative to current file's directory
 // - Absolute paths (starting with /): relative to template root
 func resolveIncludePath(includePath, templateRoot, currentFile string) (string, error) {
-	// Validate path doesn't contain ..
-	if strings.Contains(includePath, "..") {
-		return "", fmt.Errorf("include path contains '..': %s", includePath)
-	}
-
 	var resolvedPath string
 
 	if filepath.IsAbs(includePath) || strings.HasPrefix(includePath, "/") {
@@ -110,15 +105,19 @@ func resolveIncludePath(includePath, templateRoot, currentFile string) (string, 
 		resolvedPath = filepath.Join(templateRoot, strings.TrimPrefix(includePath, "/"))
 	} else {
 		// Relative path (from current file's directory)
+		if !filepath.IsAbs(currentFile) {
+			currentFile = filepath.Join(templateRoot, currentFile)
+		}
 		currentDir := filepath.Dir(currentFile)
 		resolvedPath = filepath.Join(currentDir, includePath)
 	}
 
-	// Clean the path
 	resolvedPath = filepath.Clean(resolvedPath)
+	templateRoot = filepath.Clean(templateRoot)
 
 	// Verify the resolved path is within template root
-	if !strings.HasPrefix(resolvedPath, templateRoot) {
+	rel, err := filepath.Rel(templateRoot, resolvedPath)
+	if err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("include path escapes template root: %s", includePath)
 	}
 

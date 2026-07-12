@@ -66,7 +66,7 @@ ign init /absolute/path/to/template
 | Condition | Action |
 |-----------|--------|
 | `.ign/` does not exist | Create `.ign/ign-var.json` |
-| `.ign/` exists | Do nothing (skip) |
+| `.ign/` exists | Return an error |
 | `.ign/` exists + `--force` | Backup existing config, then reinitialize |
 
 **Backup naming:** When `--force` is used, existing `ign-var.json` is backed up as `ign-var.json.bk1`, `ign-var.json.bk2`, etc.
@@ -97,7 +97,7 @@ ign checkout github.com/owner/repo --verbose    # Show detailed processing info
 ign checkout github.com/owner/repo --var app_name=my-app --var port=8080
 ```
 
-If `.ign/` already exists, checkout does nothing unless `--force` is used.
+If `.ign/` already exists, checkout returns an error unless `--force` is used.
 Variables supplied with `--var` are used for generation and saved to
 `.ign/ign-var.json`. Missing variables are still prompted interactively.
 
@@ -175,7 +175,9 @@ ign rewind ./my-project
 ```
 
 If `.ign/ign-files.json` exists, ign uses it directly. Otherwise it falls back to the
-currently checked-out template and variables to infer the managed files.
+currently checked-out template and variables to infer the managed files. During
+that fallback, ign removes only files whose current content matches what the
+template would generate and skips files with different user-owned content.
 
 ### `ign switch <url-or-path> [output-path]`
 
@@ -184,9 +186,23 @@ Replace the current checked-out template with a new one.
 ```bash
 ign switch github.com/owner/new-template
 ign switch ./new-local-template ./my-project
+ign switch github.com/owner/new-template --var app_name=my-app --var port=8080
 ```
 
 `ign switch` is equivalent to `ign rewind` followed by `ign checkout`.
+It supports the same repeatable `--var`/`-V` variable assignment syntax as
+`ign checkout`. Template preparation, variable validation, and prompting happen
+before the current `.ign/` directory is replaced, so failed input does not leave
+a partial replacement configuration.
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--ref` | `-r` | Git branch, tag, or commit SHA (default: main) |
+| `--force` | `-f` | Overwrite existing files when applying the new template |
+| `--verbose` | `-v` | Show detailed processing information |
+| `--var` | `-V` | Set a template variable as `key=value` (repeatable) |
 
 ### `ign template check [PATH]`
 
@@ -301,9 +317,16 @@ String default values support `{current_dir}` as a placeholder for the output di
 | Directive | Usage |
 |-----------|-------|
 | `@ign-if:VAR@...@ign-endif@` | Conditional block (bool) |
-| `@ign-include:PATH@` | Include another file |
+| `@ign-include:PATH@` | Include another file, resolved relative to the including file and contained within the template root |
 | `@ign-raw:CONTENT@` | Output literally (escape) |
 | `@ign-comment:TEXT@` | Template-only comment (removed) |
+
+## GitHub Template URLs
+
+ign accepts GitHub URLs in shorthand, HTTPS, SSH, and `.git` forms. URLs such
+as `https://github.com/owner/repo/tree/branch-name` select `branch-name` as the
+template ref when no subdirectory is present. Branch names that contain `/` are
+ambiguous in `/tree/` URLs; use `--ref` for those refs.
 
 ## Private Repos
 

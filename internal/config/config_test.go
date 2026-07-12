@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/tacogips/ign/internal/template/model"
@@ -340,6 +341,29 @@ func TestSaveIgnVarJson(t *testing.T) {
 
 	if loaded.Variables["name"] != ignVar.Variables["name"] {
 		t.Errorf("Variables mismatch after save/load")
+	}
+}
+
+func TestSaveIgnConfigUsesAtomicTempFileCleanup(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "build", "ign.json")
+	ignConfig := &model.IgnConfig{
+		Template: model.TemplateSource{URL: "https://github.com/owner/repo"},
+		Hash:     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	}
+
+	if err := SaveIgnConfig(configPath, ignConfig); err != nil {
+		t.Fatalf("SaveIgnConfig failed: %v", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Dir(configPath))
+	if err != nil {
+		t.Fatalf("ReadDir failed: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".ign.json.tmp-") {
+			t.Fatalf("temporary atomic write file was not cleaned up: %s", entry.Name())
+		}
 	}
 }
 

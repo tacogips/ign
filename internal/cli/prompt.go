@@ -128,6 +128,9 @@ func promptString(name string, varDef model.VarDef, help string) (string, error)
 		validators = append(validators, survey.Required)
 	}
 	if varDef.Pattern != "" {
+		if _, err := regexp.Compile(varDef.Pattern); err != nil {
+			return "", fmt.Errorf("variable %q has invalid pattern %q: %w", name, varDef.Pattern, err)
+		}
 		validators = append(validators, matchPattern(varDef.Pattern, "value must match pattern: "+varDef.Pattern))
 	}
 

@@ -301,9 +301,17 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			debug.Debug("[github] Archive root directory: %s", rootDir)
 		}
 		relPath := parts[1]
+		if relPath == "" {
+			continue
+		}
 
 		// Construct target path
-		target := filepath.Join(extractDir, relPath)
+		target, err := safeArchiveTarget(extractDir, relPath)
+		if err != nil {
+			_ = os.RemoveAll(extractDir)
+			debug.Debug("[github] Unsafe archive entry %s: %v", header.Name, err)
+			return "", err
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -347,6 +355,12 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 			_ = outFile.Close()
 			fileCount++
 		case tar.TypeSymlink:
+			if err := validateArchiveSymlinkTarget(extractDir, target, header.Linkname); err != nil {
+				_ = os.RemoveAll(extractDir)
+				debug.Debug("[github] Unsafe archive symlink %s -> %s: %v", target, header.Linkname, err)
+				return "", err
+			}
+
 			// Create parent directory if needed
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				_ = os.RemoveAll(extractDir)
@@ -373,6 +387,34 @@ func (p *GitHubProvider) extractArchive(archivePath string) (string, error) {
 
 	debug.Debug("[github] Extracted %d files and %d directories", fileCount, dirCount)
 	return extractDir, nil
+}
+
+func safeArchiveTarget(extractDir, relPath string) (string, error) {
+	if relPath == "" {
+		return "", fmt.Errorf("archive entry path is empty")
+	}
+	if filepath.IsAbs(relPath) {
+		return "", fmt.Errorf("archive entry path is absolute: %s", relPath)
+	}
+	target := filepath.Clean(filepath.Join(extractDir, relPath))
+	if !isSubPath(extractDir, target) {
+		return "", fmt.Errorf("archive entry escapes extraction directory: %s", relPath)
+	}
+	return target, nil
+}
+
+func validateArchiveSymlinkTarget(extractDir, target, linkName string) error {
+	if linkName == "" {
+		return fmt.Errorf("archive symlink target is empty")
+	}
+	if filepath.IsAbs(linkName) {
+		return fmt.Errorf("archive symlink target is absolute: %s", linkName)
+	}
+	resolved := filepath.Clean(filepath.Join(filepath.Dir(target), linkName))
+	if !isSubPath(extractDir, resolved) {
+		return fmt.Errorf("archive symlink target escapes extraction directory: %s", linkName)
+	}
+	return nil
 }
 
 // removeExistingArchiveEntry removes an existing filesystem entry at path.

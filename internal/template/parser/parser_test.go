@@ -201,6 +201,12 @@ func TestRawDirective(t *testing.T) {
 			vars:     map[string]interface{}{"name": "myapp"},
 			expected: "Project: myapp, Syntax: @ign-var:x@",
 		},
+		{
+			name:     "two raw directives on one line",
+			input:    "@ign-raw:@a@@ mid @ign-raw:@b@@",
+			vars:     map[string]interface{}{},
+			expected: "@a@ mid @b@",
+		},
 	}
 
 	parser := NewParser()
@@ -343,6 +349,41 @@ func TestIncludeDirective(t *testing.T) {
 	expected := "// Header: myapp\n\ncode here"
 	if string(result) != expected {
 		t.Errorf("expected %q, got %q", expected, string(result))
+	}
+}
+
+func TestIncludeDirectiveRejectsSiblingPrefixEscape(t *testing.T) {
+	tmpDir := t.TempDir()
+	templateRoot := filepath.Join(tmpDir, "template")
+	sibling := filepath.Join(tmpDir, "template-other")
+	if err := os.MkdirAll(templateRoot, 0755); err != nil {
+		t.Fatalf("failed to create template root: %v", err)
+	}
+	if err := os.MkdirAll(sibling, 0755); err != nil {
+		t.Fatalf("failed to create sibling dir: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(templateRoot, "sub"), 0755); err != nil {
+		t.Fatalf("failed to create template subdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sibling, "secret.txt"), []byte("secret"), 0644); err != nil {
+		t.Fatalf("failed to write sibling include: %v", err)
+	}
+
+	pctx := &ParseContext{
+		Variables:    testVars(map[string]interface{}{}),
+		IncludeDepth: 0,
+		IncludeStack: []string{},
+		TemplateRoot: templateRoot,
+		CurrentFile:  filepath.Join(templateRoot, "sub", "main.txt"),
+	}
+
+	parser := NewParser()
+	_, err := parser.ParseWithContext(context.Background(), []byte("@ign-include:../../template-other/secret.txt@"), pctx)
+	if err == nil {
+		t.Fatal("expected include escape error")
+	}
+	if !strings.Contains(err.Error(), "escapes template root") {
+		t.Fatalf("error = %v, want template root escape rejection", err)
 	}
 }
 

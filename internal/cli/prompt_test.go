@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/tacogips/ign/internal/template/model"
@@ -15,6 +16,19 @@ func TestPromptForVariables_NilConfig(t *testing.T) {
 	}
 	if len(vars) != 0 {
 		t.Fatalf("PromptForVariables(nil) = %v, want empty map", vars)
+	}
+}
+
+func TestPromptStringInvalidPatternFailsBeforePrompt(t *testing.T) {
+	_, err := promptString("name", model.VarDef{
+		Type:    model.VarTypeString,
+		Pattern: "[",
+	}, "")
+	if err == nil {
+		t.Fatal("promptString expected invalid pattern error")
+	}
+	if !strings.Contains(err.Error(), `variable "name" has invalid pattern`) {
+		t.Fatalf("error = %v, want variable invalid pattern message", err)
 	}
 }
 

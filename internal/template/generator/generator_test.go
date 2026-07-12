@@ -40,6 +40,48 @@ func TestIsSpecialFile(t *testing.T) {
 	}
 }
 
+func TestGeneratorResolvesRelativeIncludeFromTemplateFileDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	template := &model.Template{
+		RootPath: tempDir,
+		Config: model.IgnJson{
+			Name:      "include-template",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: "_includes/header.txt", Content: []byte("included\n")},
+			{Path: "cmd/main.txt", Content: []byte("@ign-include:../_includes/header.txt@body\n")},
+		},
+	}
+	if err := os.MkdirAll(filepath.Join(tempDir, "_includes"), 0755); err != nil {
+		t.Fatalf("failed to create template include dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "_includes", "header.txt"), []byte("included\n"), 0644); err != nil {
+		t.Fatalf("failed to write include file: %v", err)
+	}
+
+	gen := NewGenerator()
+	result, err := gen.DryRun(context.Background(), GenerateOptions{
+		Template:  template,
+		Variables: parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir: filepath.Join(tempDir, "out"),
+	})
+	if err != nil {
+		t.Fatalf("DryRun failed: %v", err)
+	}
+
+	for _, file := range result.DryRunFiles {
+		if filepath.Base(file.Path) == "main.txt" {
+			if string(file.Content) != "included\nbody\n" {
+				t.Fatalf("main content = %q, want included content", file.Content)
+			}
+			return
+		}
+	}
+	t.Fatal("main.txt dry-run output not found")
+}
+
 // TestMatchesPattern tests glob pattern matching.
 func TestMatchesPattern(t *testing.T) {
 	tests := []struct {

@@ -38,6 +38,29 @@ func TestParseGitHubURL(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "https URL tree branch only",
+			url:  "https://github.com/owner/repo/tree/develop",
+			want: &model.TemplateRef{
+				Provider: "github",
+				Owner:    "owner",
+				Repo:     "repo",
+				Path:     "",
+				Ref:      "develop",
+			},
+			wantErr: false,
+		},
+		{
+			name: "https URL trims git suffix",
+			url:  "https://github.com/owner/repo.git",
+			want: &model.TemplateRef{
+				Provider: "github",
+				Owner:    "owner",
+				Repo:     "repo",
+				Ref:      "main",
+			},
+			wantErr: false,
+		},
+		{
 			name: "git@ SSH URL",
 			url:  "git@github.com:owner/repo.git",
 			want: &model.TemplateRef{

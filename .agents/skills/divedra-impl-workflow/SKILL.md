@@ -95,6 +95,18 @@ Because the workflow ends with commit/push, do not use it when the user has
 explicitly asked to avoid workflow-driven commits or wants manual local edits
 only.
 
+## Documentation Refresh Gate
+
+In full `issue-resolution` mode, after implementation review accepts the code,
+refresh user-facing documentation before commit-message generation. Always
+review `README.md` and this workflow skill, and update any other README or
+workflow skill whose documented behavior changed.
+
+For defect-remediation work, the docs refresh should reflect shipped behavior
+such as CLI exit/error semantics, supported flags, safety guarantees, and
+verification commands. Keep this gate documentation-only: do not reopen design
+or implementation scope after Step 7 acceptance.
+
 ## Reporting
 
 After the workflow finishes, report:

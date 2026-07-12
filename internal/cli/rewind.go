@@ -43,6 +43,9 @@ func runRewind(cmd *cobra.Command, args []string) error {
 		if result.FilesMissing > 0 {
 			printInfo(fmt.Sprintf("  Missing: %d files (already absent)", result.FilesMissing))
 		}
+		if result.FilesSkipped > 0 {
+			printInfo(fmt.Sprintf("  Skipped: %d files (content differs)", result.FilesSkipped))
+		}
 		if result.DirectoriesRemoved > 0 {
 			printInfo(fmt.Sprintf("  Cleaned: %d empty directories", result.DirectoriesRemoved))
 		}
@@ -55,7 +58,6 @@ func runRewind(cmd *cobra.Command, args []string) error {
 	}
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Rewind failed: %v", err))
 		return err
 	}
 
