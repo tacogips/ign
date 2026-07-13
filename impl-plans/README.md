@@ -4,5 +4,9 @@ Implementation plans for this repository live here. Track status in PROGRESS.jso
 
 ## Plans
 
+- `impl-plans/ign-update-ref.md`: completed plan for adding non-destructive `ign update --ref <ref>` retargeting.
+- `impl-plans/ign-vars.md`: completed plan for the `ign vars` variable inspection command.
+- `impl-plans/active/verified-defect-remediation.md`: completed plan for fixing
+  verified defects from the full-codebase review of `ign`.
 - `impl-plans/selective-overwrite.md`: completed selective-overwrite implementation plan.
 - `impl-plans/update-overwrite-cleanup-review.md`: completed follow-up plan for reviewing and improving stale managed file cleanup during update overwrite.

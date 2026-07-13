@@ -538,7 +538,7 @@ func updateIgnJson(path string, result *UpdateTemplateResult, existing *model.Ig
 		return NewValidationError("failed to marshal ign-template.json", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := config.WriteFileAtomic(path, data, 0644); err != nil {
 		return NewValidationError("failed to write ign-template.json", err)
 	}
 

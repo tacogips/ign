@@ -1,6 +1,176 @@
 {
-  "lastUpdated": "2026-05-31T13:38:28Z",
+  "lastUpdated": "2026-07-13T00:00:00Z",
   "plans": {
+    "ign-vars": {
+      "path": "impl-plans/ign-vars.md",
+      "phase": 2,
+      "status": "Completed",
+      "updated": "2026-07-13",
+      "tasks": {
+        "TASK-001": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-002": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-003": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-004": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-003"
+          ]
+        },
+        "TASK-005": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-003"
+          ]
+        },
+        "TASK-006": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001",
+            "TASK-002",
+            "TASK-003",
+            "TASK-004",
+            "TASK-005"
+          ]
+        }
+      }
+    },
+    "ign-update-ref": {
+      "path": "impl-plans/ign-update-ref.md",
+      "phase": 2,
+      "status": "Completed",
+      "updated": "2026-07-13",
+      "tasks": {
+        "TASK-001": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-002": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-003": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-004": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-003"
+          ]
+        },
+        "TASK-005": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-002",
+            "TASK-004"
+          ]
+        },
+        "TASK-006": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-004"
+          ]
+        },
+        "TASK-007": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-008": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-005",
+            "TASK-006",
+            "TASK-007"
+          ]
+        }
+      }
+    },
+    "verified-defect-remediation": {
+      "path": "impl-plans/active/verified-defect-remediation.md",
+      "phase": 2,
+      "status": "Completed",
+      "updated": "2026-07-12",
+      "tasks": {
+        "TASK-001": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-002": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-003": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-004": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-005": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-006": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-007": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001",
+            "TASK-002",
+            "TASK-003",
+            "TASK-004",
+            "TASK-005",
+            "TASK-006"
+          ]
+        },
+        "TASK-008": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-007"
+          ]
+        }
+      }
+    },
     "selective-overwrite": {
       "path": "impl-plans/selective-overwrite.md",
       "phase": 2,

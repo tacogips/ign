@@ -64,7 +64,6 @@ func init() {
 func runCheckout(cmd *cobra.Command, args []string) error {
 	url := args[0]
 	if err := ValidateVariableAssignmentSyntax(checkoutVars); err != nil {
-		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
 		return err
 	}
 
@@ -81,9 +80,7 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(configDir); err == nil {
 		configExists = true
 		if !checkoutForce {
-			printInfo("Configuration already exists at .ign")
-			printInfo("(use --force to backup and reinitialize)")
-			return nil
+			return fmt.Errorf("configuration already exists at %s (use --force to backup and reinitialize)", configDir)
 		}
 		printWarning("Force mode enabled - will backup existing configuration")
 	}
@@ -108,21 +105,18 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		SkipConfigSetup: true,
 	})
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Preparation failed: %v", err))
 		return err
 	}
 
 	resolvedIgnJSON := templatedefaults.ResolveIgnJSON(prepResult.IgnJson, outputPath)
 	providedVars, err := ParseVariableAssignments(checkoutVars, resolvedIgnJSON.Variables)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Variable parsing failed: %v", err))
 		return err
 	}
 
 	// Prompt only for variables that were not supplied by flag.
 	vars, err := PromptForVariablesWithProvided(resolvedIgnJSON, providedVars)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Variable collection failed: %v", err))
 		return err
 	}
 
@@ -137,7 +131,6 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 	}
 	preparedInputs, err := app.PrepareCompleteCheckoutInputs(completeOpts)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
 		return err
 	}
 	completeOpts.PreparedInputs = preparedInputs
@@ -147,7 +140,6 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 		printInfo("[DRY RUN] Would generate project from template")
 	} else {
 		if err := app.PrepareCheckoutConfigDir(configExists); err != nil {
-			printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
 			return err
 		}
 		printInfo("Generating project from template...")
@@ -155,7 +147,6 @@ func runCheckout(cmd *cobra.Command, args []string) error {
 
 	result, err := app.CompleteCheckout(cmd.Context(), completeOpts)
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Checkout failed: %v", err))
 		return err
 	}
 

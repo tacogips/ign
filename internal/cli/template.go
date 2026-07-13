@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
@@ -151,7 +150,6 @@ func runTemplateCheck(cmd *cobra.Command, args []string) error {
 	})
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Template check failed: %v", err))
 		return err
 	}
 
@@ -185,8 +183,7 @@ func runTemplateCheck(cmd *cobra.Command, args []string) error {
 		printSeparator()
 		printErrorMsg(fmt.Sprintf("Validation failed: %d file(s) with errors", result.FilesWithErrors))
 
-		// Exit with error code
-		os.Exit(1)
+		return fmt.Errorf("template validation failed: %d file(s) with errors", result.FilesWithErrors)
 	} else {
 		printSuccess("All templates are valid")
 	}
@@ -211,7 +208,6 @@ func runTemplateNew(cmd *cobra.Command, args []string) error {
 	// Get available types for error message
 	availableTypes, err := app.AvailableScaffoldTypes()
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Failed to list scaffold types: %v", err))
 		return err
 	}
 
@@ -226,7 +222,6 @@ func runTemplateNew(cmd *cobra.Command, args []string) error {
 	})
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Failed to create template: %v", err))
 		return err
 	}
 
@@ -276,7 +271,6 @@ func runTemplateUpdate(cmd *cobra.Command, args []string) error {
 	})
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Failed to update template: %v", err))
 		return err
 	}
 

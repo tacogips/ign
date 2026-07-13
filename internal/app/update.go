@@ -13,7 +13,6 @@ import (
 	"github.com/tacogips/ign/internal/debug"
 	"github.com/tacogips/ign/internal/template/generator"
 	"github.com/tacogips/ign/internal/template/model"
-	"github.com/tacogips/ign/internal/template/provider"
 )
 
 // UpdateOptions contains options for the update command.
@@ -30,6 +29,8 @@ type UpdateOptions struct {
 	Verbose bool
 	// GitHubToken is the GitHub personal access token (optional).
 	GitHubToken string
+	// TargetRef overrides the stored template ref for this update.
+	TargetRef string
 }
 
 // PrepareUpdateResult contains the result of update preparation.
@@ -56,6 +57,16 @@ type PrepareUpdateResult struct {
 	IgnVarPath string
 	// IgnConfig is the existing ign.json configuration.
 	IgnConfig *model.IgnConfig
+	// PreviousRef is the ref stored before applying an update ref override.
+	PreviousRef string
+	// RequestedRef is the requested ref override.
+	RequestedRef string
+	// EffectiveRef is the ref used to fetch the template.
+	EffectiveRef string
+	// RefOverrideRequested indicates whether update was called with a ref override.
+	RefOverrideRequested bool
+	// RefChanged indicates whether the requested ref differs from the stored ref.
+	RefChanged bool
 }
 
 // UpdateResult contains the results of the update operation.
@@ -86,6 +97,10 @@ type UpdateResult struct {
 	DryRunFiles []DryRunFile
 	// Directories contains directories that would be created (dry-run only).
 	Directories []string
+	// RefChanged indicates whether the stored template ref changed.
+	RefChanged bool
+	// RefOverrideRequested indicates whether update was called with a ref override.
+	RefOverrideRequested bool
 }
 
 // PrepareUpdate prepares for update by checking if .ign exists and fetching template.
@@ -101,6 +116,7 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	debug.DebugValue("[app] Overwrite", opts.Overwrite)
 	debug.DebugValue("[app] DryRun", opts.DryRun)
 	debug.DebugValue("[app] Verbose", opts.Verbose)
+	debug.DebugValue("[app] TargetRef", opts.TargetRef)
 
 	// Step 1: Check if .ign directory exists
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
@@ -125,6 +141,15 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	debug.DebugValue("[app] Template URL", ignConfig.Template.URL)
 	debug.DebugValue("[app] Current hash", ignConfig.Hash)
 
+	previousRef := ignConfig.Template.Ref
+	requestedRef := opts.TargetRef
+	refOverrideRequested := requestedRef != ""
+	if refOverrideRequested {
+		if err := ValidateGitRef(requestedRef); err != nil {
+			return nil, NewValidationError("invalid update ref", err)
+		}
+	}
+
 	// Step 3: Load existing variables
 	debug.Debug("[app] Loading existing ign-var.json")
 	ignVar, err := config.LoadIgnVarJson(ignVarPath)
@@ -143,37 +168,20 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 
 	// Step 4: Create provider and fetch template
 	templateSource := ignConfig.Template
-	normalizedURL := NormalizeTemplateURL(templateSource.URL)
-	debug.DebugValue("[app] Normalized template URL", normalizedURL)
-
-	debug.Debug("[app] Creating template provider")
-	prov, err := provider.NewProviderWithToken(normalizedURL, opts.GitHubToken)
-	if err != nil {
-		debug.Debug("[app] Failed to create provider: %v", err)
-		return nil, NewCheckoutError("failed to create provider", err)
-	}
-
-	debug.Debug("[app] Resolving template URL")
-	templateRef, err := prov.Resolve(normalizedURL)
-	if err != nil {
-		debug.Debug("[app] Failed to resolve template URL: %v", err)
-		return nil, NewCheckoutError("failed to resolve template URL", err)
-	}
-
-	// Use ref and path from configuration
-	if templateSource.Ref != "" {
-		templateRef.Ref = templateSource.Ref
-	}
-	if templateSource.Path != "" {
-		templateRef.Path = templateSource.Path
+	if refOverrideRequested {
+		templateSource.Ref = requestedRef
 	}
 
 	debug.Debug("[app] Fetching template from provider")
-	template, err := prov.Fetch(ctx, templateRef)
+	fetched, err := fetchTrackedTemplate(ctx, trackedTemplateFetchOptions{
+		Source:      templateSource,
+		GitHubToken: opts.GitHubToken,
+	})
 	if err != nil {
-		debug.Debug("[app] Failed to fetch template: %v", err)
-		return nil, NewTemplateFetchError("failed to fetch template", err)
+		return nil, err
 	}
+	template := fetched.Template
+	effectiveRef := fetched.TemplateRef.Ref
 	debug.Debug("[app] Template fetched successfully")
 	debug.DebugValue("[app] Template name", template.Config.Name)
 	debug.DebugValue("[app] Template version", template.Config.Version)
@@ -183,18 +191,14 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	newHash := template.Config.Hash
 	debug.DebugValue("[app] Template hash from ign-template.json", newHash)
 
-	// Validate hash is present
-	if newHash == "" {
-		debug.Debug("[app] Template hash is missing in ign-template.json")
-		return nil, NewValidationError(
-			"template is missing hash in ign-template.json.\n"+
-				"The template author needs to run 'ign template update' to generate the hash.",
-			nil,
-		)
+	if err := validateTemplateHash(newHash); err != nil {
+		return nil, err
 	}
 
 	hashChanged := newHash != ignConfig.Hash
+	refChanged := refOverrideRequested && requestedRef != previousRef
 	debug.DebugValue("[app] Hash changed", hashChanged)
+	debug.DebugValue("[app] Ref changed", refChanged)
 
 	// Step 6: Find new and removed variables
 	newVars, removedVars := findVariableChanges(existingVars, template.Config.Variables)
@@ -202,17 +206,22 @@ func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResul
 	debug.DebugValue("[app] Removed variables", removedVars)
 
 	result := &PrepareUpdateResult{
-		Template:      template,
-		IgnJson:       &template.Config,
-		ExistingVars:  existingVars,
-		NewVars:       newVars,
-		RemovedVars:   removedVars,
-		CurrentHash:   ignConfig.Hash,
-		NewHash:       newHash,
-		HashChanged:   hashChanged,
-		IgnConfigPath: ignConfigPath,
-		IgnVarPath:    ignVarPath,
-		IgnConfig:     ignConfig,
+		Template:             template,
+		IgnJson:              &template.Config,
+		ExistingVars:         existingVars,
+		NewVars:              newVars,
+		RemovedVars:          removedVars,
+		CurrentHash:          ignConfig.Hash,
+		NewHash:              newHash,
+		HashChanged:          hashChanged,
+		IgnConfigPath:        ignConfigPath,
+		IgnVarPath:           ignVarPath,
+		IgnConfig:            ignConfig,
+		PreviousRef:          previousRef,
+		RequestedRef:         requestedRef,
+		EffectiveRef:         effectiveRef,
+		RefOverrideRequested: refOverrideRequested,
+		RefChanged:           refChanged,
 	}
 
 	debug.Debug("[app] PrepareUpdate completed successfully")
@@ -315,36 +324,19 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		return nil, err
 	}
 
-	// Update configuration files (unless dry-run)
-	if !opts.DryRun {
-		// Update ign.json with new hash
-		debug.Debug("[app] Updating ign.json with new hash")
-		prep.IgnConfig.Hash = prep.NewHash
-		prep.IgnConfig.Metadata = &model.FileMetadata{
-			GeneratedAt:     time.Now(),
-			GeneratedBy:     "ign update",
-			TemplateName:    prep.IgnJson.Name,
-			TemplateVersion: prep.IgnJson.Version,
-			IgnVersion:      build.Version(),
+	if shouldCompleteUpdateConfigOnly(prep, opts) {
+		if !opts.DryRun {
+			if err := saveCompleteUpdateConfigOnlyArtifacts(prep, rawVars); err != nil {
+				return nil, err
+			}
 		}
-
-		if err := config.SaveIgnConfig(prep.IgnConfigPath, prep.IgnConfig); err != nil {
-			debug.Debug("[app] Failed to save ign.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign.json", err)
-		}
-		debug.Debug("[app] ign.json updated successfully")
-
-		// Update ign-var.json with merged variables (no metadata as it's already in ign.json)
-		debug.Debug("[app] Updating ign-var.json with merged variables")
-		ignVarJson := &model.IgnVarJson{
-			Variables: rawVars,
-		}
-
-		if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {
-			debug.Debug("[app] Failed to save ign-var.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign-var.json", err)
-		}
-		debug.Debug("[app] ign-var.json updated successfully")
+		return &UpdateResult{
+			HashChanged:          prep.HashChanged,
+			NewVariables:         prep.NewVars,
+			RemovedVariables:     prep.RemovedVars,
+			RefChanged:           prep.RefChanged,
+			RefOverrideRequested: prep.RefOverrideRequested,
+		}, nil
 	}
 
 	// Create generator
@@ -363,6 +355,14 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	// Generate or dry run
 	var genResult *generator.GenerateResult
+	var rollback *checkoutGenerationRollback
+	if !opts.DryRun {
+		rollback, err = prepareCheckoutGenerationRollback(ctx, gen, genOpts)
+		if err != nil {
+			return nil, err
+		}
+		defer rollback.cleanup()
+	}
 	if opts.DryRun {
 		debug.Debug("[app] Starting dry run generation")
 		genResult, err = gen.DryRun(ctx, genOpts)
@@ -373,12 +373,15 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 
 	if err != nil {
 		debug.Debug("[app] Generation failed: %v", err)
+		if rollback != nil {
+			rollback.rollback(genResult)
+		}
 		return nil, NewCheckoutError("generation failed", err)
 	}
 	debug.Debug("[app] Generation completed successfully")
 
 	manifestPath := manifestPathFromConfigPath(prep.IgnConfigPath)
-	removedManagedFiles, err := cleanupRemovedManagedFilesForUpdate(ctx, cleanupRemovedManagedFilesOptions{
+	removedManagedFiles, cleanupErr := cleanupRemovedManagedFilesForUpdate(ctx, cleanupRemovedManagedFilesOptions{
 		ManifestPath:   manifestPath,
 		OutputDir:      opts.OutputDir,
 		Template:       prep.Template,
@@ -387,31 +390,31 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		Overwrite:      opts.Overwrite,
 		DryRun:         opts.DryRun,
 	})
-	if err != nil {
-		debug.Debug("[app] Failed to remove stale managed files: %v", err)
-		return nil, NewCheckoutError("failed to remove files no longer present in template", err)
+	if cleanupErr != nil {
+		debug.Debug("[app] Failed to remove stale managed files: %v", cleanupErr)
 	}
 
 	if !opts.DryRun {
-		if err := saveManifestFromGenerateResultExcluding(manifestPath, genResult, removedManagedFiles.RemovedCanonicalPaths); err != nil {
-			debug.Debug("[app] Failed to save ign-files.json: %v", err)
-			return nil, NewCheckoutError("failed to save ign-files.json", err)
+		if err := saveCompleteUpdateArtifacts(prep, rawVars, genResult, removedManagedFiles, rollback); err != nil {
+			return nil, err
 		}
 	}
 
 	// Build result
 	result := &UpdateResult{
-		HashChanged:      prep.HashChanged,
-		NewVariables:     prep.NewVars,
-		RemovedVariables: prep.RemovedVars,
-		FilesCreated:     genResult.FilesCreated,
-		FilesSkipped:     genResult.FilesSkipped,
-		FilesOverwritten: genResult.FilesOverwritten,
-		FilesDeleted:     removedManagedFiles.FilesDeleted,
-		Errors:           genResult.Errors,
-		Files:            genResult.Files,
-		DeletedFiles:     removedManagedFiles.DeletedFiles,
-		Directories:      genResult.Directories,
+		HashChanged:          prep.HashChanged,
+		NewVariables:         prep.NewVars,
+		RemovedVariables:     prep.RemovedVars,
+		FilesCreated:         genResult.FilesCreated,
+		FilesSkipped:         genResult.FilesSkipped,
+		FilesOverwritten:     genResult.FilesOverwritten,
+		FilesDeleted:         removedManagedFiles.FilesDeleted,
+		Errors:               genResult.Errors,
+		Files:                genResult.Files,
+		DeletedFiles:         removedManagedFiles.DeletedFiles,
+		Directories:          genResult.Directories,
+		RefChanged:           prep.RefChanged,
+		RefOverrideRequested: prep.RefOverrideRequested,
 	}
 
 	// Convert dry-run files
@@ -429,7 +432,112 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 	}
 
 	debug.Debug("[app] CompleteUpdate workflow completed successfully")
+	if cleanupErr != nil {
+		return result, NewCheckoutError("failed to remove files no longer present in template", cleanupErr)
+	}
 	return result, nil
+}
+
+func shouldCompleteUpdateConfigOnly(prep *PrepareUpdateResult, opts CompleteUpdateOptions) bool {
+	return prep.RefChanged && !prep.HashChanged && !opts.Overwrite
+}
+
+func saveCompleteUpdateArtifacts(prep *PrepareUpdateResult, rawVars map[string]interface{}, genResult *generator.GenerateResult, removedManagedFiles *cleanupRemovedManagedFilesResult, rollback *checkoutGenerationRollback) error {
+	if removedManagedFiles == nil {
+		removedManagedFiles = &cleanupRemovedManagedFilesResult{}
+	}
+
+	ignConfigSnapshot, err := rollback.snapshotPath(prep.IgnConfigPath)
+	if err != nil {
+		rollback.rollback(genResult)
+		return NewCheckoutError("failed to prepare ign.json rollback", err)
+	}
+	ignVarSnapshot, err := rollback.snapshotPath(prep.IgnVarPath)
+	if err != nil {
+		rollback.rollback(genResult)
+		return NewCheckoutError("failed to prepare ign-var.json rollback", err)
+	}
+	manifestPath := manifestPathFromConfigPath(prep.IgnConfigPath)
+	manifestSnapshot, err := rollback.snapshotPath(manifestPath)
+	if err != nil {
+		rollback.rollback(genResult)
+		return NewCheckoutError("failed to prepare ign-files.json rollback", err)
+	}
+
+	if err := saveManifestFromGenerateResultExcluding(manifestPath, genResult, removedManagedFiles.RemovedCanonicalPaths); err != nil {
+		debug.Debug("[app] Failed to save ign-files.json: %v", err)
+		rollback.rollback(genResult)
+		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
+		return NewCheckoutError("failed to save ign-files.json", err)
+	}
+
+	applyCompleteUpdateConfig(prep)
+	if err := config.SaveIgnConfig(prep.IgnConfigPath, prep.IgnConfig); err != nil {
+		debug.Debug("[app] Failed to save ign.json: %v", err)
+		rollback.rollback(genResult)
+		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
+		return NewCheckoutError("failed to save ign.json", err)
+	}
+
+	ignVarJson := &model.IgnVarJson{Variables: rawVars}
+	if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {
+		debug.Debug("[app] Failed to save ign-var.json: %v", err)
+		rollback.rollback(genResult)
+		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
+		return NewCheckoutError("failed to save ign-var.json", err)
+	}
+
+	return nil
+}
+
+func saveCompleteUpdateConfigOnlyArtifacts(prep *PrepareUpdateResult, rawVars map[string]interface{}) error {
+	rollback := &checkoutGenerationRollback{}
+	defer rollback.cleanup()
+
+	ignConfigSnapshot, err := rollback.snapshotPath(prep.IgnConfigPath)
+	if err != nil {
+		return NewCheckoutError("failed to prepare ign.json rollback", err)
+	}
+	ignVarSnapshot, err := rollback.snapshotPath(prep.IgnVarPath)
+	if err != nil {
+		return NewCheckoutError("failed to prepare ign-var.json rollback", err)
+	}
+
+	applyCompleteUpdateConfig(prep)
+	if err := config.SaveIgnConfig(prep.IgnConfigPath, prep.IgnConfig); err != nil {
+		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot)
+		return NewCheckoutError("failed to save ign.json", err)
+	}
+
+	ignVarJson := &model.IgnVarJson{Variables: rawVars}
+	if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {
+		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot)
+		return NewCheckoutError("failed to save ign-var.json", err)
+	}
+
+	return nil
+}
+
+func applyCompleteUpdateConfig(prep *PrepareUpdateResult) {
+	prep.IgnConfig.Hash = prep.NewHash
+	if prep.RefOverrideRequested {
+		prep.IgnConfig.Template.Ref = prep.RequestedRef
+	}
+	prep.IgnConfig.Metadata = &model.FileMetadata{
+		GeneratedAt:     time.Now(),
+		GeneratedBy:     "ign update",
+		TemplateName:    prep.IgnJson.Name,
+		TemplateVersion: prep.IgnJson.Version,
+		IgnVersion:      build.Version(),
+	}
+}
+
+func restoreUpdateArtifactSnapshots(entries ...checkoutRollbackEntry) {
+	for i := len(entries) - 1; i >= 0; i-- {
+		if err := restoreCheckoutRollbackEntry(entries[i]); err != nil {
+			debug.Debug("[app] Failed to restore update artifact %s: %v", entries[i].path, err)
+		}
+	}
 }
 
 // GetNewVariableDefinitions returns VarDef for new variables that need prompting.

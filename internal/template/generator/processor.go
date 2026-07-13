@@ -117,7 +117,7 @@ func (p *FileProcessor) Process(ctx context.Context, file model.TemplateFile, va
 		IncludeDepth: 0,
 		IncludeStack: []string{},
 		TemplateRoot: templateRoot,
-		CurrentFile:  file.Path,
+		CurrentFile:  filepath.Join(templateRoot, file.Path),
 	}
 
 	// Process template directives

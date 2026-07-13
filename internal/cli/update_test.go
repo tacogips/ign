@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/tacogips/ign/internal/app"
 	"github.com/tacogips/ign/internal/template/generator"
 )
 
@@ -15,6 +16,7 @@ func TestUpdateCmd_FlagDefaults(t *testing.T) {
 	updateDryRun = false
 	updateVerbose = false
 	updateYes = false
+	updateRef = ""
 
 	// Verify default values
 	if updateForce != false {
@@ -32,6 +34,9 @@ func TestUpdateCmd_FlagDefaults(t *testing.T) {
 	if updateVerbose != false {
 		t.Errorf("Expected updateVerbose default to be false, got %v", updateVerbose)
 	}
+	if updateRef != "" {
+		t.Errorf("Expected updateRef default to be empty, got %q", updateRef)
+	}
 }
 
 func TestUpdateCmd_FlagRegistration(t *testing.T) {
@@ -46,6 +51,7 @@ func TestUpdateCmd_FlagRegistration(t *testing.T) {
 		{"dry-run", "d"},
 		{"verbose", "v"},
 		{"yes", "y"},
+		{"ref", "r"},
 	}
 
 	for _, tt := range tests {
@@ -193,6 +199,51 @@ func TestShouldRegenerate(t *testing.T) {
 	}
 }
 
+func TestShouldCompleteUpdateIncludesRefChanged(t *testing.T) {
+	tests := []struct {
+		name      string
+		prep      *app.PrepareUpdateResult
+		force     bool
+		overwrite bool
+		want      bool
+	}{
+		{
+			name: "nil prep",
+			want: false,
+		},
+		{
+			name: "unchanged no ref",
+			prep: &app.PrepareUpdateResult{},
+			want: false,
+		},
+		{
+			name: "ref changed",
+			prep: &app.PrepareUpdateResult{RefChanged: true},
+			want: true,
+		},
+		{
+			name: "hash changed",
+			prep: &app.PrepareUpdateResult{HashChanged: true},
+			want: true,
+		},
+		{
+			name:  "force",
+			prep:  &app.PrepareUpdateResult{},
+			force: true,
+			want:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldCompleteUpdate(tt.prep, tt.force, tt.overwrite)
+			if got != tt.want {
+				t.Fatalf("shouldCompleteUpdate() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestUpdateCmd_FlagParsing(t *testing.T) {
 	tests := []struct {
 		name                 string
@@ -202,6 +253,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 		expectedOverwriteAll bool
 		expectedDryRun       bool
 		expectedYes          bool
+		expectedRef          string
 	}{
 		{
 			name:                 "no flags",
@@ -211,6 +263,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: false,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "force flag long",
@@ -220,6 +273,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: false,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "force flag short",
@@ -229,6 +283,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: false,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "overwrite flag long",
@@ -238,6 +293,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: false,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "overwrite flag short",
@@ -247,6 +303,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: false,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "overwrite all flag",
@@ -256,6 +313,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: true,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "force and overwrite combined",
@@ -265,6 +323,7 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: false,
 			expectedDryRun:       false,
 			expectedYes:          false,
+			expectedRef:          "",
 		},
 		{
 			name:                 "all flags",
@@ -274,6 +333,27 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			expectedOverwriteAll: true,
 			expectedDryRun:       true,
 			expectedYes:          true,
+			expectedRef:          "",
+		},
+		{
+			name:                 "ref flag long",
+			args:                 []string{"--ref", "v2.0.0"},
+			expectedForce:        false,
+			expectedOverwrite:    false,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
+			expectedRef:          "v2.0.0",
+		},
+		{
+			name:                 "ref flag short",
+			args:                 []string{"-r", "feature/new-template"},
+			expectedForce:        false,
+			expectedOverwrite:    false,
+			expectedOverwriteAll: false,
+			expectedDryRun:       false,
+			expectedYes:          false,
+			expectedRef:          "feature/new-template",
 		},
 	}
 
@@ -282,12 +362,14 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			// Create a fresh command for each test to avoid flag state pollution
 			cmd := &cobra.Command{Use: "update"}
 			var force, overwrite, overwriteAll, dryRun, verbose, yes bool
+			var ref string
 			cmd.Flags().BoolVarP(&force, "force", "f", false, "")
 			cmd.Flags().BoolVarP(&overwrite, "overwrite", "o", false, "")
 			cmd.Flags().BoolVar(&overwriteAll, "overwrite-all", false, "")
 			cmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "")
 			cmd.Flags().BoolVarP(&verbose, "verbose", "v", false, "")
 			cmd.Flags().BoolVarP(&yes, "yes", "y", false, "")
+			cmd.Flags().StringVarP(&ref, "ref", "r", "", "")
 
 			// Parse the arguments
 			if err := cmd.ParseFlags(tt.args); err != nil {
@@ -308,6 +390,9 @@ func TestUpdateCmd_FlagParsing(t *testing.T) {
 			}
 			if yes != tt.expectedYes {
 				t.Errorf("yes = %v, expected %v", yes, tt.expectedYes)
+			}
+			if ref != tt.expectedRef {
+				t.Errorf("ref = %q, expected %q", ref, tt.expectedRef)
 			}
 		})
 	}

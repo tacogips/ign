@@ -42,6 +42,7 @@ func TestSwitchCmd_FlagRegistration(t *testing.T) {
 		{"ref", "r"},
 		{"force", "f"},
 		{"verbose", "v"},
+		{FlagVar, "V"},
 	}
 
 	for _, tt := range tests {

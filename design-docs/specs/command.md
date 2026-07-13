@@ -43,3 +43,41 @@ ign checkout ./template ./out -V project_name=my-app -V enable_feature=true
 Before this design, the CLI had no registered `ign init` command and one-shot
 `ign checkout` always called the interactive prompt helper for all template
 variables. There was no CLI option for non-interactive variable assignment.
+
+## Defect-Fix CLI Semantics
+
+This section records CLI behavior required by the verified defect remediation
+work in `design-docs/specs/architecture.md`.
+
+### Error Output
+
+- `--quiet` suppresses non-error output only.
+- Cobra-level and command-returned errors must always print to stderr.
+- Each failure should be reported once. Command `RunE` handlers should return
+  errors and avoid printing the same error that `Execute` will print.
+- `RunE` handlers must not call `os.Exit`; they should return errors so deferred
+  cleanup and the root error path remain consistent.
+
+### Checkout Existing Configuration
+
+- `ign checkout <url-or-path> [output-path]` must return a non-zero exit when
+  `.ign` already exists and `--force` is absent.
+- The behavior should match `ign init`: report that configuration already exists
+  and return an error instead of succeeding after informational output.
+
+### Switch Variables And Setup Timing
+
+- `ign switch <url-or-path> [output-path]` supports repeatable
+  `--var key=value` and short `-V key=value` with the same parsing and
+  validation semantics as `ign checkout`.
+- `ign switch` must prepare and validate the new template without creating or
+  backing up `.ign` before variable parsing and prompting complete.
+- If variable parsing, validation, or prompting fails, switch leaves the current
+  `.ign` state untouched.
+
+### GitHub Tree URL Ambiguity
+
+- `https://github.com/owner/repo/tree/<branch>` with no subdirectory resolves to
+  `owner/repo` at ref `<branch>`.
+- Branch names containing slashes are ambiguous in `/tree/` URLs. Users must use
+  `--ref` for those refs instead of relying on path parsing.

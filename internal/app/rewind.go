@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -28,9 +29,11 @@ type RewindOptions struct {
 type RewindResult struct {
 	FilesRemoved       int
 	FilesMissing       int
+	FilesSkipped       int
 	DirectoriesRemoved int
 	Errors             []error
 	Files              []string
+	SkippedFiles       []string
 }
 
 // Rewind removes files previously created by ign and then deletes .ign.
@@ -53,7 +56,7 @@ func Rewind(ctx context.Context, opts RewindOptions) (*RewindResult, error) {
 		)
 	}
 
-	files, err := loadManagedFilesForRewind(ctx, opts)
+	files, skippedFiles, err := loadManagedFilesForRewind(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -68,8 +71,10 @@ func Rewind(ctx context.Context, opts RewindOptions) (*RewindResult, error) {
 	})
 
 	result := &RewindResult{
-		Errors: []error{},
-		Files:  append([]string(nil), files...),
+		Errors:       []error{},
+		Files:        append([]string(nil), files...),
+		FilesSkipped: len(skippedFiles),
+		SkippedFiles: append([]string(nil), skippedFiles...),
 	}
 
 	removedDirs := make(map[string]struct{})
@@ -128,43 +133,43 @@ func Rewind(ctx context.Context, opts RewindOptions) (*RewindResult, error) {
 	return result, nil
 }
 
-func loadManagedFilesForRewind(ctx context.Context, opts RewindOptions) ([]string, error) {
+func loadManagedFilesForRewind(ctx context.Context, opts RewindOptions) ([]string, []string, error) {
 	manifest, err := config.LoadIgnManifest(manifestPath())
 	if err == nil {
-		return dedupePaths(manifest.Files), nil
+		return dedupePaths(manifest.Files), nil, nil
 	}
 
 	if cfgErr, ok := err.(*config.ConfigError); !ok || cfgErr.Type != config.ConfigNotFound {
-		return nil, NewCheckoutError("failed to load ign-files.json", err)
+		return nil, nil, NewCheckoutError("failed to load ign-files.json", err)
 	}
 
 	debug.Debug("[app] ign-files.json not found; falling back to current template dry-run")
 	return buildManagedFilesFromCurrentTemplate(ctx, opts)
 }
 
-func buildManagedFilesFromCurrentTemplate(ctx context.Context, opts RewindOptions) ([]string, error) {
+func buildManagedFilesFromCurrentTemplate(ctx context.Context, opts RewindOptions) ([]string, []string, error) {
 	ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
 	ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
 
 	ignConfig, err := config.LoadIgnConfig(ignConfigPath)
 	if err != nil {
-		return nil, NewCheckoutError("failed to load .ign/ign.json: run 'ign checkout <template-url>' first", err)
+		return nil, nil, NewCheckoutError("failed to load .ign/ign.json: run 'ign checkout <template-url>' first", err)
 	}
 
 	ignVar, err := config.LoadIgnVarJson(ignVarPath)
 	if err != nil {
-		return nil, NewCheckoutError("failed to load .ign/ign-var.json: run 'ign checkout <template-url>' first", err)
+		return nil, nil, NewCheckoutError("failed to load .ign/ign-var.json: run 'ign checkout <template-url>' first", err)
 	}
 
 	normalizedURL := NormalizeTemplateURL(ignConfig.Template.URL)
 	prov, err := provider.NewProviderWithToken(normalizedURL, opts.GitHubToken)
 	if err != nil {
-		return nil, NewCheckoutError("failed to create provider", err)
+		return nil, nil, NewCheckoutError("failed to create provider", err)
 	}
 
 	templateRef, err := prov.Resolve(normalizedURL)
 	if err != nil {
-		return nil, NewCheckoutError("failed to resolve template URL", err)
+		return nil, nil, NewCheckoutError("failed to resolve template URL", err)
 	}
 	if ignConfig.Template.Ref != "" {
 		templateRef.Ref = ignConfig.Template.Ref
@@ -175,12 +180,12 @@ func buildManagedFilesFromCurrentTemplate(ctx context.Context, opts RewindOption
 
 	template, err := prov.Fetch(ctx, templateRef)
 	if err != nil {
-		return nil, NewTemplateFetchError("failed to fetch template", err)
+		return nil, nil, NewTemplateFetchError("failed to fetch template", err)
 	}
 
 	_, vars, err := prepareVariablesForGeneration(template.Config.Variables, ignVar.Variables, model.IgnConfigDir, opts.OutputDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	gen := generator.NewGenerator()
@@ -191,10 +196,39 @@ func buildManagedFilesFromCurrentTemplate(ctx context.Context, opts RewindOption
 		Overwrite: true,
 	})
 	if err != nil {
-		return nil, NewCheckoutError("failed to enumerate generated files", err)
+		return nil, nil, NewCheckoutError("failed to enumerate generated files", err)
 	}
 
-	return dedupePaths(genResult.Files), nil
+	return managedFilesMatchingDryRunContent(genResult.DryRunFiles, opts.OutputDir)
+}
+
+func managedFilesMatchingDryRunContent(files []generator.DryRunFile, outputDir string) ([]string, []string, error) {
+	managed := make([]string, 0, len(files))
+	skipped := make([]string, 0)
+	for _, file := range files {
+		if file.Path == "" || !file.Exists {
+			continue
+		}
+
+		cleanPath, err := validateManagedPath(file.Path, outputDir)
+		if err != nil {
+			debug.Debug("[app] Skipping rewind fallback candidate %s: %v", file.Path, err)
+			continue
+		}
+
+		current, err := os.ReadFile(cleanPath)
+		if err != nil {
+			debug.Debug("[app] Skipping rewind fallback candidate %s: %v", cleanPath, err)
+			continue
+		}
+		if !bytes.Equal(current, file.Content) {
+			debug.Debug("[app] Skipping rewind fallback candidate %s: content differs from generated template output", cleanPath)
+			skipped = append(skipped, cleanPath)
+			continue
+		}
+		managed = append(managed, cleanPath)
+	}
+	return dedupePaths(managed), dedupePaths(skipped), nil
 }
 
 func dedupePaths(paths []string) []string {

@@ -60,12 +60,10 @@ func init() {
 	rootCmd.AddCommand(switchCmd)
 	rootCmd.AddCommand(templateCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(varsCmd)
 }
 
 // printError prints an error message to stderr
 func printError(err error) {
-	if globalQuiet {
-		return
-	}
 	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 }

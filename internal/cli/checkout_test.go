@@ -108,6 +108,32 @@ func TestRunCheckoutInvalidFileVariableDoesNotBackupExistingConfig(t *testing.T)
 	}
 }
 
+func TestRunCheckoutExistingConfigWithoutForceReturnsError(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	if err := os.MkdirAll(model.IgnConfigDir, 0755); err != nil {
+		t.Fatalf("failed to create .ign: %v", err)
+	}
+
+	origForce := checkoutForce
+	origVars := checkoutVars
+	defer func() {
+		checkoutForce = origForce
+		checkoutVars = origVars
+	}()
+	checkoutForce = false
+	checkoutVars = nil
+
+	err := runCheckout(&cobra.Command{}, []string{"github.com/owner/repo"})
+	if err == nil {
+		t.Fatal("runCheckout expected existing config error")
+	}
+	if !strings.Contains(err.Error(), "configuration already exists") {
+		t.Fatalf("error = %v, want existing configuration message", err)
+	}
+}
+
 func TestRunCheckoutInvalidTemplateHashDoesNotBackupExistingConfig(t *testing.T) {
 	tempDir := t.TempDir()
 

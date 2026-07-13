@@ -45,6 +45,7 @@ Examples:
   ign update --overwrite         # Selectively overwrite existing files, respecting .ign-overwrite-ignore
   ign update --overwrite --yes   # Selectively overwrite without confirmation
   ign update --overwrite-all     # Overwrite all existing files
+  ign update --ref v2.0.0        # Retarget the tracked template ref non-destructively
   ign update --force             # Regenerate even if unchanged and overwrite all existing files`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runUpdate,
@@ -58,6 +59,7 @@ var (
 	updateDryRun       bool
 	updateVerbose      bool
 	updateYes          bool
+	updateRef          string
 )
 
 func init() {
@@ -70,6 +72,7 @@ func init() {
 	updateCmd.Flags().BoolVarP(&updateDryRun, "dry-run", "d", false, "Preview what files would be generated without writing them")
 	updateCmd.Flags().BoolVarP(&updateVerbose, "verbose", "v", false, "Show detailed processing information during project generation")
 	updateCmd.Flags().BoolVarP(&updateYes, "yes", "y", false, "Skip overwrite confirmation prompt")
+	updateCmd.Flags().StringVarP(&updateRef, "ref", "r", "", "Retarget the tracked template branch, tag, or commit SHA")
 }
 
 func runUpdate(cmd *cobra.Command, args []string) error {
@@ -81,6 +84,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	// Get GitHub token from environment
 	githubToken := getGitHubToken("")
+
+	if updateRef != "" {
+		if err := ValidateGitRef(updateRef); err != nil {
+			return fmt.Errorf("invalid update ref: %w", err)
+		}
+	}
 
 	printInfo("Checking for template updates...")
 
@@ -95,29 +104,33 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		DryRun:        updateDryRun,
 		Verbose:       updateVerbose,
 		GitHubToken:   githubToken,
+		TargetRef:     updateRef,
 	})
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Update preparation failed: %v", err))
 		return err
 	}
 
 	// Show template info
 	printInfo(fmt.Sprintf("Template: %s", prepResult.IgnConfig.Template.URL))
-	if prepResult.IgnConfig.Template.Ref != "" && prepResult.IgnConfig.Template.Ref != "main" {
+	if prepResult.RefOverrideRequested {
+		printInfo(fmt.Sprintf("Reference: %s", prepResult.RequestedRef))
+	} else if prepResult.IgnConfig.Template.Ref != "" && prepResult.IgnConfig.Template.Ref != "main" {
 		printInfo(fmt.Sprintf("Reference: %s", prepResult.IgnConfig.Template.Ref))
 	}
 	printSeparator()
 
 	// Decide whether to regenerate files.
 	// By default, unchanged template exits early. --overwrite or --force bypasses this.
-	if !shouldRegenerate(prepResult.HashChanged, updateForce, shouldOverwrite) {
+	if !shouldCompleteUpdate(prepResult, updateForce, shouldOverwrite) {
 		printSuccess("Template is up to date (no changes detected)")
 		return nil
 	}
 
 	// Check if hash changed
 	if !prepResult.HashChanged {
-		if updateForce {
+		if prepResult.RefChanged {
+			printInfo("Template content is identical; updating tracked reference...")
+		} else if updateForce {
 			printInfo("Template unchanged, but --force specified - regenerating files...")
 		} else {
 			printInfo("Template unchanged, but --overwrite specified - regenerating files...")
@@ -162,7 +175,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			printInfo("Please provide values for the following new variables:")
 			promptedVars, err := PromptForNewVariables(varsNeedingPrompt)
 			if err != nil {
-				printErrorMsg(fmt.Sprintf("Failed to collect variable values: %v", err))
 				return err
 			}
 			newVarValues = app.ApplyDefaults(newVarDefs, promptedVars)
@@ -183,7 +195,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			Verbose:       updateVerbose,
 		})
 		if err != nil {
-			printErrorMsg(fmt.Sprintf("Update preview failed: %v", err))
 			return err
 		}
 		printUpdateWritePreview(preview)
@@ -216,7 +227,6 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	})
 
 	if err != nil {
-		printErrorMsg(fmt.Sprintf("Update failed: %v", err))
 		return err
 	}
 
@@ -267,6 +277,13 @@ func shouldRegenerate(hashChanged, force, overwrite bool) bool {
 		return true
 	}
 	return force || overwrite
+}
+
+func shouldCompleteUpdate(prep *app.PrepareUpdateResult, force, overwrite bool) bool {
+	if prep == nil {
+		return false
+	}
+	return shouldRegenerate(prep.HashChanged, force, overwrite) || prep.RefChanged
 }
 
 func updateOverwriteMode(overwrite, overwriteAll, force bool) generator.OverwriteMode {

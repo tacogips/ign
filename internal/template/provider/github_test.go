@@ -111,6 +111,83 @@ func TestGitHubProvider_ExtractArchive_SymlinkReplacesExistingFile(t *testing.T)
 	}
 }
 
+func TestGitHubProvider_ExtractArchiveRejectsEscapingEntry(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "template-escape.tar.gz")
+	if err := createTestArchive(archivePath, []archiveEntry{
+		{header: &tar.Header{Name: "repo-main/", Typeflag: tar.TypeDir, Mode: 0755}},
+		{
+			header:  &tar.Header{Name: "repo-main/../../escape.txt", Typeflag: tar.TypeReg, Mode: 0644, Size: int64(len("escape"))},
+			content: []byte("escape"),
+		},
+	}); err != nil {
+		t.Fatalf("failed to create test archive: %v", err)
+	}
+
+	p := NewGitHubProvider()
+	if _, err := p.extractArchive(archivePath); err == nil {
+		t.Fatal("extractArchive expected escaping entry error")
+	}
+}
+
+func TestGitHubProvider_ExtractArchiveRejectsEscapingSymlink(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	archivePath := filepath.Join(tmpDir, "template-symlink-escape.tar.gz")
+	if err := createTestArchive(archivePath, []archiveEntry{
+		{header: &tar.Header{Name: "repo-main/", Typeflag: tar.TypeDir, Mode: 0755}},
+		{
+			header: &tar.Header{
+				Name:     "repo-main/link",
+				Typeflag: tar.TypeSymlink,
+				Mode:     0777,
+				Linkname: "../outside",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("failed to create test archive: %v", err)
+	}
+
+	p := NewGitHubProvider()
+	if _, err := p.extractArchive(archivePath); err == nil {
+		t.Fatal("extractArchive expected escaping symlink error")
+	}
+}
+
+type archiveEntry struct {
+	header  *tar.Header
+	content []byte
+}
+
+func createTestArchive(archivePath string, entries []archiveEntry) error {
+	f, err := os.Create(archivePath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	gzw := gzip.NewWriter(f)
+	defer func() { _ = gzw.Close() }()
+
+	tw := tar.NewWriter(gzw)
+	defer func() { _ = tw.Close() }()
+
+	for _, e := range entries {
+		if err := tw.WriteHeader(e.header); err != nil {
+			return err
+		}
+		if len(e.content) > 0 {
+			if _, err := tw.Write(e.content); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func createTestTemplateArchiveWithSymlink(archivePath string) error {
 	f, err := os.Create(archivePath)
 	if err != nil {
