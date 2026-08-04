@@ -33,10 +33,43 @@ ign checkout ./template ./out -V project_name=my-app -V enable_feature=true
 - Provided variables are passed into the prompt layer before interactive
   collection. Variables supplied by option are not prompted; missing variables
   keep the existing interactive fallback.
+- The shared prompt layer must preflight missing variables before invoking
+  `survey/v2`. When stdin is not an interactive terminal and any variable would
+  still require prompting, the command fails with a controlled actionable error
+  instead of calling survey.
+- Fully supplied non-interactive runs remain valid: if `--var` values resolve
+  every template variable that requires input, `ign init`, one-shot
+  `ign checkout`, and `ign switch` must continue without prompting even when
+  stdin is redirected.
+- The non-TTY failure must occur before `.ign` creation, force-mode backup, or
+  switch replacement so redirected prompt failures leave the workspace
+  unchanged.
 - `ign init` saves supplied values into `.ign/ign-var.json` without generating
   project files.
 - `ign checkout` uses supplied values for both saved `.ign/ign-var.json` and
   project generation.
+
+### Redirected Stdin Prompt Failures
+
+Issue [#41](https://github.com/tacogips/ign/issues/41) records a crash where
+`ign checkout` panics inside `survey/v2` when unresolved template variables are
+prompted while stdin is redirected. The command contract is:
+
+- `checkout`, `init`, and `switch` share one prompt boundary for unresolved
+  template variables.
+- Prompt code must classify unresolved variables before any survey prompt is
+  constructed or executed.
+- If unresolved variables exist and stdin is not a TTY, the command returns a
+  normal error that explains interactive prompts require a TTY and that missing
+  values can be supplied with repeatable `--var key=value` / `-V key=value`.
+- Empty lines from redirected stdin are not treated as answers in this defect
+  fix. Declared defaults remain interactive prompt defaults, and scripted
+  execution should use explicit `--var` assignments.
+- Existing TTY prompt behavior, validation, defaults, and help text remain
+  unchanged.
+- Regression coverage must exercise the shared prompt boundary directly and at
+  least the command paths for `checkout` and `switch`; `init` must be covered
+  either directly or through the same shared prompt helper.
 
 ### Current Behavior Finding
 

@@ -72,7 +72,9 @@ ign init /absolute/path/to/template
 **Backup naming:** When `--force` is used, existing `ign-var.json` is backed up as `ign-var.json.bk1`, `ign-var.json.bk2`, etc.
 
 Variables supplied with `--var` are written to `.ign/ign-var.json`. Missing
-variables are still prompted interactively.
+variables are still prompted interactively. If stdin is redirected or otherwise
+non-interactive, missing variables fail with an error instead of prompting; pass
+all required values with repeatable `--var key=value` or `-V key=value`.
 
 ```bash
 # Force reinitialize with backup
@@ -99,7 +101,10 @@ ign checkout github.com/owner/repo --var app_name=my-app --var port=8080
 
 If `.ign/` already exists, checkout returns an error unless `--force` is used.
 Variables supplied with `--var` are used for generation and saved to
-`.ign/ign-var.json`. Missing variables are still prompted interactively.
+`.ign/ign-var.json`. Missing variables are still prompted interactively. If
+stdin is redirected or otherwise non-interactive, missing variables fail with an
+error instead of prompting; pass all required values with repeatable
+`--var key=value` or `-V key=value`.
 
 **Flags:**
 
@@ -225,7 +230,9 @@ ign switch github.com/owner/new-template --var app_name=my-app --var port=8080
 It supports the same repeatable `--var`/`-V` variable assignment syntax as
 `ign checkout`. Template preparation, variable validation, and prompting happen
 before the current `.ign/` directory is replaced, so failed input does not leave
-a partial replacement configuration.
+a partial replacement configuration. When stdin is non-interactive, unresolved
+variables fail before replacement; provide every required value with
+`--var key=value` or `-V key=value` for scripted use.
 
 **Flags:**
 

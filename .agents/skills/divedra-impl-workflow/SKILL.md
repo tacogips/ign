@@ -98,6 +98,11 @@ such as CLI exit/error semantics, supported flags, safety guarantees, and
 verification commands. Keep this gate documentation-only: do not reopen design
 or implementation scope after Step 7 acceptance.
 
+For CLI template-variable prompting changes, ensure user-facing docs describe
+non-interactive stdin behavior for `init`, `checkout`, and `switch`: unresolved
+variables require a TTY for interactive prompts, while scripted runs should pass
+all required values with repeatable `--var key=value` or `-V key=value`.
+
 ## Reporting
 
 After the workflow finishes, report:

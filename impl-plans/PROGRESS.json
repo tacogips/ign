@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-07-13T00:00:00Z",
+  "lastUpdated": "2026-08-04T00:00:00Z",
   "plans": {
     "ign-vars": {
       "path": "impl-plans/ign-vars.md",
@@ -167,6 +167,48 @@
           "parallelizable": false,
           "deps": [
             "TASK-007"
+          ]
+        }
+      }
+    },
+    "non-tty-template-variable-prompts": {
+      "path": "impl-plans/active/non-tty-template-variable-prompts.md",
+      "phase": 2,
+      "status": "Completed",
+      "updated": "2026-08-04",
+      "tasks": {
+        "TASK-001": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-002": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-003": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-004": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": []
+        },
+        "TASK-005": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001",
+            "TASK-002",
+            "TASK-003",
+            "TASK-004"
           ]
         }
       }

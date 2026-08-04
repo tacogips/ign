@@ -11,6 +11,127 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
+func writeTemplateWithRequiredVariable(t *testing.T, dir string, name string) string {
+	t.Helper()
+
+	templateDir := filepath.Join(dir, name)
+	if err := os.MkdirAll(templateDir, 0755); err != nil {
+		t.Fatalf("failed to create template directory: %v", err)
+	}
+
+	templateConfig := `{
+  "name": "` + name + `",
+  "version": "1.0.0",
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "required": true
+    }
+  },
+  "hash": "` + strings.Repeat("a", 64) + `"
+}`
+	if err := os.WriteFile(filepath.Join(templateDir, model.IgnTemplateConfigFile), []byte(templateConfig), 0644); err != nil {
+		t.Fatalf("failed to write template config: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templateDir, "README.md"), []byte("@ign-var:project_name@"), 0644); err != nil {
+		t.Fatalf("failed to write template file: %v", err)
+	}
+
+	return templateDir
+}
+
+func TestRunCheckoutNonInteractiveMissingVariableDoesNotCreateConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	templateDir := writeTemplateWithRequiredVariable(t, tempDir, "template")
+
+	origRef := checkoutRef
+	origForce := checkoutForce
+	origDryRun := checkoutDryRun
+	origVerbose := checkoutVerbose
+	origVars := checkoutVars
+	origPromptInputIsTerminal := promptInputIsTerminal
+	defer func() {
+		checkoutRef = origRef
+		checkoutForce = origForce
+		checkoutDryRun = origDryRun
+		checkoutVerbose = origVerbose
+		checkoutVars = origVars
+		promptInputIsTerminal = origPromptInputIsTerminal
+	}()
+
+	checkoutRef = "main"
+	checkoutForce = false
+	checkoutDryRun = false
+	checkoutVerbose = false
+	checkoutVars = nil
+	promptInputIsTerminal = func() bool { return false }
+
+	err := runCheckout(&cobra.Command{}, []string{templateDir, "."})
+	if err == nil {
+		t.Fatal("runCheckout expected non-interactive prompt error")
+	}
+	errText := err.Error()
+	for _, want := range []string{"require a TTY", "--var key=value", "-V key=value", "project_name"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error = %q, want %q", errText, want)
+		}
+	}
+	if _, statErr := os.Stat(model.IgnConfigDir); !os.IsNotExist(statErr) {
+		t.Fatalf(".ign should not be created after prompt preflight failure: %v", statErr)
+	}
+	if _, statErr := os.Stat("README.md"); !os.IsNotExist(statErr) {
+		t.Fatalf("output should not be generated after prompt preflight failure: %v", statErr)
+	}
+}
+
+func TestRunCheckoutNonInteractiveAllVariablesProvidedSucceeds(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
+
+	templateDir := writeTemplateWithRequiredVariable(t, tempDir, "template")
+
+	origRef := checkoutRef
+	origForce := checkoutForce
+	origDryRun := checkoutDryRun
+	origVerbose := checkoutVerbose
+	origVars := checkoutVars
+	origPromptInputIsTerminal := promptInputIsTerminal
+	defer func() {
+		checkoutRef = origRef
+		checkoutForce = origForce
+		checkoutDryRun = origDryRun
+		checkoutVerbose = origVerbose
+		checkoutVars = origVars
+		promptInputIsTerminal = origPromptInputIsTerminal
+	}()
+
+	checkoutRef = "main"
+	checkoutForce = false
+	checkoutDryRun = false
+	checkoutVerbose = false
+	checkoutVars = []string{"project_name=my-app"}
+	promptInputIsTerminal = func() bool { return false }
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	if err := runCheckout(cmd, []string{templateDir, "."}); err != nil {
+		t.Fatalf("runCheckout returned error: %v", err)
+	}
+
+	generated, err := os.ReadFile("README.md")
+	if err != nil {
+		t.Fatalf("failed to read generated output: %v", err)
+	}
+	if string(generated) != "my-app" {
+		t.Fatalf("README.md = %q, want supplied variable value", generated)
+	}
+	if _, err := os.Stat(filepath.Join(model.IgnConfigDir, model.IgnVarFile)); err != nil {
+		t.Fatalf("ign-var.json should be created for supplied non-interactive checkout: %v", err)
+	}
+}
+
 func TestRunCheckoutInvalidFileVariableDoesNotBackupExistingConfig(t *testing.T) {
 	tempDir := t.TempDir()
 

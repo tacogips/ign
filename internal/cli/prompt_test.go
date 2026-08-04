@@ -19,6 +19,62 @@ func TestPromptForVariables_NilConfig(t *testing.T) {
 	}
 }
 
+func TestPromptForVariablesWithProvided_NonInteractiveMissingVariables(t *testing.T) {
+	origPromptInputIsTerminal := promptInputIsTerminal
+	defer func() { promptInputIsTerminal = origPromptInputIsTerminal }()
+	promptInputIsTerminal = func() bool { return false }
+
+	ignJSON := &model.IgnJson{
+		Variables: map[string]model.VarDef{
+			"name": {Type: model.VarTypeString, Required: true},
+			"port": {Type: model.VarTypeInt, Required: true},
+		},
+	}
+
+	_, err := PromptForVariablesWithProvided(ignJSON, map[string]interface{}{
+		"name": "my-app",
+	})
+	if err == nil {
+		t.Fatal("PromptForVariablesWithProvided() expected non-interactive prompt error")
+	}
+	errText := err.Error()
+	for _, want := range []string{"require a TTY", "--var key=value", "-V key=value", "port"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("error = %q, want %q", errText, want)
+		}
+	}
+	if strings.Contains(errText, "name") {
+		t.Fatalf("error = %q, did not expect supplied variable name", errText)
+	}
+}
+
+func TestPromptForVariablesWithProvided_AllProvidedBypassesTerminalCheck(t *testing.T) {
+	origPromptInputIsTerminal := promptInputIsTerminal
+	defer func() { promptInputIsTerminal = origPromptInputIsTerminal }()
+	promptInputIsTerminal = func() bool {
+		t.Fatal("promptInputIsTerminal should not be called when all variables are supplied")
+		return false
+	}
+
+	ignJSON := &model.IgnJson{
+		Variables: map[string]model.VarDef{
+			"name": {Type: model.VarTypeString, Required: true},
+			"port": {Type: model.VarTypeInt, Required: true},
+		},
+	}
+
+	got, err := PromptForVariablesWithProvided(ignJSON, map[string]interface{}{
+		"name": "my-app",
+		"port": 8080,
+	})
+	if err != nil {
+		t.Fatalf("PromptForVariablesWithProvided() returned error: %v", err)
+	}
+	if got["name"] != "my-app" || got["port"] != 8080 {
+		t.Fatalf("PromptForVariablesWithProvided() = %v", got)
+	}
+}
+
 func TestPromptStringInvalidPatternFailsBeforePrompt(t *testing.T) {
 	_, err := promptString("name", model.VarDef{
 		Type:    model.VarTypeString,

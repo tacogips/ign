@@ -2,13 +2,20 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/tacogips/ign/internal/template/model"
+	"golang.org/x/term"
 )
+
+var promptInputIsTerminal = func() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
 
 // PromptForVariables interactively prompts the user for variable values.
 // Returns a map of variable names to their values.
@@ -50,6 +57,10 @@ func PromptForVariablesWithProvided(ignJson *model.IgnJson, providedVars map[str
 		return vars, nil
 	}
 
+	if !promptInputIsTerminal() {
+		return nil, newNonInteractivePromptError(missingVarNames)
+	}
+
 	fmt.Println()
 	fmt.Println("Please provide values for template variables:")
 	fmt.Println()
@@ -66,6 +77,13 @@ func PromptForVariablesWithProvided(ignJson *model.IgnJson, providedVars map[str
 	}
 
 	return vars, nil
+}
+
+func newNonInteractivePromptError(missingVarNames []string) error {
+	return fmt.Errorf(
+		"interactive template variable prompts require a TTY; supply missing values with repeatable --var key=value or -V key=value: %s",
+		strings.Join(missingVarNames, ", "),
+	)
 }
 
 // promptForVariable prompts for a single variable based on its type.
