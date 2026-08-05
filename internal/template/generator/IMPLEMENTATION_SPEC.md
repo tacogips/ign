@@ -55,7 +55,7 @@ type TemplateFile struct {
 }
 
 type TemplateSettings struct {
-    PreserveExecutable bool
+    PreserveExecutable *bool // nil means unspecified; default is true
     IgnorePatterns     []string
     BinaryExtensions   []string
     IncludeDotfiles    bool
@@ -277,7 +277,8 @@ const (
 - New files: **Create** → increment FilesCreated
 
 **File Permissions**:
-- Executable bit is preserved from template if PreserveExecutable is true
+- Executable bit is preserved from template unless PreserveExecutable is explicitly false
+  (an unspecified `preserve_executable` setting defaults to preserving the bit)
 - Other permissions use system defaults (0644 for regular files)
 
 **Special Files**:

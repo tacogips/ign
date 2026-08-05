@@ -1051,6 +1051,91 @@ func TestCheckout_ManifestFailurePreservesPreexistingOutputDir(t *testing.T) {
 	}
 }
 
+// TestCheckout_PreservesExecutableModeFromLocalTemplate verifies that executable
+// template files stay executable in the generated project, including when the
+// template declares a settings block that does not mention preserve_executable.
+func TestCheckout_PreservesExecutableModeFromLocalTemplate(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *model.TemplateSettings
+		wantPerm os.FileMode
+	}{
+		{
+			name:     "no settings block",
+			settings: nil,
+			wantPerm: 0755,
+		},
+		{
+			name:     "settings block without preserve_executable",
+			settings: &model.TemplateSettings{IgnorePatterns: []string{".git"}},
+			wantPerm: 0755,
+		},
+		{
+			name:     "preserve_executable explicitly false",
+			settings: &model.TemplateSettings{PreserveExecutable: model.NewPreserveExecutable(false)},
+			wantPerm: 0644,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			t.Chdir(tempDir)
+
+			templateDir := "template"
+			templateConfig := &model.IgnJson{
+				Name:      "executable-template",
+				Version:   "1.0.0",
+				Variables: map[string]model.VarDef{},
+				Settings:  tt.settings,
+				Hash:      strings.Repeat("b", 64),
+			}
+			scriptPath := filepath.Join("scripts", "build-app-targets.py")
+			writeLocalTemplate(t, templateDir, templateConfig, map[string]string{
+				scriptPath:  "#!/usr/bin/env python3\n",
+				"README.md": "readme",
+			})
+			if err := os.Chmod(filepath.Join(templateDir, scriptPath), 0755); err != nil {
+				t.Fatalf("failed to mark template script executable: %v", err)
+			}
+
+			ignConfigPath := filepath.Join(model.IgnConfigDir, model.IgnProjectConfigFile)
+			if err := config.SaveIgnConfig(ignConfigPath, &model.IgnConfig{
+				Template: model.TemplateSource{URL: "./" + templateDir},
+				Hash:     strings.Repeat("a", 64),
+			}); err != nil {
+				t.Fatalf("failed to write ign config: %v", err)
+			}
+			ignVarPath := filepath.Join(model.IgnConfigDir, model.IgnVarFile)
+			if err := config.SaveIgnVarJson(ignVarPath, &model.IgnVarJson{
+				Variables: map[string]interface{}{},
+			}); err != nil {
+				t.Fatalf("failed to write ign vars: %v", err)
+			}
+
+			if _, err := Checkout(context.Background(), CheckoutOptions{OutputDir: "output"}); err != nil {
+				t.Fatalf("Checkout() error = %v", err)
+			}
+
+			info, err := os.Stat(filepath.Join("output", scriptPath))
+			if err != nil {
+				t.Fatalf("failed to stat generated script: %v", err)
+			}
+			if got := info.Mode().Perm(); got != tt.wantPerm {
+				t.Fatalf("generated script mode = %o, want %o", got, tt.wantPerm)
+			}
+
+			readmeInfo, err := os.Stat(filepath.Join("output", "README.md"))
+			if err != nil {
+				t.Fatalf("failed to stat generated README: %v", err)
+			}
+			if got := readmeInfo.Mode().Perm(); got != 0644 {
+				t.Fatalf("generated README mode = %o, want 0644", got)
+			}
+		})
+	}
+}
+
 func writeLocalTemplate(t *testing.T, templateDir string, templateConfig *model.IgnJson, files map[string]string) {
 	t.Helper()
 

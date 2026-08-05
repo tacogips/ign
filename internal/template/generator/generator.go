@@ -166,13 +166,14 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Get template settings
 	settings := getTemplateSettings(opts.Template)
+	preserveExecutable := settings.PreserveExecutableEnabled()
 	overwriteIgnorePatterns := overwriteIgnorePatternsFromTemplate(opts.Template)
 	debug.Debug("[generator] Template settings: preserveExecutable=%v, ignorePatterns=%v, binaryExtensions=%d",
-		settings.PreserveExecutable, settings.IgnorePatterns, len(settings.BinaryExtensions))
+		preserveExecutable, settings.IgnorePatterns, len(settings.BinaryExtensions))
 
 	// Create processor and writer based on template settings
 	processor := NewFileProcessor(g.parser, settings.BinaryExtensions)
-	writer := NewFileWriter(settings.PreserveExecutable)
+	writer := NewFileWriter(preserveExecutable)
 
 	// Create output directory if it doesn't exist (unless dry run)
 	if !dryRun && !writer.Exists(opts.OutputDir) {
@@ -311,7 +312,7 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			result.Errors = append(result.Errors, fmt.Errorf("failed to process %s: %w", file.Path, err))
 			continue
 		}
-		if opts.SkipUnchanged && fileExists && fileContentMatchesExisting(outputPath, processed, effectiveWriteFileMode(file.Mode, settings.PreserveExecutable)) {
+		if opts.SkipUnchanged && fileExists && fileContentMatchesExisting(outputPath, processed, effectiveWriteFileMode(file.Mode, preserveExecutable)) {
 			debug.Debug("[generator] Skipping unchanged file: %s", outputPath)
 			continue
 		}
@@ -479,10 +480,12 @@ func validateOptions(opts GenerateOptions) error {
 }
 
 // getTemplateSettings returns template settings with defaults.
+// PreserveExecutable stays nil when unspecified so that
+// TemplateSettings.PreserveExecutableEnabled applies the default (true).
 func getTemplateSettings(template *model.Template) model.TemplateSettings {
 	if template.Config.Settings == nil {
 		return model.TemplateSettings{
-			PreserveExecutable: true,
+			PreserveExecutable: model.NewPreserveExecutable(model.DefaultPreserveExecutable),
 			IgnorePatterns:     []string{},
 			BinaryExtensions:   defaultBinaryExtensions(),
 			IncludeDotfiles:    true,

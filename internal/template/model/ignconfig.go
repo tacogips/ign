@@ -51,7 +51,8 @@ type VarDef struct {
 // TemplateSettings contains template-specific settings for generation.
 type TemplateSettings struct {
 	// PreserveExecutable preserves the executable bit from template files.
-	PreserveExecutable bool `json:"preserve_executable,omitempty"`
+	// A nil value means the setting is not specified and the default (true) applies.
+	PreserveExecutable *bool `json:"preserve_executable,omitempty"`
 	// IgnorePatterns are glob patterns for files to ignore during generation.
 	IgnorePatterns []string `json:"ignore_patterns,omitempty"`
 	// BinaryExtensions are file extensions to copy without template processing.
@@ -60,4 +61,23 @@ type TemplateSettings struct {
 	IncludeDotfiles bool `json:"include_dotfiles,omitempty"`
 	// MaxIncludeDepth is the maximum nested include depth for @ign-include directives.
 	MaxIncludeDepth int `json:"max_include_depth,omitempty"`
+}
+
+// DefaultPreserveExecutable is the executable-bit preservation default applied when
+// a template does not specify settings.preserve_executable.
+const DefaultPreserveExecutable = true
+
+// PreserveExecutableEnabled reports whether the executable bit of template files
+// must be preserved in generated projects. Templates that omit the setting (or omit
+// the whole settings block) keep the executable bit, so scripts stay runnable.
+func (s *TemplateSettings) PreserveExecutableEnabled() bool {
+	if s == nil || s.PreserveExecutable == nil {
+		return DefaultPreserveExecutable
+	}
+	return *s.PreserveExecutable
+}
+
+// NewPreserveExecutable returns a pointer usable for TemplateSettings.PreserveExecutable.
+func NewPreserveExecutable(value bool) *bool {
+	return &value
 }

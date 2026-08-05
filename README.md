@@ -307,6 +307,32 @@ ign version --json   # JSON format output
 }
 ```
 
+## Template Settings
+
+Template authors can tune generation through the optional `settings` block in the
+template's `ign-template.json`:
+
+```json
+{
+  "settings": {
+    "preserve_executable": true,
+    "ignore_patterns": [".git", ".DS_Store"],
+    "binary_extensions": [".png", ".jpg"]
+  }
+}
+```
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `preserve_executable` | `true` | Keep the executable bit of template files in generated projects |
+| `ignore_patterns` | none | Glob patterns for files excluded from generation |
+| `binary_extensions` | built-in list | Extensions copied without variable substitution |
+
+Omitting a setting (or the whole `settings` block) applies its default. Set
+`"preserve_executable": false` explicitly to write every generated file as `0644`.
+Projects generated before this default was fixed can be repaired with
+`ign update --overwrite --yes`.
+
 ## Template Syntax
 
 ```go
