@@ -110,7 +110,7 @@ func TestIgnJson_MarshalUnmarshal(t *testing.T) {
 			},
 		},
 		Settings: &TemplateSettings{
-			PreserveExecutable: true,
+			PreserveExecutable: NewPreserveExecutable(true),
 			IgnorePatterns:     []string{"*.log", "*.tmp"},
 			BinaryExtensions:   []string{".png", ".jpg"},
 			IncludeDotfiles:    true,
@@ -454,5 +454,72 @@ func TestTemplateSettings_Defaults(t *testing.T) {
 	expected := "{}"
 	if string(data) != expected {
 		t.Errorf("Expected %s, got %s", expected, string(data))
+	}
+}
+
+func TestTemplateSettings_PreserveExecutableEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *TemplateSettings
+		want     bool
+	}{
+		{name: "nil settings", settings: nil, want: true},
+		{name: "unspecified setting", settings: &TemplateSettings{IgnorePatterns: []string{".git"}}, want: true},
+		{name: "explicit true", settings: &TemplateSettings{PreserveExecutable: NewPreserveExecutable(true)}, want: true},
+		{name: "explicit false", settings: &TemplateSettings{PreserveExecutable: NewPreserveExecutable(false)}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.settings.PreserveExecutableEnabled(); got != tt.want {
+				t.Errorf("PreserveExecutableEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTemplateSettings_PreserveExecutableJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want bool
+	}{
+		{name: "absent", json: `{"ignore_patterns":[".git"]}`, want: true},
+		{name: "explicit false", json: `{"preserve_executable":false}`, want: false},
+		{name: "explicit true", json: `{"preserve_executable":true}`, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var settings TemplateSettings
+			if err := json.Unmarshal([]byte(tt.json), &settings); err != nil {
+				t.Fatalf("failed to unmarshal: %v", err)
+			}
+			if got := settings.PreserveExecutableEnabled(); got != tt.want {
+				t.Errorf("PreserveExecutableEnabled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTemplateSettings_PreserveExecutableFalseSurvivesRoundTrip ensures an explicit
+// false is not dropped by omitempty, which would silently flip it back to the default.
+func TestTemplateSettings_PreserveExecutableFalseSurvivesRoundTrip(t *testing.T) {
+	settings := TemplateSettings{PreserveExecutable: NewPreserveExecutable(false)}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+
+	var decoded TemplateSettings
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if decoded.PreserveExecutable == nil {
+		t.Fatal("PreserveExecutable was dropped during round trip")
+	}
+	if decoded.PreserveExecutableEnabled() {
+		t.Error("PreserveExecutableEnabled() = true, want false")
 	}
 }

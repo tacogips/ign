@@ -27,7 +27,7 @@
     }
   },
   "settings": {
-    "preserve_executable": false,
+    "preserve_executable": true,
     "ignore_patterns": [
       ".git",
       ".DS_Store"

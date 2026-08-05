@@ -556,7 +556,7 @@ func TestGenerator_WriteFileSetsExpectedMode(t *testing.T) {
 		Config: model.IgnJson{
 			Name: "test",
 			Settings: &model.TemplateSettings{
-				PreserveExecutable: true,
+				PreserveExecutable: model.NewPreserveExecutable(true),
 			},
 		},
 		Files: []model.TemplateFile{
@@ -585,6 +585,81 @@ func TestGenerator_WriteFileSetsExpectedMode(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0755 {
 		t.Fatalf("generated file mode = %o, want 0755", got)
+	}
+}
+
+// TestGenerator_ExecutableModeFollowsPreserveExecutableSetting verifies that a
+// settings block that does not mention preserve_executable keeps the executable
+// bit, and that an explicit false still drops it.
+func TestGenerator_ExecutableModeFollowsPreserveExecutableSetting(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *model.TemplateSettings
+		wantPerm os.FileMode
+	}{
+		{
+			name:     "no settings block",
+			settings: nil,
+			wantPerm: 0755,
+		},
+		{
+			name:     "settings block without preserve_executable",
+			settings: &model.TemplateSettings{IgnorePatterns: []string{".git"}},
+			wantPerm: 0755,
+		},
+		{
+			name:     "preserve_executable explicitly true",
+			settings: &model.TemplateSettings{PreserveExecutable: model.NewPreserveExecutable(true)},
+			wantPerm: 0755,
+		},
+		{
+			name:     "preserve_executable explicitly false",
+			settings: &model.TemplateSettings{PreserveExecutable: model.NewPreserveExecutable(false)},
+			wantPerm: 0644,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			gen := NewGenerator()
+			ctx := context.Background()
+
+			template := &model.Template{
+				Ref: model.TemplateRef{},
+				Config: model.IgnJson{
+					Name:     "test",
+					Version:  "1.0.0",
+					Settings: tt.settings,
+				},
+				Files: []model.TemplateFile{
+					{
+						Path:    "scripts/build.py",
+						Content: []byte("#!/usr/bin/env python3\n"),
+						Mode:    0755,
+					},
+				},
+				RootPath: tmpDir,
+			}
+
+			opts := GenerateOptions{
+				Template:  template,
+				Variables: parser.NewMapVariables(map[string]interface{}{}),
+				OutputDir: tmpDir,
+			}
+
+			if _, err := gen.Generate(ctx, opts); err != nil {
+				t.Fatalf("Generate() error = %v", err)
+			}
+
+			info, err := os.Stat(filepath.Join(tmpDir, "scripts", "build.py"))
+			if err != nil {
+				t.Fatalf("failed to stat generated file: %v", err)
+			}
+			if got := info.Mode().Perm(); got != tt.wantPerm {
+				t.Fatalf("generated file mode = %o, want %o", got, tt.wantPerm)
+			}
+		})
 	}
 }
 
