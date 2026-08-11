@@ -83,15 +83,17 @@ type UpdateResult struct {
 	FilesSkipped int
 	// FilesOverwritten is the number of existing files overwritten.
 	FilesOverwritten int
-	// FilesDeleted is the number of previously managed files removed because
-	// they no longer exist in the template during an overwrite update.
+	// FilesDeleted is the number of previously managed paths removed from disk
+	// or pruned from tracking because they no longer exist in the template
+	// during an overwrite update.
 	FilesDeleted int
 	// Errors contains non-fatal errors encountered during generation.
 	Errors []error
 	// Files contains the paths of all files processed.
 	Files []string
-	// DeletedFiles contains previously managed paths removed because they no
-	// longer exist in the template during an overwrite update.
+	// DeletedFiles contains previously managed paths removed from disk or
+	// pruned from tracking because they no longer exist in the template during
+	// an overwrite update.
 	DeletedFiles []string
 	// DryRunFiles contains detailed information for dry-run mode.
 	DryRunFiles []DryRunFile

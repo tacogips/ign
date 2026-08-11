@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-08-04T00:00:00Z",
+  "lastUpdated": "2026-08-12T00:00:00Z",
   "plans": {
     "ign-vars": {
       "path": "impl-plans/ign-vars.md",
@@ -255,6 +255,57 @@
           "parallelizable": false,
           "deps": [
             "TASK-004"
+          ]
+        }
+      }
+    },
+    "issue-49-selective-overwrite-manifest-pruning": {
+      "path": "impl-plans/active/issue-49-selective-overwrite-manifest-pruning.md",
+      "phase": 2,
+      "status": "Implemented",
+      "updated": "2026-08-12",
+      "tasks": {
+        "TASK-001": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": []
+        },
+        "TASK-002": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-003": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001"
+          ]
+        },
+        "TASK-004": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-001",
+            "TASK-002",
+            "TASK-003"
+          ]
+        },
+        "TASK-005": {
+          "status": "Completed",
+          "parallelizable": true,
+          "deps": [
+            "TASK-004"
+          ]
+        },
+        "TASK-006": {
+          "status": "Completed",
+          "parallelizable": false,
+          "deps": [
+            "TASK-004",
+            "TASK-005"
           ]
         }
       }

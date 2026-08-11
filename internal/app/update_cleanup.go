@@ -100,7 +100,7 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 		shouldRemove := shouldRemoveManagedPathDuringUpdate(relPath, overwriteMode, overwriteIgnorePatterns)
 		if !shouldRemove {
 			if _, statErr := os.Lstat(canonicalPath); os.IsNotExist(statErr) {
-				result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
+				recordRemovedManagedPath(result, opts.OutputDir, relPath, canonicalPath)
 			}
 			continue
 		}
@@ -108,7 +108,7 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 		info, statErr := os.Lstat(canonicalPath)
 		if statErr != nil {
 			if os.IsNotExist(statErr) {
-				result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
+				recordRemovedManagedPath(result, opts.OutputDir, relPath, canonicalPath)
 				continue
 			}
 			cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to stat removed managed path %s: %w", canonicalPath, statErr))
@@ -120,9 +120,7 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 		}
 
 		if opts.DryRun {
-			result.FilesDeleted++
-			result.DeletedFiles = append(result.DeletedFiles, outputPathForManagedRelativePath(opts.OutputDir, relPath))
-			result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
+			recordRemovedManagedPath(result, opts.OutputDir, relPath, canonicalPath)
 			continue
 		}
 
@@ -131,9 +129,7 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 			cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to remove managed file no longer present in template %s: %w", canonicalPath, err))
 			continue
 		}
-		result.FilesDeleted++
-		result.DeletedFiles = append(result.DeletedFiles, outputPathForManagedRelativePath(opts.OutputDir, relPath))
-		result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
+		recordRemovedManagedPath(result, opts.OutputDir, relPath, canonicalPath)
 		removeEmptyParentDirs(canonicalPath, opts.OutputDir)
 	}
 
@@ -142,6 +138,12 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 		return result, errors.Join(cleanupErrors...)
 	}
 	return result, nil
+}
+
+func recordRemovedManagedPath(result *cleanupRemovedManagedFilesResult, outputDir, relPath, canonicalPath string) {
+	result.FilesDeleted++
+	result.DeletedFiles = append(result.DeletedFiles, outputPathForManagedRelativePath(outputDir, relPath))
+	result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
 }
 
 func hasPreservedTransition(transitions map[string]generator.SymlinkTransition) bool {

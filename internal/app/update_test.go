@@ -1752,6 +1752,14 @@ func TestCompleteUpdate_OverwriteDeleteRespectsTemplateIgnore(t *testing.T) {
 	if _, err := os.Stat(removedPath); err != nil {
 		t.Fatalf("config/local.yaml should be preserved, stat error = %v", err)
 	}
+
+	manifest, err := config.LoadIgnManifest(manifestPath)
+	if err != nil {
+		t.Fatalf("Failed to load manifest: %v", err)
+	}
+	if !slices.Contains(manifest.Files, removedPath) {
+		t.Fatalf("manifest should retain existing ignored stale file %s: %v", removedPath, manifest.Files)
+	}
 }
 
 func TestCompleteUpdate_OverwritePrunesMissingIgnoredManagedFile(t *testing.T) {
@@ -1797,6 +1805,24 @@ func TestCompleteUpdate_OverwritePrunesMissingIgnoredManagedFile(t *testing.T) {
 		},
 	}
 
+	dryRunResult, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+		PrepareResult: prep,
+		NewVariables:  map[string]interface{}{},
+		OutputDir:     tempDir,
+		Overwrite:     true,
+		OverwriteMode: generator.OverwriteSelective,
+		DryRun:        true,
+	})
+	if err != nil {
+		t.Fatalf("CompleteUpdate dry-run failed: %v", err)
+	}
+	if dryRunResult.FilesDeleted != 1 {
+		t.Fatalf("dry-run FilesDeleted = %d, want 1", dryRunResult.FilesDeleted)
+	}
+	if got, want := dryRunResult.DeletedFiles, []string{missingPath}; !slices.Equal(got, want) {
+		t.Fatalf("dry-run DeletedFiles = %v, want %v", got, want)
+	}
+
 	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
 		PrepareResult: prep,
 		NewVariables:  map[string]interface{}{},
@@ -1807,11 +1833,11 @@ func TestCompleteUpdate_OverwritePrunesMissingIgnoredManagedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompleteUpdate failed: %v", err)
 	}
-	if result.FilesDeleted != 0 {
-		t.Fatalf("FilesDeleted = %d, want 0", result.FilesDeleted)
+	if result.FilesDeleted != 1 {
+		t.Fatalf("FilesDeleted = %d, want 1", result.FilesDeleted)
 	}
-	if len(result.DeletedFiles) != 0 {
-		t.Fatalf("DeletedFiles = %v, want empty", result.DeletedFiles)
+	if got, want := result.DeletedFiles, []string{missingPath}; !slices.Equal(got, want) {
+		t.Fatalf("DeletedFiles = %v, want %v", got, want)
 	}
 
 	manifest, err := config.LoadIgnManifest(manifestPath)
@@ -1821,9 +1847,12 @@ func TestCompleteUpdate_OverwritePrunesMissingIgnoredManagedFile(t *testing.T) {
 	if slices.Contains(manifest.Files, missingPath) {
 		t.Fatalf("manifest should not contain missing stale file %s: %v", missingPath, manifest.Files)
 	}
+	if _, err := os.Lstat(missingPath); !os.IsNotExist(err) {
+		t.Fatalf("missing ignored stale file should not be recreated, lstat error = %v", err)
+	}
 }
 
-func TestCompleteUpdate_DryRunDoesNotReportMissingRemovedManagedFiles(t *testing.T) {
+func TestCompleteUpdate_DryRunReportsMissingRemovedManagedFiles(t *testing.T) {
 	tempDir := t.TempDir()
 	ignDir := filepath.Join(tempDir, ".ign")
 	if err := os.MkdirAll(ignDir, 0755); err != nil {
@@ -1876,11 +1905,11 @@ func TestCompleteUpdate_DryRunDoesNotReportMissingRemovedManagedFiles(t *testing
 	if err != nil {
 		t.Fatalf("CompleteUpdate failed: %v", err)
 	}
-	if result.FilesDeleted != 0 {
-		t.Fatalf("FilesDeleted = %d, want 0", result.FilesDeleted)
+	if result.FilesDeleted != 1 {
+		t.Fatalf("FilesDeleted = %d, want 1", result.FilesDeleted)
 	}
-	if len(result.DeletedFiles) != 0 {
-		t.Fatalf("DeletedFiles = %v, want empty", result.DeletedFiles)
+	if got, want := result.DeletedFiles, []string{missingPath}; !slices.Equal(got, want) {
+		t.Fatalf("DeletedFiles = %v, want %v", got, want)
 	}
 }
 

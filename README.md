@@ -181,7 +181,7 @@ requested ref. If the new ref has identical template content, ign still persists
 the requested ref and leaves generated files unchanged unless overwrite or force
 options request regeneration. Dry runs never change the stored ref.
 
-When `--overwrite` or `--overwrite-all` is used, `ign update` also removes project files recorded in `.ign/ign-files.json` when the current template no longer generates them. The manifest is pruned after removal, and stale manifest entries for files that are already missing are pruned without reporting a deletion. Selective overwrite does not remove paths matched by `.ign-overwrite-ignore`.
+When `--overwrite` or `--overwrite-all` is used, `ign update` also removes project files recorded in `.ign/ign-files.json` when the current template no longer generates them. The manifest is pruned after removal. Stale manifest entries for files that are already missing are pruned and reported with `D` in dry-run, confirmation, and write summaries. Selective overwrite preserves existing stale files matched by `.ign-overwrite-ignore`, but still prunes matching stale manifest entries when the files are already absent.
 
 If a template changes a managed directory into a symlink, update replaces the directory only when manifest ownership or rendered-template content equivalence proves the directory is safe to remove. `--overwrite-all` and `--force` do not remove unproven directory contents.
 
