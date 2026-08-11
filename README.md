@@ -148,7 +148,7 @@ If template declarations cannot be fetched, `ign vars` falls back to local
 
 ### `ign update [output-path]`
 
-Fetch the checked-out template again and regenerate project files when the template hash has changed.
+Fetch the checked-out template again and regenerate project files when the template hash has changed. When `[output-path]` is provided, update reads and writes that project's `.ign/` tracking files.
 
 ```bash
 ign update
@@ -182,6 +182,19 @@ the requested ref and leaves generated files unchanged unless overwrite or force
 options request regeneration. Dry runs never change the stored ref.
 
 When `--overwrite` or `--overwrite-all` is used, `ign update` also removes project files recorded in `.ign/ign-files.json` when the current template no longer generates them. The manifest is pruned after removal, and stale manifest entries for files that are already missing are pruned without reporting a deletion. Selective overwrite does not remove paths matched by `.ign-overwrite-ignore`.
+
+If a template changes a managed directory into a symlink, update replaces the directory only when manifest ownership or rendered-template content equivalence proves the directory is safe to remove. `--overwrite-all` and `--force` do not remove unproven directory contents.
+
+When ownership cannot be proven, the directory and everything in it are preserved and every other template change still applies. The affected path is reported as `BLOCKED` with the paths that prevented the transition and the steps to recover, and `ign update` exits non-zero so a preserved directory is never mistaken for a completed transition:
+
+```text
+# BLOCKED: .claude
+#   issue-45 partial-state recovery required for .claude -> .agents: ign cannot
+#   prove the existing directory is template-owned or content-equivalent;
+#   blocking paths: .claude/user.txt; --overwrite-all and --force cannot remove
+#   unproven directory contents. Remove or move the stale directory, then rerun
+#   update: mv .claude .claude.backup; ign update --overwrite-all --yes
+```
 
 When `--overwrite` or `--overwrite-all` is used without `--yes`, `ign update` displays files that will change before prompting:
 

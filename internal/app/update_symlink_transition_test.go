@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"golang.org/x/sys/unix"
@@ -199,7 +200,7 @@ func assertDryRunOverwrite(t *testing.T, result *UpdateResult, path string) {
 	t.Fatalf("dry-run files = %#v, missing transition %s", result.DryRunFiles, path)
 }
 
-func TestCompleteUpdate_OverwriteSymlinkPreservesUnownedOrEmptyDirectory(t *testing.T) {
+func TestCompleteUpdate_OverwriteSymlinkPreservesAndReportsUnownedOrEmptyDirectory(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		add      func(t *testing.T, dir string)
@@ -254,9 +255,7 @@ func TestCompleteUpdate_OverwriteSymlinkPreservesUnownedOrEmptyDirectory(t *test
 			if err != nil {
 				t.Fatalf("update: %v", err)
 			}
-			if len(result.Errors) != 0 {
-				t.Fatalf("generation errors = %v", result.Errors)
-			}
+			assertUnresolvedTransitionReported(t, result, managedDir)
 			info, err := os.Lstat(managedDir)
 			if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 				t.Fatalf("managed directory = %v, %v; want preserved directory", info, err)
@@ -377,17 +376,19 @@ func TestCompleteUpdate_SymlinkTransitionNoOverwriteAndProtectedPreserveDirector
 	}
 }
 
-func TestCompleteUpdate_OverwriteSymlinkPreservedTreeSkipsCleanup(t *testing.T) {
+func TestCompleteUpdate_OverwriteSymlinkPreservedTreeReportsAndSkipsCleanup(t *testing.T) {
 	tempDir, prep, managedDir, retiredPath, agentsPath, manifestPath := setupSymlinkTransitionUpdate(t)
 	if err := os.WriteFile(filepath.Join(managedDir, "user.txt"), []byte("keep"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
+	result, err := CompleteUpdate(context.Background(), CompleteUpdateOptions{
 		PrepareResult: prep, NewVariables: map[string]interface{}{}, OutputDir: tempDir, Overwrite: true,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("preserved update: %v", err)
 	}
+	assertUnresolvedTransitionReported(t, result, managedDir)
 	if info, err := os.Lstat(managedDir); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		t.Fatalf("managed directory = %v, %v; want preserved directory", info, err)
 	}
@@ -975,4 +976,23 @@ func symlinkTransitionPrepareResult(tempDir string, template *model.Template) *P
 		IgnVarPath:    filepath.Join(tempDir, ".ign", model.IgnVarFile),
 		IgnConfig:     &model.IgnConfig{Template: model.TemplateSource{URL: "https://github.com/test/template"}, Hash: testHash1},
 	}
+}
+
+// assertUnresolvedTransitionReported checks that an unproven directory-to-symlink
+// transition was surfaced rather than silently skipped. The update itself still
+// succeeds so unrelated template changes are not held hostage by one directory.
+func assertUnresolvedTransitionReported(t *testing.T, result *UpdateResult, path string) {
+	t.Helper()
+	if result == nil {
+		t.Fatal("update returned no result")
+	}
+	if !slices.Contains(result.UnresolvedTransitionPaths, path) {
+		t.Fatalf("UnresolvedTransitionPaths = %v, want %s", result.UnresolvedTransitionPaths, path)
+	}
+	for _, err := range result.Errors {
+		if strings.Contains(err.Error(), "issue-45 partial-state") {
+			return
+		}
+	}
+	t.Fatalf("errors = %v, want issue-45 partial-state diagnostic", result.Errors)
 }

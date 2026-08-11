@@ -267,7 +267,23 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		printInfo(fmt.Sprintf("Project ready at: %s", outputPath))
 	}
 
-	return nil
+	return unresolvedTransitionError(result)
+}
+
+// unresolvedTransitionError fails the command when a managed directory was
+// preserved because its symlink transition could not be proven safe. Every
+// other template change has already been applied; the non-zero exit exists so
+// the unresolved directory is not silently carried forward.
+func unresolvedTransitionError(result *app.UpdateResult) error {
+	if result == nil || len(result.UnresolvedTransitionPaths) == 0 {
+		return nil
+	}
+	printSeparator()
+	printWarning(fmt.Sprintf("%d managed directory transition(s) could not be completed:", len(result.UnresolvedTransitionPaths)))
+	for _, path := range result.UnresolvedTransitionPaths {
+		printWarning(fmt.Sprintf("  ! %s (preserved)", path))
+	}
+	return fmt.Errorf("update completed with %d unresolved managed directory-to-symlink transition(s); see the recovery steps above", len(result.UnresolvedTransitionPaths))
 }
 
 // truncateHash truncates a hash for display purposes.
@@ -374,6 +390,22 @@ func PromptForNewVariables(varDefs map[string]model.VarDef) (map[string]interfac
 	return vars, nil
 }
 
+// unresolvedTransitionDiagnostics maps each preserved managed directory to the
+// explanation of why its symlink transition was refused. Errors carries one
+// diagnostic per unresolved path, appended in the same order.
+func unresolvedTransitionDiagnostics(result *app.UpdateResult) map[string]string {
+	diagnostics := make(map[string]string, len(result.UnresolvedTransitionPaths))
+	offset := len(result.Errors) - len(result.UnresolvedTransitionPaths)
+	for i, path := range result.UnresolvedTransitionPaths {
+		if index := offset + i; index >= 0 && index < len(result.Errors) {
+			diagnostics[path] = result.Errors[index].Error()
+			continue
+		}
+		diagnostics[path] = "managed directory-to-symlink transition could not be proven safe"
+	}
+	return diagnostics
+}
+
 // printUpdateDryRunPatch outputs dry-run results in unified diff format.
 func printUpdateDryRunPatch(result *app.UpdateResult) {
 	if result == nil {
@@ -419,9 +451,18 @@ func printUpdateDryRunPatch(result *app.UpdateResult) {
 	fmt.Println()
 	fmt.Println()
 
+	unresolved := unresolvedTransitionDiagnostics(result)
+
 	// Print each file in patch format
 	for _, file := range result.DryRunFiles {
 		if file.WouldSkip {
+			// A preserved directory-to-symlink transition is not an ordinary
+			// "already exists" skip. Report why it was refused and how to
+			// recover instead of suggesting flags that cannot resolve it.
+			if diagnostic, blocked := unresolved[file.Path]; blocked {
+				fmt.Printf("# BLOCKED: %s\n#   %s\n\n", file.Path, diagnostic)
+				continue
+			}
 			fmt.Printf("# SKIP: %s (file exists, use --overwrite or --force to overwrite)\n\n", file.Path)
 			continue
 		}

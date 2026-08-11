@@ -77,6 +77,14 @@ const (
 	SymlinkTransitionPreserved SymlinkTransitionDisposition = "preserved"
 )
 
+// SymlinkTransitionRecoveryReason records why a preserved directory can be
+// replaced even though manifest ownership was not sufficient by itself.
+type SymlinkTransitionRecoveryReason string
+
+const (
+	SymlinkTransitionRecoveredByContentEquivalence SymlinkTransitionRecoveryReason = "content_equivalence"
+)
+
 // SymlinkTransition is an update-layer ownership decision. RetiredManagedPaths
 // are consumed by update cleanup after an eligible replacement succeeds.
 type SymlinkTransition struct {
@@ -91,6 +99,13 @@ type SymlinkTransition struct {
 	// It lets the update layer create the replacement before generation while
 	// retaining the old directory until tracking artifacts are committed.
 	Target string
+	// RecoveryReason is set when the update layer used a narrow recovery proof
+	// instead of ordinary manifest ownership.
+	RecoveryReason SymlinkTransitionRecoveryReason
+	// Diagnostic explains why a preserved transition was rejected by update
+	// classification. The CLI/app layer returns this before generation so the
+	// generic skip output does not hide the real recovery issue.
+	Diagnostic error
 }
 
 // DryRunFile contains information about a file that would be created in dry-run mode.
@@ -156,6 +171,17 @@ func NewGenerator() Generator {
 		processor: nil, // Will be created per-generation with template settings
 		writer:    nil, // Will be created per-generation with template settings
 	}
+}
+
+// RenderTemplateFileContent applies the same content processing used by
+// generation for a single non-symlink template file.
+func RenderTemplateFileContent(ctx context.Context, template *model.Template, file model.TemplateFile, vars parser.Variables) ([]byte, error) {
+	if template == nil {
+		return nil, fmt.Errorf("template cannot be nil")
+	}
+	settings := getTemplateSettings(template)
+	processor := NewFileProcessor(parser.NewParser(), settings.BinaryExtensions)
+	return processor.Process(ctx, file, vars, template.RootPath)
 }
 
 // Generate creates a project from a template with the given options.

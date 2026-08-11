@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -45,6 +47,36 @@ func TestRunUpdate_ConfirmationPreviewReusesSymlinkTransitionPlan(t *testing.T) 
 	}
 	if calls[1].ExecutionPlan != previewPlan {
 		t.Fatal("confirmed update did not receive the exact preview execution plan")
+	}
+}
+
+func TestRunUpdatePassesOutputPathToPrepareAndComplete(t *testing.T) {
+	resetUpdateCommandDependencies(t)
+	updateDryRun = true
+	updateOverwrite = true
+
+	var prepareOutput string
+	var completeOutput string
+	prepareUpdate = func(_ context.Context, opts app.UpdateOptions) (*app.PrepareUpdateResult, error) {
+		prepareOutput = opts.OutputDir
+		return &app.PrepareUpdateResult{
+			HashChanged: true,
+			IgnConfig:   &model.IgnConfig{Template: model.TemplateSource{URL: "https://github.com/test/template"}},
+		}, nil
+	}
+	completeUpdate = func(_ context.Context, opts app.CompleteUpdateOptions) (*app.UpdateResult, error) {
+		completeOutput = opts.OutputDir
+		return &app.UpdateResult{}, nil
+	}
+
+	if err := runUpdate(&cobra.Command{}, []string{"./my-project"}); err != nil {
+		t.Fatalf("run update: %v", err)
+	}
+	if prepareOutput != "./my-project" {
+		t.Fatalf("prepare OutputDir = %q, want ./my-project", prepareOutput)
+	}
+	if completeOutput != "./my-project" {
+		t.Fatalf("complete OutputDir = %q, want ./my-project", completeOutput)
 	}
 }
 
@@ -524,5 +556,43 @@ func TestTruncateHash(t *testing.T) {
 				t.Errorf("truncateHash(%q) = %q, want %q", tt.hash, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestUnresolvedTransitionErrorFailsOnlyWhenTransitionsPreserved(t *testing.T) {
+	if err := unresolvedTransitionError(&app.UpdateResult{}); err != nil {
+		t.Fatalf("clean update returned error: %v", err)
+	}
+	if err := unresolvedTransitionError(nil); err != nil {
+		t.Fatalf("nil result returned error: %v", err)
+	}
+
+	err := unresolvedTransitionError(&app.UpdateResult{
+		UnresolvedTransitionPaths: []string{"/project/.claude"},
+		Errors:                    []error{errors.New("issue-45 partial-state recovery required")},
+	})
+	if err == nil {
+		t.Fatal("preserved transition did not fail the command")
+	}
+	if !strings.Contains(err.Error(), "unresolved managed directory-to-symlink transition") {
+		t.Fatalf("error = %v, want unresolved transition summary", err)
+	}
+}
+
+func TestUnresolvedTransitionDiagnosticsPairsPathsWithReportedErrors(t *testing.T) {
+	result := &app.UpdateResult{
+		UnresolvedTransitionPaths: []string{"/project/.claude"},
+		Errors: []error{
+			errors.New("unrelated generation failure"),
+			errors.New("issue-45 partial-state recovery required for /project/.claude"),
+		},
+	}
+	diagnostics := unresolvedTransitionDiagnostics(result)
+	got, ok := diagnostics["/project/.claude"]
+	if !ok {
+		t.Fatalf("diagnostics = %v, want entry for preserved path", diagnostics)
+	}
+	if !strings.Contains(got, "issue-45 partial-state") {
+		t.Fatalf("diagnostic = %q, want the issue-45 explanation, not an unrelated error", got)
 	}
 }

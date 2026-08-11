@@ -95,6 +95,11 @@ type UpdateResult struct {
 	DeletedFiles []string
 	// DryRunFiles contains detailed information for dry-run mode.
 	DryRunFiles []DryRunFile
+	// UnresolvedTransitionPaths lists managed directories preserved because ign
+	// could not prove their directory-to-symlink transition was safe. The
+	// matching explanation is in Errors; callers report these separately so the
+	// generic "already exists" skip never stands in for a recovery diagnostic.
+	UnresolvedTransitionPaths []string
 	// Directories contains directories that would be created (dry-run only).
 	Directories []string
 	// RefChanged indicates whether the stored template ref changed.
@@ -109,7 +114,7 @@ type UpdateResult struct {
 // PrepareUpdate prepares for update by checking if .ign exists and fetching template.
 // Returns information about hash changes and new variables that need prompting.
 func PrepareUpdate(ctx context.Context, opts UpdateOptions) (*PrepareUpdateResult, error) {
-	configDir := model.IgnConfigDir
+	configDir := filepath.Join(opts.OutputDir, model.IgnConfigDir)
 	ignConfigPath := filepath.Join(configDir, model.IgnProjectConfigFile)
 	ignVarPath := filepath.Join(configDir, model.IgnVarFile)
 
@@ -317,7 +322,8 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 	}
 	debug.DebugValue("[app] Merged variables count", len(mergedVars))
 
-	rawVars, vars, err := prepareVariablesForGeneration(prep.IgnJson.Variables, mergedVars, model.IgnConfigDir, opts.OutputDir)
+	configDir := filepath.Dir(prep.IgnConfigPath)
+	rawVars, vars, err := prepareVariablesForGeneration(prep.IgnJson.Variables, mergedVars, configDir, opts.OutputDir)
 	if err != nil {
 		return nil, err
 	}
@@ -381,11 +387,12 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		if err != nil {
 			return nil, NewCheckoutError("failed to classify symlink transitions", err)
 		}
-		plan, err = classifyUpdateSymlinkTransitions(opts.OutputDir, manifestPath, prep.Template, preview, effectiveUpdateOverwriteMode(opts.OverwriteMode, opts.Overwrite))
+		plan, err = classifyUpdateSymlinkTransitionsWithVariables(ctx, opts.OutputDir, manifestPath, prep.Template, vars, preview, effectiveUpdateOverwriteMode(opts.OverwriteMode, opts.Overwrite))
 		if err != nil {
 			return nil, NewCheckoutError("failed to classify symlink transitions", err)
 		}
 	}
+	unresolvedTransitionPaths, transitionDiagnostics := collectUpdateSymlinkTransitionDiagnostics(plan)
 	if plan != nil {
 		genOpts.SymlinkTransitions = plan.transitions
 	}
@@ -470,13 +477,15 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		FilesSkipped:         genResult.FilesSkipped,
 		FilesOverwritten:     genResult.FilesOverwritten,
 		FilesDeleted:         removedManagedFiles.FilesDeleted,
-		Errors:               genResult.Errors,
+		Errors:               append(append([]error(nil), genResult.Errors...), transitionDiagnostics...),
 		Files:                genResult.Files,
 		DeletedFiles:         removedManagedFiles.DeletedFiles,
 		Directories:          genResult.Directories,
 		RefChanged:           prep.RefChanged,
 		RefOverrideRequested: prep.RefOverrideRequested,
 		ExecutionPlan:        plan,
+
+		UnresolvedTransitionPaths: unresolvedTransitionPaths,
 	}
 
 	// Convert dry-run files

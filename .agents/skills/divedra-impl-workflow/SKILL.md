@@ -51,6 +51,10 @@ explicit issue/reference context. Typical fields:
 - `workflowInput.referenceRepositoryRoot`
 - `workflowInput.referenceRepositoryUrl`
 
+When the intake step splits accepted scope into feature fanout items, the local
+workflow expects `featureFanoutItems` at the root of the step output payload for
+the planning fanout transition.
+
 Planning-only mode is available via:
 
 - `workflowInput.executionMode: "design-plan-only"`
