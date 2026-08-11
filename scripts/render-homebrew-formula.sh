@@ -66,6 +66,7 @@ main() {
 class Ign < Formula
   desc "Template-based code generation CLI tool"
   homepage "https://github.com/tacogips/ign"
+  version "$version"
   license "MIT"
 
   livecheck do
@@ -75,20 +76,20 @@ class Ign < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "$release_base_url/$artifact_name-$version-darwin-arm64.tar.gz?version=$version"
+      url "$release_base_url/$artifact_name-$version-darwin-arm64.tar.gz"
       sha256 "$darwin_arm64_sha"
     else
-      url "$release_base_url/$artifact_name-$version-darwin-x64.tar.gz?version=$version"
+      url "$release_base_url/$artifact_name-$version-darwin-x64.tar.gz"
       sha256 "$darwin_x64_sha"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "$release_base_url/$artifact_name-$version-linux-arm64.tar.gz?version=$version"
+      url "$release_base_url/$artifact_name-$version-linux-arm64.tar.gz"
       sha256 "$linux_arm64_sha"
     else
-      url "$release_base_url/$artifact_name-$version-linux-x64.tar.gz?version=$version"
+      url "$release_base_url/$artifact_name-$version-linux-x64.tar.gz"
       sha256 "$linux_x64_sha"
     end
   end
