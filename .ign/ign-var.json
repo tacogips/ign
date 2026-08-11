@@ -1,9 +1,14 @@
 {
   "variables": {
     "DESCRIPTION": "templating",
+    "GITHUB_REPOSITORY": "user/repo",
     "GO_VERSION": "1.25.4",
+    "HOMEBREW_FORMULA_CLASS": "App",
+    "HOMEBREW_TAP": "user/tap",
     "HOMEPAGE": "https://github.com/tacogips/ign",
+    "LICENSE": "MIT",
     "MODULE_PATH": "github.com/tacogips/ign",
-    "PROJECT_NAME": "ign"
+    "PROJECT_NAME": "ign",
+    "VERSION": "0.1.0"
   }
 }

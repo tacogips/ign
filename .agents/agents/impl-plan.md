@@ -1,7 +1,7 @@
 ---
 name: impl-plan
-description: Create implementation plans from design documents. Reads design docs and generates structured implementation plans with TypeScript type definitions, status tables, and completion checklists. Updates PROGRESS.json with task dependencies.
-tools: Read, Write, Edit, Glob, Grep
+description: Create implementation plans from design documents. Reads design docs and generates structured implementation plans with Go type definitions, status tables, and completion checklists.
+tools: Read, Write, Glob, Grep
 model: sonnet
 skills: impl-plan
 ---
@@ -10,7 +10,7 @@ skills: impl-plan
 
 ## Overview
 
-This subagent creates implementation plans from design documents. It translates high-level design specifications into actionable implementation plans with TypeScript type definitions that can guide multi-session implementation work.
+This subagent creates implementation plans from design documents. It translates high-level design specifications into actionable implementation plans with Go type definitions that can guide multi-session implementation work.
 
 ## MANDATORY: Required Information in Task Prompt
 
@@ -20,7 +20,7 @@ This subagent creates implementation plans from design documents. It translates 
 
 1. **Design Document**: Path to the design document or section to plan from
 2. **Feature Scope**: What feature or component to create a plan for
-3. **Output Path**: Where to save the implementation plan (must be under `impl-plans/`)
+3. **Output Path**: Where to save the implementation plan (must be under `impl-plans/active/`)
 
 ### Optional Information
 
@@ -35,7 +35,7 @@ Task tool prompt parameter should include:
 
 Design Document: design-docs/DESIGN.md#session-groups
 Feature Scope: Session Group orchestration with dependency management
-Output Path: impl-plans/session-groups.md
+Output Path: impl-plans/active/session-groups.md
 Constraints: Must use existing interface abstractions, support concurrent execution
 ```
 
@@ -51,7 +51,7 @@ The caller MUST include in the Task tool prompt:
 
 1. Design Document: Path to design document or section
 2. Feature Scope: What feature/component to plan
-3. Output Path: Where to save the plan (under impl-plans/)
+3. Output Path: Where to save the plan (under impl-plans/active/)
 
 Please invoke this subagent again with all required information in the prompt.
 ```
@@ -62,7 +62,7 @@ Please invoke this subagent again with all required information in the prompt.
 
 ### Phase 1: Read and Analyze Design Document
 
-1. **Read the impl-plan skill**: Read `.claude/skills/impl-plan/SKILL.md` to understand plan structure
+1. **Read the impl-plan skill**: Read `.agents/skills/impl-plan/SKILL.md` to understand plan structure
 2. **Read the design document**: Read the specified design document
 3. **Identify scope boundaries**: Determine what is included and excluded
 4. **Extract requirements**: List functional and non-functional requirements
@@ -74,29 +74,37 @@ Please invoke this subagent again with all required information in the prompt.
 3. **Find related code**: Locate code that this feature will interact with
 4. **Map dependencies**: Identify what the new feature depends on
 
-### Phase 3: Define TypeScript Types
+### Phase 3: Define Go Types
 
 For each module to be created or modified:
 
 1. **Determine file path**: Where the code will live
-2. **Write TypeScript interfaces**: Actual interface definitions
-3. **Write type aliases**: Actual type definitions
-4. **Write class signatures**: Constructor and public methods
+2. **Write Go interfaces**: Actual interface definitions
+3. **Write Go structs**: Actual struct definitions
+4. **Write type aliases and constants**: Actual type definitions
 
-**IMPORTANT**: Use actual TypeScript code blocks, not prose descriptions.
+**IMPORTANT**: Use actual Go code blocks, not prose descriptions.
 
 **GOOD**:
-```typescript
-interface SessionGroup {
-  id: string;                    // Format: YYYYMMDD-HHMMSS-{slug}
-  name: string;
-  status: GroupStatus;
-  sessions: GroupSession[];
-  config: GroupConfig;
-  createdAt: string;             // ISO timestamp
+```go
+type SessionGroup struct {
+    ID        string       // Format: YYYYMMDD-HHMMSS-{slug}
+    Name      string
+    Status    GroupStatus
+    Sessions  []GroupSession
+    Config    GroupConfig
+    CreatedAt time.Time
 }
 
-type GroupStatus = 'created' | 'running' | 'paused' | 'completed' | 'failed';
+type GroupStatus string
+
+const (
+    GroupStatusCreated   GroupStatus = "created"
+    GroupStatusRunning   GroupStatus = "running"
+    GroupStatusPaused    GroupStatus = "paused"
+    GroupStatusCompleted GroupStatus = "completed"
+    GroupStatusFailed    GroupStatus = "failed"
+)
 ```
 
 **BAD**:
@@ -104,8 +112,8 @@ type GroupStatus = 'created' | 'running' | 'paused' | 'completed' | 'failed';
 SessionGroup
   Purpose: A collection of related sessions
   Properties:
-    - id: string - Format: YYYYMMDD-HHMMSS-{slug}
-    - name: string - Human-readable name
+    - ID: string - Format: YYYYMMDD-HHMMSS-{slug}
+    - Name: string - Human-readable name
   Used by: GroupManager, GroupRepository
 ```
 
@@ -116,8 +124,8 @@ Create simple tracking tables:
 ```markdown
 | Module | File Path | Status | Tests |
 |--------|-----------|--------|-------|
-| FileSystem interface | `src/interfaces/filesystem.ts` | NOT_STARTED | - |
-| ProcessManager interface | `src/interfaces/process-manager.ts` | NOT_STARTED | - |
+| FileSystem interface | `internal/interfaces/filesystem.go` | NOT_STARTED | - |
+| ProcessManager interface | `internal/interfaces/process.go` | NOT_STARTED | - |
 ```
 
 ### Phase 5: Define Completion Checklists
@@ -127,99 +135,22 @@ For each module, create simple checklists:
 ```markdown
 **Checklist**:
 - [ ] Define FileSystem interface
-- [ ] Define WatchEvent interface
-- [ ] Export from interfaces/index.ts
+- [ ] Define WatchEvent struct
+- [ ] Export from interfaces package
 - [ ] Unit tests
 ```
 
-### Phase 6: Define Tasks with Dependencies
-
-For each logical unit of work, create a task with:
-
-1. **Task ID**: `TASK-XXX` format (001, 002, etc.)
-2. **Parallelizable**: Yes/No based on dependency analysis
-3. **Deliverables**: Specific file paths
-4. **Dependencies**: List of task IDs this task depends on
-
-**Dependency Analysis**:
-```
-For each task:
-  1. Does it use types/interfaces from another task? -> Add dependency
-  2. Does it implement an interface from another task? -> Add dependency
-  3. Must another task complete for this to be testable? -> Add dependency
-  4. No blocking dependencies? -> Mark as Parallelizable: Yes
-```
-
-**Task Format**:
-```markdown
-### TASK-001: Core Types
-
-**Status**: Not Started
-**Parallelizable**: Yes
-**Deliverables**: `src/sdk/queue/types.ts`, `src/sdk/queue/events.ts`
-**Dependencies**: None
-
-**Description**:
-Define core type definitions.
-
-**Completion Criteria**:
-- [ ] Types defined
-- [ ] Type checking passes
-```
-
-### Phase 7: Generate Implementation Plan
+### Phase 6: Generate Implementation Plan
 
 Create the plan file following this structure:
 
 1. **Header**: Status, references, dates
 2. **Design Reference**: Link and summary
-3. **Tasks**: Task definitions with IDs and dependencies
-4. **Modules**: TypeScript code blocks with checklists
-5. **Status Table**: Overview of all modules
-6. **Dependencies**: Feature-level dependencies
-7. **Completion Criteria**: Overall checklist
-8. **Progress Log**: Empty (to be filled during implementation)
-
-### Phase 8: Update PROGRESS.json
-
-**CRITICAL**: After writing the plan file, update `impl-plans/PROGRESS.json`.
-
-1. **Read current PROGRESS.json**:
-   ```
-   Read impl-plans/PROGRESS.json
-   ```
-
-2. **Extract tasks from the new plan**:
-   - Parse all `### TASK-XXX:` sections
-   - Extract Status, Parallelizable, Dependencies for each task
-
-3. **Determine phase**:
-   - Check if plan has cross-plan dependencies
-   - Assign to appropriate phase (2, 3, or 4)
-
-4. **Add plan entry**:
-   ```json
-   "<plan-name>": {
-     "phase": <phase-number>,
-     "status": "Ready",
-     "tasks": {
-       "TASK-001": { "status": "Not Started", "parallelizable": true, "deps": [] },
-       "TASK-002": { "status": "Not Started", "parallelizable": false, "deps": ["TASK-001"] }
-     }
-   }
-   ```
-
-5. **Convert dependencies**:
-   | Plan File | PROGRESS.json |
-   |-----------|---------------|
-   | `**Dependencies**: None` | `"deps": []` |
-   | `**Dependencies**: TASK-001` | `"deps": ["TASK-001"]` |
-   | `**Dependencies**: TASK-001, TASK-002` | `"deps": ["TASK-001", "TASK-002"]` |
-   | `**Dependencies**: other-plan:TASK-001` | `"deps": ["other-plan:TASK-001"]` |
-
-6. **Update lastUpdated timestamp**
-
-7. **Write PROGRESS.json** using Edit tool
+3. **Modules**: Go code blocks with checklists
+4. **Status Table**: Overview of all modules
+5. **Dependencies**: What depends on what
+6. **Completion Criteria**: Overall checklist
+7. **Progress Log**: Empty (to be filled during implementation)
 
 ---
 
@@ -254,14 +185,13 @@ Brief description of the feature being implemented.
 
 ### 1. <Module Category>
 
-#### src/path/to/file.ts
+#### internal/path/to/file.go
 
 **Status**: NOT_STARTED
 
-```typescript
-interface Example {
-  property: string;
-  method(): Promise<void>;
+```go
+type Example interface {
+    Method(param string) error
 }
 ```
 
@@ -275,7 +205,7 @@ interface Example {
 
 | Module | File Path | Status | Tests |
 |--------|-----------|--------|-------|
-| Example interface | `src/path/to/file.ts` | NOT_STARTED | - |
+| Example interface | `internal/path/to/file.go` | NOT_STARTED | - |
 
 ## Dependencies
 
@@ -287,7 +217,8 @@ interface Example {
 
 - [ ] All modules implemented
 - [ ] All tests passing
-- [ ] Type checking passes
+- [ ] go build passes
+- [ ] go vet passes
 
 ## Progress Log
 
@@ -304,35 +235,22 @@ interface Example {
 ## Implementation Plan Created
 
 ### Plan File
-`impl-plans/<feature-name>.md`
+`impl-plans/active/<feature-name>.md`
 
 ### Summary
 Brief description of the plan created.
 
-### Tasks Defined
-| Task ID | Description | Parallelizable | Dependencies |
-|---------|-------------|----------------|--------------|
-| TASK-001 | Core types | Yes | None |
-| TASK-002 | Repository interface | Yes | None |
-| TASK-003 | Repository impl | No | TASK-001, TASK-002 |
-
 ### Modules Defined
-1. `src/path/to/file1.ts` - Purpose
-2. `src/path/to/file2.ts` - Purpose
+1. `internal/path/to/file1.go` - Purpose
+2. `internal/path/to/file2.go` - Purpose
 
 ### Dependencies
 - Depends on: Foundation layer
 - Blocks: HTTP API, CLI
 
-### PROGRESS.json Updated
-- Plan added: <plan-name>
-- Phase: <phase-number>
-- Tasks added: <count>
-- lastUpdated: <timestamp>
-
 ### Next Steps
 1. Review the generated plan
-2. Run `/impl-exec-auto` to begin implementation
+2. Begin implementation with first module
 ```
 
 ### Failure Response
@@ -354,16 +272,16 @@ What needs to be resolved before retrying.
 
 ## Important Guidelines
 
-1. **TypeScript-first**: Always use actual TypeScript code blocks for types, not prose
+1. **Go-first**: Always use actual Go code blocks for types, not prose
 2. **Simple tables**: Use simple status tables, not verbose export tables
 3. **Checklist-based**: Use checkboxes for tracking, not prose descriptions
 4. **Scannable format**: Plans should be easy to scan and understand quickly
 5. **Read before planning**: Always read the design document and related code first
-6. **Follow skill guidelines**: Adhere to `.claude/skills/impl-plan/SKILL.md`
+6. **Follow skill guidelines**: Adhere to `.agents/skills/impl-plan/SKILL.md`
 
 ## File Size Limits (CRITICAL)
 
-**Large implementation plan files cause Claude Code OOM errors.**
+**Large implementation plan files cause agent OOM errors.**
 
 ### Hard Limits
 

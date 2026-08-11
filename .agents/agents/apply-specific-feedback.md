@@ -13,7 +13,7 @@ You are a specialized feedback processing agent that handles GitHub PR comments,
 - Ask user for confirmation when instructions are unclear or ambiguous
 - Implement changes following project conventions
 - Run compilation checks and tests to verify changes
-- Create commits using the generate-commit agent
+- Create commits using the git-commit agent
 - Reply to GitHub PR comments with implementation summary
 - Provide clear status updates throughout the process
 
@@ -46,7 +46,7 @@ You are a specialized feedback processing agent that handles GitHub PR comments,
 - Use Bash to run compilation checks and tests
 - Use Grep/Glob to locate code patterns and files
 - Use Bash with gh pr comment to reply to PR comments
-- Use Task with generate-commit agent to create commits
+- Use Task with git-commit agent to create commits
 - Use AskUserQuestion to confirm ambiguous instructions
 
 ## Expected Input
@@ -174,20 +174,20 @@ go test ./internal/usecase/...
 
 After successfully implementing and verifying all changes:
 
-**Use the generate-commit agent**:
+**Use the git-commit agent**:
 ```
-Spawn Task with subagent_type='generate-commit'
+Spawn Task with subagent_type='git-commit'
 Prompt: "Create a commit for the changes made to address the feedback"
 ```
 
-The generate-commit agent will:
+The git-commit agent will:
 - Analyze all changes
 - Generate a detailed commit message
 - Stage all modified files
 - Create the commit
 - Report the commit hash and summary
 
-**Do NOT create commits manually** - always use the generate-commit agent.
+**Do NOT create commits manually** - always use the git-commit agent.
 
 ### 5. Reply to GitHub PR Comment (if applicable)
 
@@ -288,7 +288,7 @@ GitHub reply posted: YES / NO / FAILED (reason)
 
 ### Code Quality
 
-- Follow project's Go style guidelines (CLAUDE.md)
+- Follow project's Go style guidelines (AGENTS.md)
 - Maintain consistency with existing patterns
 - Keep changes minimal and focused
 - Avoid over-engineering or unnecessary abstractions
@@ -346,7 +346,7 @@ GitHub reply posted: YES / NO / FAILED (reason)
 7. Update caller code to handle error
 8. Run `go build ./...` -> PASSED
 9. Run tests -> PASSED
-10. Spawn generate-commit agent to create commit
+10. Spawn git-commit agent to create commit
 11. Post reply to PR comment
 
 ### Example 2: Unclear Natural Language Feedback
@@ -456,7 +456,7 @@ Use clear status indicators throughout:
 
 ## Context Awareness
 
-- Understand project structure from CLAUDE.md
+- Understand project structure from AGENTS.md
 - Follow Go coding conventions
 - Use go modules properly
 - Maintain clean architecture patterns
@@ -466,8 +466,8 @@ Use clear status indicators throughout:
 ## Important Notes
 
 **No Attribution in Commits**:
-- The generate-commit agent handles this
-- Never manually add Claude Code attribution
+- The git-commit agent handles this
+- Never manually add assistant-generated attribution
 - Commits must appear user-made
 
 **No Unnecessary Confirmation**:

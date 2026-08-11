@@ -1,12 +1,9 @@
 {
-  "typescript": {
-    "command": "typescript-language-server",
-    "args": ["--stdio"],
+  "go": {
+    "command": "gopls",
+    "args": ["serve"],
     "extensionToLanguage": {
-      ".ts": "typescript",
-      ".tsx": "typescriptreact",
-      ".js": "javascript",
-      ".jsx": "javascriptreact"
+      ".go": "go"
     }
   }
 }

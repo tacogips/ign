@@ -22,6 +22,7 @@ golangci-lint = "latest"
 gitleaks = "latest"
 pre-commit = "latest"
 "go:golang.org/x/tools/gopls" = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
 
 [tasks."default"]
 description = "Show available tasks"

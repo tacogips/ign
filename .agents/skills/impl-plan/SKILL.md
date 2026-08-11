@@ -19,7 +19,7 @@ Apply this skill when:
 ## Purpose
 
 Implementation plans bridge the gap between design documents (what to build) and actual implementation (how to build). They provide:
-- Clear deliverables with TypeScript type definitions
+- Clear deliverables with Go type definitions
 - Simple status tracking tables
 - Checklist-based completion criteria
 - Progress tracking across sessions
@@ -65,13 +65,13 @@ Split a plan into multiple files when ANY of these conditions are met:
 
 ```
 BEFORE (one large plan):
-impl-plans/foundation-and-core.md (1100+ lines)
+impl-plans/active/foundation-and-core.md (1100+ lines)
 
 AFTER (split by phase):
-impl-plans/foundation-interfaces.md (~200 lines)
-impl-plans/foundation-mocks.md (~150 lines)
-impl-plans/foundation-types.md (~150 lines)
-impl-plans/foundation-core-services.md (~200 lines)
+impl-plans/active/foundation-interfaces.md (~200 lines)
+impl-plans/active/foundation-mocks.md (~150 lines)
+impl-plans/active/foundation-types.md (~150 lines)
+impl-plans/active/foundation-core-services.md (~200 lines)
 ```
 
 ### Split Plan Naming Convention
@@ -90,34 +90,33 @@ Example:
 Each split plan MUST include:
 ```markdown
 ## Related Plans
-- **Previous**: `impl-plans/foundation-interfaces.md` (Phase 1)
-- **Next**: `impl-plans/foundation-core-services.md` (Phase 3)
+- **Previous**: `impl-plans/active/foundation-interfaces.md` (Phase 1)
+- **Next**: `impl-plans/active/foundation-core-services.md` (Phase 3)
 - **Depends On**: `foundation-interfaces.md`, `foundation-types.md`
 ```
 
 ## Output Location
 
-**IMPORTANT**: All implementation plans MUST be stored directly under `impl-plans/`.
+**IMPORTANT**: All implementation plans MUST be stored under `impl-plans/` subdirectories.
 
 ```
 impl-plans/
 ├── README.md              # Index of all implementation plans
-├── PROGRESS.json          # Task status index (single source of truth)
-├── <feature>.md           # Implementation plan files
-├── <feature>-types.md     # Split plans use consistent naming
+├── active/                # Currently active implementation plans
+│   └── <feature>.md       # One file per feature being implemented
+├── completed/             # Completed implementation plans (archive)
+│   └── <feature>.md       # Completed plans for reference
 └── templates/             # Plan templates
     └── plan-template.md   # Standard plan template
 ```
 
 ## Directory Rules
 
-| Location | Purpose |
-|----------|---------|
-| `impl-plans/*.md` | All implementation plan files (no subdirectories) |
-| `impl-plans/PROGRESS.json` | Single source of truth for plan/task status |
+| Directory | Purpose |
+|-----------|---------|
+| `impl-plans/active/` | Implementation plans currently in progress |
+| `impl-plans/completed/` | Archived completed plans for reference |
 | `impl-plans/templates/` | Plan templates and examples |
-
-**Plan status is tracked in PROGRESS.json, not by file location.**
 
 **DO NOT** create implementation plan files outside `impl-plans/`.
 
@@ -142,35 +141,43 @@ Each implementation plan file MUST include:
 
 ### 3. Modules and Types
 
-List each module with its TypeScript type definitions. **USE ACTUAL TYPESCRIPT CODE** for interfaces and types - not prose descriptions.
+List each module with its Go type definitions. **USE ACTUAL GO CODE** for interfaces, structs, and function signatures - not prose descriptions.
 
 ```markdown
 ## Modules
 
 ### 1. Core Interfaces
 
-#### src/interfaces/filesystem.ts
+#### internal/interfaces/filesystem.go
 
 **Status**: NOT_STARTED
 
-```typescript
-interface FileSystem {
-  readFile(path: string): Promise<string>;
-  writeFile(path: string, content: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-  watch(path: string): AsyncIterable<WatchEvent>;
+```go
+type FileSystem interface {
+    ReadFile(path string) ([]byte, error)
+    WriteFile(path string, content []byte) error
+    Exists(path string) (bool, error)
+    Watch(path string) (<-chan WatchEvent, error)
 }
 
-interface WatchEvent {
-  type: 'create' | 'modify' | 'delete';
-  path: string;
+type WatchEvent struct {
+    Type WatchEventType
+    Path string
 }
+
+type WatchEventType int
+
+const (
+    WatchCreate WatchEventType = iota
+    WatchModify
+    WatchDelete
+)
 ```
 
 **Checklist**:
 - [ ] Define FileSystem interface
-- [ ] Define WatchEvent interface
-- [ ] Export from interfaces/index.ts
+- [ ] Define WatchEvent struct
+- [ ] Export from interfaces package
 - [ ] Unit tests
 ```
 
@@ -183,9 +190,9 @@ Use simple tables for overview tracking:
 
 | Module | File Path | Status | Tests |
 |--------|-----------|--------|-------|
-| FileSystem interface | `src/interfaces/filesystem.ts` | NOT_STARTED | - |
-| ProcessManager interface | `src/interfaces/process-manager.ts` | NOT_STARTED | - |
-| Mock implementations | `src/test/mocks/*.ts` | NOT_STARTED | - |
+| FileSystem interface | `internal/interfaces/filesystem.go` | NOT_STARTED | - |
+| ProcessManager interface | `internal/interfaces/process.go` | NOT_STARTED | - |
+| Mock implementations | `internal/test/mocks/*.go` | NOT_STARTED | - |
 ```
 
 ### 5. Dependencies
@@ -210,7 +217,8 @@ Simple checklist:
 
 - [ ] All modules implemented
 - [ ] All tests passing
-- [ ] Type checking passes
+- [ ] go build passes
+- [ ] go vet passes
 - [ ] Integration verified
 ```
 
@@ -230,54 +238,62 @@ Track session-by-session progress:
 
 ## Content Guidelines
 
-### INCLUDE TypeScript Code
+### INCLUDE Go Code
 
-**ALWAYS** include actual TypeScript code for:
+**ALWAYS** include actual Go code for:
 - Interface definitions
-- Type aliases
-- Class structure (public methods, constructor signature)
-- Function signatures
+- Struct definitions
+- Type aliases and constants
+- Function signatures (name, parameters, return types)
 
 Example:
 ```markdown
-```typescript
-interface SessionGroup {
-  id: string;                    // Format: YYYYMMDD-HHMMSS-{slug}
-  name: string;
-  status: GroupStatus;
-  sessions: GroupSession[];
-  config: GroupConfig;
-  createdAt: string;             // ISO timestamp
+```go
+type SessionGroup struct {
+    ID        string       // Format: YYYYMMDD-HHMMSS-{slug}
+    Name      string
+    Status    GroupStatus
+    Sessions  []GroupSession
+    Config    GroupConfig
+    CreatedAt time.Time
 }
 
-type GroupStatus = 'created' | 'running' | 'paused' | 'completed' | 'failed';
+type GroupStatus string
+
+const (
+    GroupStatusCreated   GroupStatus = "created"
+    GroupStatusRunning   GroupStatus = "running"
+    GroupStatusPaused    GroupStatus = "paused"
+    GroupStatusCompleted GroupStatus = "completed"
+    GroupStatusFailed    GroupStatus = "failed"
+)
 ```
 ```
 
 ### DO NOT Include
 
 - Implementation logic (function bodies)
-- Private methods
+- Private/unexported functions
 - Algorithm details
 - Excessive prose descriptions
 
 ### Format Comparison
 
-**GOOD** (TypeScript-first):
+**GOOD** (Go-first):
 ```markdown
-#### src/interfaces/clock.ts
+#### internal/interfaces/clock.go
 
-```typescript
-interface Clock {
-  now(): Date;
-  timestamp(): string;
-  sleep(ms: number): Promise<void>;
+```go
+type Clock interface {
+    Now() time.Time
+    Timestamp() string
+    Sleep(d time.Duration)
 }
 ```
 
 **Checklist**:
 - [ ] Define Clock interface
-- [ ] Export from interfaces/index.ts
+- [ ] Export from interfaces package
 ```
 
 **BAD** (Prose-heavy):
@@ -288,210 +304,41 @@ interface Clock {
 | `Clock` | interface | Time operations | Caching, logging |
 
 **Function Signatures**:
-now(): Date
+Now() time.Time
   Purpose: Get current date/time
   Called by: Logger, Cache
 ```
 
-## Task Definition with Dependencies
+## Parallelization Rules
 
-**CRITICAL**: Each task MUST have explicit task ID and dependency information for PROGRESS.json integration.
-
-### Task Structure Format
-
-```markdown
-### TASK-001: Core Types
-
-**Status**: Not Started
-**Parallelizable**: Yes
-**Deliverables**: `src/sdk/queue/types.ts`, `src/sdk/queue/events.ts`
-**Dependencies**: None
-
-**Description**:
-Define core type definitions for the queue system.
-
-**Completion Criteria**:
-- [ ] Types defined
-- [ ] Type checking passes
-- [ ] Unit tests written
-```
-
-### Task ID Format
-
-- Format: `TASK-XXX` where XXX is zero-padded number (001, 002, etc.)
-- IDs are unique within a plan
-- Cross-plan references use format: `<plan-name>:TASK-XXX`
-
-### Dependency Specification
-
-**Same-plan dependency**:
-```markdown
-**Dependencies**: TASK-001
-**Dependencies**: TASK-001, TASK-002
-```
-
-**Cross-plan dependency**:
-```markdown
-**Dependencies**: session-groups-types:TASK-001
-**Dependencies**: session-groups-types:TASK-001, command-queue-types:TASK-002
-```
-
-**No dependencies**:
-```markdown
-**Dependencies**: None
-```
-
-### Dependency Identification Rules
-
-Identify dependencies by analyzing:
-
-1. **Type dependencies**: Does this task use types defined in another task?
-2. **Interface dependencies**: Does this implement an interface from another task?
-3. **Import dependencies**: Will the code import from files created by another task?
-4. **Execution order**: Must another task complete first for this to be testable?
-
-Example analysis:
-```
-TASK-001: Define QueueRepository interface
-TASK-002: Implement FileQueueRepository (implements QueueRepository)
-  -> TASK-002 depends on TASK-001
-
-TASK-003: Define QueueManager class (uses QueueRepository)
-  -> TASK-003 depends on TASK-001
-
-TASK-004: Define types (independent)
-  -> No dependencies, parallelizable
-```
-
-### Parallelization Rules
-
-Tasks can be parallelized when:
+Subtasks can be parallelized when:
 1. No data dependencies between tasks
 2. No shared file modifications
 3. No order-dependent side effects
 
-**Parallelizable: Yes** means the task has no blocking dependencies on other incomplete tasks.
-**Parallelizable: No** is used when the task depends on other tasks (list in Dependencies field).
-
-## PROGRESS.json Integration
-
-**CRITICAL**: After creating a plan file, PROGRESS.json MUST be updated to include the new plan and its tasks.
-
-### PROGRESS.json Structure
-
-```json
-{
-  "lastUpdated": "2026-01-06T16:00:00Z",
-  "phases": {
-    "1": { "status": "COMPLETED" },
-    "2": { "status": "READY" },
-    "3": { "status": "BLOCKED" },
-    "4": { "status": "BLOCKED" }
-  },
-  "plans": {
-    "plan-name": {
-      "phase": 2,
-      "status": "Ready",
-      "tasks": {
-        "TASK-001": { "status": "Not Started", "parallelizable": true, "deps": [] },
-        "TASK-002": { "status": "Not Started", "parallelizable": false, "deps": ["TASK-001"] },
-        "TASK-003": { "status": "Not Started", "parallelizable": false, "deps": ["other-plan:TASK-001"] }
-      }
-    }
-  }
-}
-```
-
-### Dependency Format in PROGRESS.json
-
-| Dependency Type | Plan File Format | PROGRESS.json Format |
-|-----------------|------------------|---------------------|
-| None | `**Dependencies**: None` | `"deps": []` |
-| Same-plan | `**Dependencies**: TASK-001` | `"deps": ["TASK-001"]` |
-| Same-plan multiple | `**Dependencies**: TASK-001, TASK-002` | `"deps": ["TASK-001", "TASK-002"]` |
-| Cross-plan | `**Dependencies**: other-plan:TASK-001` | `"deps": ["other-plan:TASK-001"]` |
-| Mixed | `**Dependencies**: TASK-001, other-plan:TASK-002` | `"deps": ["TASK-001", "other-plan:TASK-002"]` |
-
-### Phase Assignment
-
-Assign the plan to a phase based on its dependencies:
-
-| Condition | Phase |
-|-----------|-------|
-| No cross-plan dependencies | Phase 2 (or current active phase) |
-| Depends on Phase 2 plans | Phase 3 |
-| Depends on Phase 3 plans | Phase 4 |
-
-### PROGRESS.json Update Protocol
-
-When creating a new plan:
-
-1. **Read current PROGRESS.json**
-2. **Extract tasks from plan file**:
-   - Parse all `### TASK-XXX:` sections
-   - Extract `**Status**`, `**Parallelizable**`, `**Dependencies**`
-3. **Convert to PROGRESS.json format**:
-   ```python
-   for task in plan_tasks:
-       task_entry = {
-           "status": task.status,  # "Not Started", "In Progress", "Completed"
-           "parallelizable": task.parallelizable,  # true/false
-           "deps": parse_dependencies(task.dependencies)  # ["TASK-001", "other-plan:TASK-002"]
-       }
-   ```
-4. **Add plan to PROGRESS.json**:
-   ```json
-   "new-plan-name": {
-     "phase": <determined-phase>,
-     "status": "Ready",
-     "tasks": { ... }
-   }
-   ```
-5. **Update lastUpdated timestamp**
-6. **Write PROGRESS.json** (with file locking if concurrent access possible)
-
-### File Locking Protocol
-
-When updating PROGRESS.json, use file locking to prevent race conditions:
-
-```bash
-# Acquire lock
-while [ -f impl-plans/.progress.lock ]; do sleep 1; done
-echo "<plan-name>" > impl-plans/.progress.lock
-
-# ... perform PROGRESS.json update ...
-
-# Release lock
-rm -f impl-plans/.progress.lock
-```
+Mark dependencies explicitly in the status table.
 
 ## Workflow Integration
 
 ### Creating a Plan
 1. Read the design document
 2. Identify feature boundaries
-3. Define TypeScript interfaces and types
-4. Define tasks with explicit IDs and dependencies
-5. List modules with status tracking
-6. Set completion criteria
-7. Create plan file in `impl-plans/<feature>.md`
-8. **Update PROGRESS.json with new plan and tasks**
-9. **Update impl-plans/README.md with new plan entry**
+3. Define Go interfaces, structs, and types
+4. List modules with status tracking
+5. Set completion criteria
+6. Create plan file in `impl-plans/active/`
 
 ### During Implementation
-1. Update task status in PROGRESS.json as work progresses
-2. Update module status in plan file
-3. Add progress log entries per session
-4. Note blockers and decisions
-5. Check off completion criteria
+1. Update module status as work progresses
+2. Add progress log entries per session
+3. Note blockers and decisions
+4. Check off completion criteria
 
 ### Completing a Plan
 1. Verify all completion criteria met
-2. Update plan status to "Completed" in PROGRESS.json
-3. Update plan file header status to "Completed"
-4. Add final progress log entry
-
-**Note**: No file move is required. PROGRESS.json is the single source of truth for plan status.
+2. Update status to Completed
+3. Add final progress log entry
+4. Move file to `impl-plans/completed/`
 
 ## Quick Reference
 
@@ -499,7 +346,7 @@ rm -f impl-plans/.progress.lock
 |---------|----------|--------|
 | Header | Yes | Markdown metadata |
 | Design Reference | Yes | Link + summary |
-| Modules | Yes | TypeScript code blocks + checklist |
+| Modules | Yes | Go code blocks + checklist |
 | Status Table | Yes | Simple table |
 | Dependencies | Yes | Simple table |
 | Completion Criteria | Yes | Checklist |
