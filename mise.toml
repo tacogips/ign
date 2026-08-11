@@ -1,0 +1,111 @@
+min_version = "2026.8.3"
+
+[[hooks.enter]]
+shell = "bash"
+script = '''
+if command -v kinko >/dev/null 2>&1 && kinko hook --help >/dev/null 2>&1; then
+  eval "$(kinko --path "$MISE_PROJECT_ROOT" hook enter bash)"
+fi
+'''
+
+[[hooks.leave]]
+shell = "bash"
+script = '''
+if command -v kinko >/dev/null 2>&1 && kinko hook --help >/dev/null 2>&1; then
+  eval "$(kinko hook leave bash)"
+fi
+'''
+
+[tools]
+go = "1.25.4"
+golangci-lint = "latest"
+gitleaks = "latest"
+pre-commit = "latest"
+"go:golang.org/x/tools/gopls" = "latest"
+
+[tasks."default"]
+description = "Show available tasks"
+run = '''
+mise tasks ls
+'''
+
+[tasks."build"]
+description = "Build the binary"
+run = '''
+go build -o ign ./cmd/ign
+'''
+
+[tasks."run"]
+description = "Run the application"
+depends = ["build"]
+run = '''
+./ign
+'''
+
+[tasks."test"]
+description = "Run tests"
+run = '''
+go test -v ./...
+'''
+
+[tasks."test-coverage"]
+description = "Run tests with coverage"
+run = '''
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+'''
+
+[tasks."lint"]
+description = "Run linter"
+run = '''
+golangci-lint run ./...
+'''
+
+[tasks."fmt"]
+description = "Format code"
+run = '''
+go fmt ./...
+'''
+
+[tasks."vet"]
+description = "Run go vet"
+run = '''
+go vet ./...
+'''
+
+[tasks."clean"]
+description = "Clean build artifacts"
+run = '''
+rm -f ign
+rm -f coverage.out coverage.html
+'''
+
+[tasks."tidy"]
+description = "Tidy go modules"
+run = '''
+go mod tidy
+'''
+
+[tasks."build:homebrew"]
+description = "Build a standalone Homebrew release archive for the current platform, or pass targets after --"
+run = '''
+scripts/build-homebrew-release.sh "$@"
+'''
+
+[tasks."homebrew:formula"]
+description = "Render Formula/ign.rb from dist/homebrew checksums (pass the version after --)"
+run = '''
+scripts/render-homebrew-formula.sh "$@"
+'''
+
+[tasks."homebrew:tap-formula"]
+description = "Render ign into the sibling tacogips/homebrew-tap repository (pass version after --)"
+run = '''
+set -euo pipefail
+if [ -z ""$@"" ]; then
+  echo "usage: mise run homebrew:tap-formula -- <version>" >&2
+  exit 2
+fi
+scripts/render-homebrew-formula.sh ""$@"" ../homebrew-tap/Formula/ign.rb
+
+'''

@@ -412,9 +412,6 @@ brew tap tacogips/tap
 brew install ign
 ign version
 
-# Using Nix
-nix run github:tacogips/ign
-
 # From source
 go install github.com/tacogips/ign@latest
 ```

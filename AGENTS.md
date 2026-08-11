@@ -115,22 +115,20 @@ feat: implement user authentication system
 
 ## Project Overview
 
-This is `ign`, a Go project with Nix flake development environment support.
+This is `ign`, a Go project with a mise-managed development environment.
 
 ## Development Environment
 
 - Language: Go
-- Build tool: go-task
-- Environment manager: Nix flakes + direnv
-- Development shell: run `nix develop` or use direnv to activate
+- Build and task runner: mise
+- Environment manager: mise
+- Tool setup: run `mise install`
 
 ## Project Structure
 
 ```text
 .
-├── flake.nix          # Nix flake configuration for Go development
-├── flake.lock         # Locked flake dependencies
-├── .envrc             # direnv configuration
+├── mise.toml          # Tool versions and project tasks
 └── .gitignore         # Git ignore patterns
 ```
 
@@ -138,9 +136,7 @@ This is `ign`, a Go project with Nix flake development environment support.
 
 - `go`: Go compiler and toolchain
 - `gopls`: Go language server
-- `gotools`: Additional Go development tools
-- `task`: go-task runner
-- `divedra`: workflow runner available in the Nix dev shell
+- `mise`: Tool manager and task runner
 
 ## Coding Standards
 
@@ -260,8 +256,8 @@ For Go work in this repository, keep using the existing Go project conventions f
 
 ## Task Management
 
-- Use `task` command for build automation.
-- Define tasks in `Taskfile.yml` as needed.
+- Use `mise run` for build automation.
+- Define tasks in `mise.toml` as needed.
 
 ## Git Workflow
 
@@ -315,6 +311,5 @@ Example:
 
 ## Notes
 
-- This project uses Nix flakes for reproducible development environments.
-- Use direnv for automatic environment activation.
-- All development dependencies are managed through `flake.nix`.
+- This project uses mise for reproducible development environments.
+- All development tools and tasks are managed through `mise.toml`.

@@ -18,11 +18,8 @@
 # Dependencies
 /vendor/
 
-## nix/git
-.pre-commit-config.yaml
-**/.direnv
+## Environment
 **/.env
-**/.envrc.private*
 **/*.private*
 
 ## large files
@@ -58,7 +55,8 @@
 **/.pytest_cache/
 
 ## tmps
-result
 **/tmp
+
+mise.local.toml
 
 ## go binaries
