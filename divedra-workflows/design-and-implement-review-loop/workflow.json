@@ -88,7 +88,7 @@
           "label": "has_feature_fanout",
           "fanout": {
             "groupId": "feature-local-planning",
-            "itemsFrom": "/payload/featureFanoutItems",
+            "itemsFrom": "/featureFanoutItems",
             "itemVariable": "feature",
             "concurrency": 20,
             "joinStepId": "step5-feature-plan-join",
