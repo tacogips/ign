@@ -22,6 +22,7 @@ golangci-lint = "latest"
 gitleaks = "latest"
 pre-commit = "latest"
 "go:golang.org/x/tools/gopls" = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "0.48.0"
 
 [tasks."default"]
 description = "Show available tasks"
@@ -102,10 +103,10 @@ scripts/render-homebrew-formula.sh "$@"
 description = "Render ign into the sibling tacogips/homebrew-tap repository (pass version after --)"
 run = '''
 set -euo pipefail
-if [ -z ""$@"" ]; then
+if [ "$#" -eq 0 ]; then
   echo "usage: mise run homebrew:tap-formula -- <version>" >&2
   exit 2
 fi
-scripts/render-homebrew-formula.sh ""$@"" ../homebrew-tap/Formula/ign.rb
+scripts/render-homebrew-formula.sh "$@" ../homebrew-tap/Formula/ign.rb
 
 '''

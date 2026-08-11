@@ -1,4 +1,15 @@
 {
+  "extraKnownMarketplaces": {
+    "local": {
+      "source": {
+        "source": "directory",
+        "path": ".agents/marketplace"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "go-lsp@local": true
+  },
   "hooks": {
     "Stop": [
       {
@@ -6,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "goimports -w ."
+            "command": "mise exec -- goimports -w ."
           }
         ]
       }
@@ -17,21 +28,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "goimports -w ."
+            "command": "mise exec -- goimports -w ."
           }
         ]
       }
     ]
-  },
-  "extraKnownMarketplaces": {
-    "local": {
-      "source": {
-        "source": "directory",
-        "path": ".agents/marketplace"
-      }
-    }
-  },
-  "enabledPlugins": {
-    "ts-lsp@local": true
   }
 }

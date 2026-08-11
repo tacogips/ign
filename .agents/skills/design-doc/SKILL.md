@@ -89,7 +89,7 @@ All external references MUST be stored in `design-docs/references/`.
 ### Adding References
 
 1. Add the reference entry to `design-docs/references/README.md`
-2. For detailed reference materials, create a topic subdirectory (e.g., `references/typescript/`)
+2. For detailed reference materials, create a topic subdirectory (e.g., `references/golang/`)
 3. Link to `design-docs/references/` in design documents
 
 ## Document Template
@@ -152,20 +152,26 @@ Code may be included when it serves a clear design purpose:
 ### Example: Good vs Verbose
 
 **Verbose (avoid):**
-```typescript
+```go
 // Full implementation with all error handling, imports, etc.
-import { Something } from './somewhere';
-import { AnotherThing } from './elsewhere';
+package main
+
+import (
+    "context"
+    "database/sql"
+    // ... many imports
+)
 // ... 50+ lines of code
 ```
 
 **Concise (preferred):**
-```typescript
+```go
 // Key pattern: dependency injection
-class Service {
-  constructor(private repo: Repository) {}
-  async process(data: Input): Promise<Output> { /* ... */ }
+type Service struct {
+    repo Repository
 }
+
+func (s *Service) Process(ctx context.Context, data Input) (Output, error) { /* ... */ }
 ```
 
 ## Quick Reference

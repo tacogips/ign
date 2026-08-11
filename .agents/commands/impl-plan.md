@@ -27,8 +27,8 @@ Invoke the `impl-plan` subagent using the Task tool.
 Parse `$ARGUMENTS` to extract:
 
 1. **Design Document Path** (required): Path to design document
-   - Can be relative path: `design-docs/DESIGN.md`
-   - Can include section: `design-docs/spec-session-groups.md#lifecycle`
+   - Can be relative path: `design-docs/specs/architecture.md`
+   - Can include section: `design-docs/specs/architecture.md#authentication`
 
 2. **Feature Name** (optional): Short name for the feature
    - If not provided, derive from design document section
@@ -37,7 +37,7 @@ Parse `$ARGUMENTS` to extract:
 ### Determine Output Path
 
 Generate the output path based on feature name:
-- If feature name provided: `impl-plans/<feature-name>.md`
+- If feature name provided: `impl-plans/active/<feature-name>.md`
 - If not provided: Derive from design document path
 
 ### Invoke Subagent
@@ -55,30 +55,27 @@ Task tool parameters:
 
 **Basic usage with design doc path**:
 ```
-/impl-plan design-docs/spec-session-groups.md
+/impl-plan design-docs/specs/architecture.md#user-authentication
 ```
-Creates: `impl-plans/session-groups.md`
+Creates: `impl-plans/active/user-authentication.md`
 
 **With explicit feature name**:
 ```
-/impl-plan design-docs/DESIGN.md foundation-layer
+/impl-plan design-docs/specs/architecture.md auth-system
 ```
-Creates: `impl-plans/foundation-layer.md`
+Creates: `impl-plans/active/auth-system.md`
 
-**With section reference**:
+**Full section reference**:
 ```
-/impl-plan design-docs/spec-infrastructure.md#testability testability
+/impl-plan design-docs/specs/command.md#cli-options cli-options
 ```
-Creates: `impl-plans/testability.md`
+Creates: `impl-plans/active/cli-options.md`
 
 ### After Subagent Completes
 
 1. Report the created plan file path to the user
-2. Summarize the tasks defined with their dependencies
-3. Confirm PROGRESS.json was updated with the new plan
-4. Suggest next steps:
-   - Review the generated plan
-   - Run `/impl-exec-auto` to begin implementation
+2. Summarize the subtasks and parallelization opportunities
+3. Suggest next steps (review plan, begin implementation)
 
 ### Error Handling
 
@@ -87,9 +84,8 @@ If no arguments provided, respond with usage instructions:
 Usage: /impl-plan <design-doc-path> [feature-name]
 
 Examples:
-  /impl-plan design-docs/spec-session-groups.md
-  /impl-plan design-docs/DESIGN.md foundation-layer
-  /impl-plan design-docs/spec-infrastructure.md#testability testability
+  /impl-plan design-docs/specs/architecture.md#auth
+  /impl-plan design-docs/specs/command.md cli-parser
 
 The design document path is required. Feature name is optional.
 ```
