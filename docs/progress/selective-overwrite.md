@@ -1,5 +1,55 @@
 # Selective Overwrite
 
+## Issue 48 Ignored Descendant Creation
+
+**Status**: Completed
+
+## Spec Reference
+
+- `design-docs/specs/selective-overwrite.md#ignored-path-creation-boundary`
+- Issue: `tacogips/ign#48`
+
+## Implemented
+
+- [x] Applied `.ign-overwrite-ignore` before regular-file creation and
+  overwrite classification in selective overwrite mode
+  (`internal/template/generator/generator.go`).
+- [x] Applied the same protected-path decision before symlink creation
+  (`internal/template/generator/generator.go`).
+- [x] Reused the existing gitignore-style matcher so ignored directory patterns
+  such as `src/`, `Sources/`, and `Tests/` protect descendants without a
+  second app-layer policy (`internal/template/generator/filter.go`).
+- [x] Kept skipped protected paths out of `CreatedFiles` and `WrittenFiles`, so
+  manifest persistence does not add them to `.ign/ign-files.json`
+  (`internal/app/manifest.go` via generator result semantics).
+- [x] Added generator regressions for missing ignored descendants, existing
+  protected paths, skipped symlinks, dry-run agreement, and overwrite-all bypass
+  (`internal/template/generator/generator_ignored_descendants_test.go`).
+- [x] Added app-layer update coverage proving missing protected descendants
+  remain absent and absent from `.ign/ign-files.json`
+  (`internal/app/update_issue48_ignored_descendants_test.go`).
+
+## Remaining
+
+- None.
+
+## Design Decisions
+
+- Selective overwrite filtering happens before filesystem mutation and before
+  manifest persistence.
+- Protected generated paths are represented as skipped results, not as
+  placeholders or post-generation deletions.
+- `--overwrite-all` and `--force` continue to bypass `.ign-overwrite-ignore`.
+
+## Notes
+
+- The implementation preserves existing ignored files unchanged and leaves
+  missing ignored descendants absent.
+- No manual manifest pruning was added for issue 48; manifest behavior follows
+  from skipped paths being absent from the generator write lists.
+- Focused generator and app tests, the full uncached test suite, build, vet,
+  formatting, and diff hygiene all passed.
+
 ## Transaction Backup Archival And No-Replace Remediation
 
 - [x] Revalidated transition ownership against the descriptor-relative renamed snapshot, preventing an untracked addition between classification and fingerprinting from being replaced.

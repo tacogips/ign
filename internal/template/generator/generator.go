@@ -270,21 +270,6 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		// Construct output path
 		outputPath := filepath.Join(opts.OutputDir, processedFilePath)
 
-		// Track parent directories for dry-run
-		if dryRun {
-			dir := filepath.Dir(outputPath)
-			for dir != "." && dir != "/" && dir != opts.OutputDir {
-				if !dirsToCreate[dir] {
-					dirsToCreate[dir] = true
-				}
-				dir = filepath.Dir(dir)
-			}
-			// Also track the output directory itself
-			if !dirsToCreate[opts.OutputDir] {
-				dirsToCreate[opts.OutputDir] = true
-			}
-		}
-
 		// Add to processed files list
 		result.Files = append(result.Files, outputPath)
 
@@ -296,6 +281,17 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			// Check if something already exists at the output path (use Lstat to detect dangling symlinks too)
 			_, lstatErr := os.Lstat(outputPath)
 			fileExists := lstatErr == nil
+
+			if shouldSkipPathForSelectiveOverwrite(processedFilePath, overwriteMode, overwriteIgnorePatterns) {
+				debug.Debug("[generator] Skipping protected symlink: %s", outputPath)
+				result.FilesSkipped++
+				if dryRun {
+					result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+						Path: outputPath, Exists: fileExists, WouldSkip: true, SymlinkTarget: file.SymlinkTarget,
+					})
+				}
+				continue
+			}
 
 			transition, hasTransition := symlinkTransitionForPath(opts.SymlinkTransitions, outputPath)
 			if hasTransition && transition.Disposition == SymlinkTransitionPreserved {
@@ -346,6 +342,9 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 				}
 				continue
 			}
+			if dryRun {
+				trackDryRunDirectories(dirsToCreate, outputPath, opts.OutputDir)
+			}
 
 			if !dryRun {
 				var writeErr error
@@ -392,6 +391,20 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		// Check if file exists
 		fileExists := writer.Exists(outputPath)
 
+		if shouldSkipPathForSelectiveOverwrite(processedFilePath, overwriteMode, overwriteIgnorePatterns) {
+			debug.Debug("[generator] Skipping protected file: %s", outputPath)
+			result.FilesSkipped++
+			if dryRun {
+				result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+					Path:      outputPath,
+					Content:   nil,
+					Exists:    fileExists,
+					WouldSkip: true,
+				})
+			}
+			continue
+		}
+
 		// Determine action
 		if fileExists && !shouldOverwritePath(processedFilePath, overwriteMode, overwriteIgnorePatterns) {
 			// Skip existing file
@@ -419,6 +432,9 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 		if opts.SkipUnchanged && fileExists && fileContentMatchesExisting(outputPath, processed, effectiveWriteFileMode(file.Mode, preserveExecutable)) {
 			debug.Debug("[generator] Skipping unchanged file: %s", outputPath)
 			continue
+		}
+		if dryRun {
+			trackDryRunDirectories(dirsToCreate, outputPath, opts.OutputDir)
 		}
 
 		// Write file (unless dry run)
@@ -519,6 +535,19 @@ func shouldOverwritePath(path string, mode OverwriteMode, overwriteIgnorePattern
 	default:
 		return false
 	}
+}
+
+func shouldSkipPathForSelectiveOverwrite(path string, mode OverwriteMode, overwriteIgnorePatterns []string) bool {
+	return mode == OverwriteSelective && MatchesGitIgnorePattern(path, overwriteIgnorePatterns)
+}
+
+func trackDryRunDirectories(dirsToCreate map[string]bool, outputPath, outputDir string) {
+	dir := filepath.Dir(outputPath)
+	for dir != "." && dir != "/" && dir != outputDir {
+		dirsToCreate[dir] = true
+		dir = filepath.Dir(dir)
+	}
+	dirsToCreate[outputDir] = true
 }
 
 func fileContentMatchesExisting(path string, content []byte, mode os.FileMode) bool {

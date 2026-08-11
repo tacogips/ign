@@ -59,4 +59,7 @@
 
 mise.local.toml
 
+## Riela runtime state
+.riela/
+
 ## go binaries

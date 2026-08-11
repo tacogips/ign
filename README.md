@@ -166,7 +166,7 @@ ign update --ref v2.0.0 --overwrite --yes
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--overwrite` | `-o` | Overwrite existing files except paths matched by the remote template's `.ign-overwrite-ignore` |
+| `--overwrite` | `-o` | Apply template changes except paths matched by the remote template's `.ign-overwrite-ignore`; matched missing paths are not created |
 | `--overwrite-all` | | Overwrite all existing files |
 | `--force` | `-f` | Regenerate even if the hash is unchanged and overwrite all existing files |
 | `--yes` | `-y` | Skip the overwrite confirmation prompt |
@@ -206,7 +206,7 @@ D obsolete-file.txt
 
 Existing files whose generated content and permissions are unchanged are omitted from the confirmation list.
 
-Template authors can add `.ign-overwrite-ignore` to the template root to protect user-owned files during selective overwrite. The file uses gitignore-style patterns and is included in the template hash.
+Template authors can add `.ign-overwrite-ignore` to the template root to protect user-owned files during selective overwrite. Matching paths and descendants are left unchanged when present and are not created when absent. Skipped paths are not added to `.ign/ign-files.json`. The file uses gitignore-style patterns and is included in the template hash.
 
 ```gitignore
 config/

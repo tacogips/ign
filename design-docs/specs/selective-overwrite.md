@@ -50,6 +50,35 @@ The supported gitignore-style behavior includes:
 - recursive `**` patterns
 - negation ordering such as `config/` followed by `!config/default.yaml`
 
+## Ignored Path Creation Boundary
+
+Issue [#48](https://github.com/tacogips/ign/issues/48) extends the selective
+overwrite contract from "do not overwrite existing ignored paths" to "do not
+materialize ignored paths at all" during `ign update --overwrite`.
+
+The ignore decision must be applied before both creation and overwrite:
+
+- A generated path matched by `.ign-overwrite-ignore`, or by an ignored
+  directory ancestor, is protected even when the destination does not exist.
+- A missing protected file or symlink remains absent after the update.
+- An existing protected file, symlink, or directory descendant remains unchanged.
+- A protected generated path is reported as skipped, not created or overwritten.
+- Protected paths skipped because of this rule are not added to
+  `.ign/ign-files.json`.
+- Dry-run and confirmation previews use the same protected-path decision as the
+  write path, so previewed `A` entries cannot become ignored creations during
+  mutation.
+
+This filtering belongs at the generator/update write boundary before filesystem
+mutation and before manifest persistence. It must not be implemented by writing
+placeholders, deleting generated files after the fact, or manually editing the
+manifest to hide created files.
+
+`--overwrite-all` and `--force` continue to bypass `.ign-overwrite-ignore`
+matching for generated paths. No-overwrite mode keeps its existing behavior of
+skipping existing paths without using `.ign-overwrite-ignore` as a creation
+filter.
+
 ## Validation
 
 The dry-run/confirmation preview path and final write path must share the same
