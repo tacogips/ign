@@ -50,8 +50,6 @@
     "design-docs/specs/notes.md",
     "design-docs/user-qa/pending-example.md",
     "design-docs/user-qa/qa-example.md",
-    "impl-plans/active/.gitkeep",
-    "impl-plans/completed/.gitkeep",
     "packaging/homebrew/README.md",
     "scripts/build-homebrew-release.sh",
     "scripts/render-homebrew-formula.sh"
