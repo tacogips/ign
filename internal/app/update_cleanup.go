@@ -87,10 +87,6 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 			result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
 			continue
 		}
-		if _, exists := currentFiles[canonicalPath]; exists {
-			continue
-		}
-
 		relPath, err := filepath.Rel(absOutputDir, canonicalPath)
 		if err != nil {
 			cleanupErrors = append(cleanupErrors, fmt.Errorf("failed to compare removed managed path %s against output directory %s: %w", canonicalPath, opts.OutputDir, err))
@@ -98,6 +94,19 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 		}
 
 		shouldRemove := shouldRemoveManagedPathDuringUpdate(relPath, overwriteMode, overwriteIgnorePatterns)
+		if _, generated := currentFiles[canonicalPath]; generated {
+			// GenerateResult.Files includes protected template paths even when
+			// selective overwrite skips them before writing. Reconcile pre-fix
+			// manifest ownership when such a protected path is already absent,
+			// while preserving any existing project-owned path and its record.
+			if !shouldRemove {
+				if _, statErr := os.Lstat(canonicalPath); os.IsNotExist(statErr) {
+					recordRemovedManagedPath(result, opts.OutputDir, relPath, canonicalPath)
+				}
+			}
+			continue
+		}
+
 		if !shouldRemove {
 			if _, statErr := os.Lstat(canonicalPath); os.IsNotExist(statErr) {
 				recordRemovedManagedPath(result, opts.OutputDir, relPath, canonicalPath)
