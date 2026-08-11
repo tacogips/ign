@@ -66,7 +66,6 @@ main() {
 class Ign < Formula
   desc "Template-based code generation CLI tool"
   homepage "https://github.com/tacogips/ign"
-  version "$version"
   license "MIT"
 
   livecheck do
