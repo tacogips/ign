@@ -30,7 +30,7 @@ Verify from the tap checkout:
 
 ```bash
 ruby -c Formula/ign.rb
-brew audit --strict tacogips/tap/ign
+brew audit --strict ign || brew audit --strict --formula ign
 brew install tacogips/tap/ign
 brew test tacogips/tap/ign
 ```

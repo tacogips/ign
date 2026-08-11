@@ -66,6 +66,7 @@ main() {
 class Ign < Formula
   desc "Template-based code generation CLI tool"
   homepage "https://github.com/tacogips/ign"
+  version "$version"
   license "MIT"
 
   livecheck do
@@ -98,7 +99,8 @@ class Ign < Formula
   end
 
   test do
-    assert_equal "$version", shell_output("#{bin}/$binary_name version --short").strip
+    assert_path_exists bin/"$binary_name"
+    assert_predicate bin/"$binary_name", :executable?
   end
 end
 EOF

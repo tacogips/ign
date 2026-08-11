@@ -8,7 +8,7 @@ description: Use when building, validating, publishing, or tap-rendering Homebre
 Use this skill for Formula releases installed with:
 
 ```bash
-brew tap user/tap
+brew tap tacogips/tap
 brew install ign
 ```
 
@@ -60,7 +60,7 @@ Before rendering a public formula, ensure the release assets exist:
 
 ```bash
 version="$(tr -d '[:space:]' < internal/build/VERSION)"
-gh release view "v${version}" --repo user/repo
+gh release view "v${version}" --repo tacogips/ign
 ```
 
 If publishing is explicitly requested:
@@ -72,7 +72,7 @@ gh release upload "v${version}" \
   "dist/homebrew/ign-${version}-darwin-x64.tar.gz" \
   "dist/homebrew/ign-${version}-linux-arm64.tar.gz" \
   "dist/homebrew/ign-${version}-linux-x64.tar.gz" \
-  --repo user/repo \
+  --repo tacogips/ign \
   --clobber
 ```
 
@@ -83,9 +83,19 @@ From the tap checkout:
 ```bash
 ruby -c Formula/ign.rb
 brew audit --strict ign || brew audit --strict --formula ign
-brew install user/tap/ign
-brew test user/tap/ign
+brew install tacogips/tap/ign
+brew test tacogips/tap/ign
 ```
 
 If online audit fails due network, GitHub credentials, or rate limits, run the
 non-online audit and report the limitation.
+
+## Tap API Metadata Gate
+
+After pushing the tap Formula, require the tap's `update-api-metadata.yml`
+workflow to succeed for that commit. Derive the GitHub tap repository from
+`tacogips/tap`, wait for the matching workflow run, then
+verify `api/formula/ign.json` from GitHub Raw.
+The JSON release is incomplete unless `.versions.stable` equals the release
+version and `.ruby_source_checksum.sha256` equals the SHA-256 of the committed
+`Formula/ign.rb`.

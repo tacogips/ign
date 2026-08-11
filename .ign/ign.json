@@ -4,12 +4,12 @@
     "path": "go-v1",
     "ref": "main"
   },
-  "hash": "47cad1fb8b2a341a326134b8818d3c601aeec31f87a42c368244a14ca95b391a",
+  "hash": "5e7d9f90125b7ebaca4f4a1cede375631eedf07337f30d1bfda58faf3ec2413d",
   "metadata": {
-    "generated_at": "2026-08-10T20:09:49.519682+09:00",
+    "generated_at": "2026-08-11T17:58:56.905963+09:00",
     "generated_by": "ign update",
     "template_name": "go-v1",
     "template_version": "1.0.0",
-    "ign_version": "0.1.20"
+    "ign_version": "0.1.21"
   }
 }
