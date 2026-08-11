@@ -24,6 +24,21 @@ type Loader interface {
 // FileLoader implements the Loader interface for file-based configuration loading.
 type FileLoader struct{}
 
+// AtomicWriteResult describes the exact regular-file content that an atomic
+// writer may have committed. Committed remains true when syncing the parent
+// directory fails after the rename, allowing callers with rollback ownership
+// to restore the preimage safely.
+type AtomicWriteResult struct {
+	Committed bool
+	Data      []byte
+	Mode      os.FileMode
+}
+
+// afterAtomicWriteRename is a test seam for the narrow interval where the
+// rename is durable enough to require rollback but a later directory sync can
+// still fail. Production leaves it as a no-op.
+var afterAtomicWriteRename = func() error { return nil }
+
 // NewLoader creates a new FileLoader instance.
 func NewLoader() Loader {
 	return &FileLoader{}
@@ -145,44 +160,59 @@ func LoadIgnJson(path string) (*model.IgnJson, error) {
 // SaveIgnVarJson saves ign-var.json to the specified path.
 // Security: The path is validated to prevent path traversal attacks.
 func SaveIgnVarJson(path string, ignVar *model.IgnVarJson) error {
+	_, err := SaveIgnVarJsonWithResult(path, ignVar)
+	return err
+}
+
+// SaveIgnVarJsonWithResult saves ign-var.json and reports whether its atomic
+// rename committed before any returned error.
+func SaveIgnVarJsonWithResult(path string, ignVar *model.IgnVarJson) (AtomicWriteResult, error) {
 	// Security: Validate path doesn't contain path traversal sequences
 	cleanPath := filepath.Clean(path)
 	if strings.Contains(cleanPath, "..") {
-		return NewConfigErrorWithCause(ConfigInvalid, path,
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, path,
 			"path contains '..' which is not allowed for security reasons", nil)
 	}
 
 	// Create parent directory if it doesn't exist
 	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath,
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, cleanPath,
 			fmt.Sprintf("failed to create directory %s", dir), err)
 	}
 
 	data, err := json.MarshalIndent(ignVar, "", "  ")
 	if err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-var.json", err)
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-var.json", err)
 	}
 
-	if err := writeFileAtomic(cleanPath, data, 0644); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-var.json", err)
+	result, err := writeFileAtomicWithResult(cleanPath, data, 0644)
+	if err != nil {
+		return result, NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-var.json", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 // SaveIgnManifest saves ign-files.json to the specified path.
 // Security: The path is validated to prevent path traversal attacks.
 func SaveIgnManifest(path string, manifest *model.IgnManifest) error {
+	_, err := SaveIgnManifestWithResult(path, manifest)
+	return err
+}
+
+// SaveIgnManifestWithResult saves ign-files.json and reports whether its
+// atomic rename committed before any returned error.
+func SaveIgnManifestWithResult(path string, manifest *model.IgnManifest) (AtomicWriteResult, error) {
 	cleanPath := filepath.Clean(path)
 	if strings.Contains(cleanPath, "..") {
-		return NewConfigErrorWithCause(ConfigInvalid, path,
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, path,
 			"path contains '..' which is not allowed for security reasons", nil)
 	}
 
 	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath,
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, cleanPath,
 			fmt.Sprintf("failed to create directory %s", dir), err)
 	}
 
@@ -195,14 +225,15 @@ func SaveIgnManifest(path string, manifest *model.IgnManifest) error {
 
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-files.json", err)
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign-files.json", err)
 	}
 
-	if err := writeFileAtomic(cleanPath, data, 0644); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-files.json", err)
+	result, err := writeFileAtomicWithResult(cleanPath, data, 0644)
+	if err != nil {
+		return result, NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign-files.json", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 // LoadIgnConfig loads user project configuration (ign.json) from the specified path.
@@ -261,30 +292,38 @@ func IsValidSHA256Hash(hash string) bool {
 // SaveIgnConfig saves ign.json to the specified path.
 // Security: The path is validated to prevent path traversal attacks.
 func SaveIgnConfig(path string, ignConfig *model.IgnConfig) error {
+	_, err := SaveIgnConfigWithResult(path, ignConfig)
+	return err
+}
+
+// SaveIgnConfigWithResult saves ign.json and reports whether its atomic rename
+// committed before any returned error.
+func SaveIgnConfigWithResult(path string, ignConfig *model.IgnConfig) (AtomicWriteResult, error) {
 	// Security: Validate path doesn't contain path traversal sequences
 	cleanPath := filepath.Clean(path)
 	if strings.Contains(cleanPath, "..") {
-		return NewConfigErrorWithCause(ConfigInvalid, path,
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, path,
 			"path contains '..' which is not allowed for security reasons", nil)
 	}
 
 	// Create parent directory if it doesn't exist
 	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath,
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, cleanPath,
 			fmt.Sprintf("failed to create directory %s", dir), err)
 	}
 
 	data, err := json.MarshalIndent(ignConfig, "", "  ")
 	if err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign.json", err)
+		return AtomicWriteResult{}, NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to marshal ign.json", err)
 	}
 
-	if err := writeFileAtomic(cleanPath, data, 0644); err != nil {
-		return NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign.json", err)
+	result, err := writeFileAtomicWithResult(cleanPath, data, 0644)
+	if err != nil {
+		return result, NewConfigErrorWithCause(ConfigInvalid, cleanPath, "failed to write ign.json", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 // WriteFileAtomic writes data to path using a same-directory temporary file and rename.
@@ -293,10 +332,16 @@ func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	_, err := writeFileAtomicWithResult(path, data, perm)
+	return err
+}
+
+func writeFileAtomicWithResult(path string, data []byte, perm os.FileMode) (AtomicWriteResult, error) {
+	result := AtomicWriteResult{Data: data, Mode: perm}
 	dir := filepath.Dir(path)
 	tempFile, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
 	if err != nil {
-		return err
+		return result, err
 	}
 	tempPath := tempFile.Name()
 	cleanup := true
@@ -308,34 +353,38 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 
 	if _, err := tempFile.Write(data); err != nil {
 		_ = tempFile.Close()
-		return err
+		return result, err
 	}
 	if err := tempFile.Chmod(perm); err != nil {
 		_ = tempFile.Close()
-		return err
+		return result, err
 	}
 	if err := tempFile.Sync(); err != nil {
 		_ = tempFile.Close()
-		return err
+		return result, err
 	}
 	if err := tempFile.Close(); err != nil {
-		return err
+		return result, err
 	}
 
 	if err := os.Rename(tempPath, path); err != nil {
-		return err
+		return result, err
 	}
 	cleanup = false
+	result.Committed = true
+	if err := afterAtomicWriteRename(); err != nil {
+		return result, err
+	}
 
 	dirFile, err := os.Open(dir)
 	if err != nil {
-		return nil
+		return result, nil
 	}
 	defer func() { _ = dirFile.Close() }()
 	if err := dirFile.Sync(); err != nil && err != io.ErrClosedPipe {
-		return err
+		return result, err
 	}
-	return nil
+	return result, nil
 }
 
 // mergeConfig merges missing fields from defaults into cfg.

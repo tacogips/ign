@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -364,6 +365,27 @@ func TestSaveIgnConfigUsesAtomicTempFileCleanup(t *testing.T) {
 		if strings.HasPrefix(entry.Name(), ".ign.json.tmp-") {
 			t.Fatalf("temporary atomic write file was not cleaned up: %s", entry.Name())
 		}
+	}
+}
+
+func TestSaveIgnConfigWithResultReportsCommittedRenameFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "ign.json")
+	previousHook := afterAtomicWriteRename
+	afterAtomicWriteRename = func() error { return errors.New("injected post-rename sync failure") }
+	t.Cleanup(func() { afterAtomicWriteRename = previousHook })
+
+	result, err := SaveIgnConfigWithResult(path, &model.IgnConfig{
+		Template: model.TemplateSource{URL: "https://github.com/owner/repo"},
+		Hash:     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+	})
+	if err == nil {
+		t.Fatal("SaveIgnConfigWithResult succeeded despite post-rename failure")
+	}
+	if !result.Committed {
+		t.Fatal("AtomicWriteResult.Committed = false, want true after rename")
+	}
+	if got, readErr := os.ReadFile(path); readErr != nil || string(got) != string(result.Data) {
+		t.Fatalf("committed file = %q, %v; want returned data", got, readErr)
 	}
 }
 

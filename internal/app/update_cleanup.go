@@ -14,13 +14,14 @@ import (
 )
 
 type cleanupRemovedManagedFilesOptions struct {
-	ManifestPath   string
-	OutputDir      string
-	Template       *model.Template
-	GenerateResult *generator.GenerateResult
-	OverwriteMode  generator.OverwriteMode
-	Overwrite      bool
-	DryRun         bool
+	ManifestPath       string
+	OutputDir          string
+	Template           *model.Template
+	GenerateResult     *generator.GenerateResult
+	OverwriteMode      generator.OverwriteMode
+	Overwrite          bool
+	DryRun             bool
+	SymlinkTransitions map[string]generator.SymlinkTransition
 }
 
 type cleanupRemovedManagedFilesResult struct {
@@ -64,10 +65,28 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 
 		cleanPath, err := validateManagedPath(manifestFile, opts.OutputDir)
 		if err != nil {
+			if hasPreservedTransition(opts.SymlinkTransitions) {
+				// A transition with incomplete manifest ownership must preserve the
+				// existing tree. Leave invalid manifest records untouched rather
+				// than turning that safety decision into an update failure.
+				continue
+			}
 			cleanupErrors = append(cleanupErrors, err)
 			continue
 		}
 		canonicalPath := filepath.Clean(cleanPath)
+		if isPreservedTransitionPath(canonicalPath, opts.SymlinkTransitions) {
+			// A preserved transition deliberately leaves the former managed tree in
+			// place. Retain every prior manifest entry beneath it; in particular, do
+			// not prune an absent descendant or inspect it through a later path.
+			continue
+		}
+		if isRetiredTransitionPath(canonicalPath, opts.SymlinkTransitions) {
+			// The transition removed this path as part of its validated directory
+			// replacement. Never inspect it through the new symlink target.
+			result.RemovedCanonicalPaths[canonicalPath] = struct{}{}
+			continue
+		}
 		if _, exists := currentFiles[canonicalPath]; exists {
 			continue
 		}
@@ -123,6 +142,41 @@ func cleanupRemovedManagedFilesForUpdate(ctx context.Context, opts cleanupRemove
 		return result, errors.Join(cleanupErrors...)
 	}
 	return result, nil
+}
+
+func hasPreservedTransition(transitions map[string]generator.SymlinkTransition) bool {
+	for _, transition := range transitions {
+		if transition.Disposition == generator.SymlinkTransitionPreserved {
+			return true
+		}
+	}
+	return false
+}
+
+func isPreservedTransitionPath(path string, transitions map[string]generator.SymlinkTransition) bool {
+	for root, transition := range transitions {
+		if transition.Disposition != generator.SymlinkTransitionPreserved {
+			continue
+		}
+		if pathWithinOrEqual(path, root) {
+			return true
+		}
+	}
+	return false
+}
+
+func isRetiredTransitionPath(path string, transitions map[string]generator.SymlinkTransition) bool {
+	for _, transition := range transitions {
+		if transition.Disposition != generator.SymlinkTransitionEligible {
+			continue
+		}
+		for _, retired := range transition.RetiredManagedPaths {
+			if filepath.Clean(retired) == filepath.Clean(path) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func outputPathForManagedRelativePath(outputDir string, relPath string) string {

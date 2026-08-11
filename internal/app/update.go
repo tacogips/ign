@@ -101,6 +101,9 @@ type UpdateResult struct {
 	RefChanged bool
 	// RefOverrideRequested indicates whether update was called with a ref override.
 	RefOverrideRequested bool
+	// ExecutionPlan is returned by a preview and must be reused for its
+	// confirmed mutation to prevent a changed source tree from being reclassified.
+	ExecutionPlan *UpdateExecutionPlan
 }
 
 // PrepareUpdate prepares for update by checking if .ign exists and fetching template.
@@ -270,6 +273,8 @@ type CompleteUpdateOptions struct {
 	DryRun bool
 	// Verbose enables detailed logging.
 	Verbose bool
+	// ExecutionPlan is the opaque plan returned by a preceding dry-run preview.
+	ExecutionPlan *UpdateExecutionPlan
 }
 
 // CompleteUpdate completes the update operation by merging variables and regenerating files.
@@ -324,6 +329,19 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		return nil, err
 	}
 
+	manifestPath := manifestPathFromConfigPath(prep.IgnConfigPath)
+	if opts.DryRun {
+		pending, err := symlinkTransitionJournalPending(opts.OutputDir)
+		if err != nil {
+			return nil, NewCheckoutError("inspect interrupted managed directory-to-symlink transition", err)
+		}
+		if pending {
+			return nil, NewValidationError("interrupted managed directory-to-symlink transition requires recovery before dry run", nil)
+		}
+	} else if err := recoverSymlinkTransitionJournal(opts.OutputDir, manifestPath, prep.IgnConfigPath, prep.IgnVarPath); err != nil {
+		return nil, NewCheckoutError("recover interrupted managed directory-to-symlink transition", err)
+	}
+
 	if shouldCompleteUpdateConfigOnly(prep, opts) {
 		if !opts.DryRun {
 			if err := saveCompleteUpdateConfigOnlyArtifacts(prep, rawVars); err != nil {
@@ -353,10 +371,39 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		SkipUnchanged: true,
 	}
 
+	plan := opts.ExecutionPlan
+	if plan != nil {
+		if err := plan.validate(opts.OutputDir, manifestPath, prep.NewHash, effectiveUpdateOverwriteMode(opts.OverwriteMode, opts.Overwrite)); err != nil {
+			return nil, NewValidationError("invalid update execution plan", err)
+		}
+	} else if effectiveUpdateOverwriteMode(opts.OverwriteMode, opts.Overwrite) != generator.OverwriteNone {
+		preview, err := gen.DryRun(ctx, genOpts)
+		if err != nil {
+			return nil, NewCheckoutError("failed to classify symlink transitions", err)
+		}
+		plan, err = classifyUpdateSymlinkTransitions(opts.OutputDir, manifestPath, prep.Template, preview, effectiveUpdateOverwriteMode(opts.OverwriteMode, opts.Overwrite))
+		if err != nil {
+			return nil, NewCheckoutError("failed to classify symlink transitions", err)
+		}
+	}
+	if plan != nil {
+		genOpts.SymlinkTransitions = plan.transitions
+	}
+
 	// Generate or dry run
 	var genResult *generator.GenerateResult
 	var rollback *checkoutGenerationRollback
+	var transitionTransactions *symlinkTransitionTransactions
 	if !opts.DryRun {
+		transitionTransactions, err = prepareSymlinkTransitionTransactions(opts.OutputDir, genOpts.SymlinkTransitions, manifestPath, prep.IgnConfigPath, prep.IgnVarPath)
+		if err != nil {
+			return nil, NewCheckoutError("prepare managed directory-to-symlink transition", err)
+		}
+		defer func() {
+			if rollbackErr := transitionTransactions.rollback(); rollbackErr != nil {
+				debug.Debug("[app] Failed to restore managed symlink transition: %v", rollbackErr)
+			}
+		}()
 		rollback, err = prepareCheckoutGenerationRollback(ctx, gen, genOpts)
 		if err != nil {
 			return nil, err
@@ -374,29 +421,43 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 	if err != nil {
 		debug.Debug("[app] Generation failed: %v", err)
 		if rollback != nil {
+			rollback.captureGeneratedNodes(genResult)
+			if rollbackErr := transitionTransactions.rollback(); rollbackErr != nil {
+				debug.Debug("[app] Failed to restore managed symlink transition: %v", rollbackErr)
+			}
 			rollback.rollback(genResult)
 		}
 		return nil, NewCheckoutError("generation failed", err)
 	}
 	debug.Debug("[app] Generation completed successfully")
+	if rollback != nil {
+		rollback.captureGeneratedNodes(genResult)
+	}
 
-	manifestPath := manifestPathFromConfigPath(prep.IgnConfigPath)
 	removedManagedFiles, cleanupErr := cleanupRemovedManagedFilesForUpdate(ctx, cleanupRemovedManagedFilesOptions{
-		ManifestPath:   manifestPath,
-		OutputDir:      opts.OutputDir,
-		Template:       prep.Template,
-		GenerateResult: genResult,
-		OverwriteMode:  opts.OverwriteMode,
-		Overwrite:      opts.Overwrite,
-		DryRun:         opts.DryRun,
+		ManifestPath:       manifestPath,
+		OutputDir:          opts.OutputDir,
+		Template:           prep.Template,
+		GenerateResult:     genResult,
+		OverwriteMode:      opts.OverwriteMode,
+		Overwrite:          opts.Overwrite,
+		DryRun:             opts.DryRun,
+		SymlinkTransitions: genOpts.SymlinkTransitions,
 	})
 	if cleanupErr != nil {
 		debug.Debug("[app] Failed to remove stale managed files: %v", cleanupErr)
 	}
 
 	if !opts.DryRun {
-		if err := saveCompleteUpdateArtifacts(prep, rawVars, genResult, removedManagedFiles, rollback); err != nil {
+		if err := saveCompleteUpdateArtifacts(prep, rawVars, genResult, removedManagedFiles, rollback, transitionTransactions); err != nil {
 			return nil, err
+		}
+		if err := transitionTransactions.markArtifactsCommitted(); err != nil {
+			rollbackUpdateGeneration(rollback, genResult, transitionTransactions)
+			return nil, NewCheckoutError("record committed managed directory-to-symlink transition", err)
+		}
+		if err := transitionTransactions.commit(); err != nil {
+			return nil, NewCheckoutError("remove managed directory-to-symlink transaction backup", err)
 		}
 	}
 
@@ -415,6 +476,7 @@ func CompleteUpdate(ctx context.Context, opts CompleteUpdateOptions) (*UpdateRes
 		Directories:          genResult.Directories,
 		RefChanged:           prep.RefChanged,
 		RefOverrideRequested: prep.RefOverrideRequested,
+		ExecutionPlan:        plan,
 	}
 
 	// Convert dry-run files
@@ -442,56 +504,68 @@ func shouldCompleteUpdateConfigOnly(prep *PrepareUpdateResult, opts CompleteUpda
 	return prep.RefChanged && !prep.HashChanged && !opts.Overwrite
 }
 
-func saveCompleteUpdateArtifacts(prep *PrepareUpdateResult, rawVars map[string]interface{}, genResult *generator.GenerateResult, removedManagedFiles *cleanupRemovedManagedFilesResult, rollback *checkoutGenerationRollback) error {
+func saveCompleteUpdateArtifacts(prep *PrepareUpdateResult, rawVars map[string]interface{}, genResult *generator.GenerateResult, removedManagedFiles *cleanupRemovedManagedFilesResult, rollback *checkoutGenerationRollback, transitions *symlinkTransitionTransactions) error {
 	if removedManagedFiles == nil {
 		removedManagedFiles = &cleanupRemovedManagedFilesResult{}
 	}
 
 	ignConfigSnapshot, err := rollback.snapshotPath(prep.IgnConfigPath)
 	if err != nil {
-		rollback.rollback(genResult)
+		rollbackUpdateGeneration(rollback, genResult, transitions)
 		return NewCheckoutError("failed to prepare ign.json rollback", err)
 	}
 	ignVarSnapshot, err := rollback.snapshotPath(prep.IgnVarPath)
 	if err != nil {
-		rollback.rollback(genResult)
+		rollbackUpdateGeneration(rollback, genResult, transitions)
 		return NewCheckoutError("failed to prepare ign-var.json rollback", err)
 	}
 	manifestPath := manifestPathFromConfigPath(prep.IgnConfigPath)
 	manifestSnapshot, err := rollback.snapshotPath(manifestPath)
 	if err != nil {
-		rollback.rollback(genResult)
+		rollbackUpdateGeneration(rollback, genResult, transitions)
 		return NewCheckoutError("failed to prepare ign-files.json rollback", err)
 	}
 
-	if err := saveManifestFromGenerateResultExcluding(manifestPath, genResult, removedManagedFiles.RemovedCanonicalPaths); err != nil {
+	manifestWrite, err := saveManifestFromGenerateResultWithResult(manifestPath, genResult, removedManagedFiles.RemovedCanonicalPaths)
+	bindCheckoutArtifactWrite(rollback, &manifestSnapshot, manifestWrite)
+	if err != nil {
 		debug.Debug("[app] Failed to save ign-files.json: %v", err)
-		rollback.rollback(genResult)
-		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
+		rollbackUpdateGeneration(rollback, genResult, transitions)
+		restoreUpdateArtifactSnapshots(rollback, ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
 		return NewCheckoutError("failed to save ign-files.json", err)
 	}
 
 	applyCompleteUpdateConfig(prep)
-	if err := config.SaveIgnConfig(prep.IgnConfigPath, prep.IgnConfig); err != nil {
+	configWrite, err := saveIgnConfigWithResult(prep.IgnConfigPath, prep.IgnConfig)
+	bindCheckoutArtifactWrite(rollback, &ignConfigSnapshot, configWrite)
+	if err != nil {
 		debug.Debug("[app] Failed to save ign.json: %v", err)
-		rollback.rollback(genResult)
-		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
+		rollbackUpdateGeneration(rollback, genResult, transitions)
+		restoreUpdateArtifactSnapshots(rollback, ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
 		return NewCheckoutError("failed to save ign.json", err)
 	}
-
 	ignVarJson := &model.IgnVarJson{Variables: rawVars}
-	if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {
+	varWrite, err := saveIgnVarJsonWithResult(prep.IgnVarPath, ignVarJson)
+	bindCheckoutArtifactWrite(rollback, &ignVarSnapshot, varWrite)
+	if err != nil {
 		debug.Debug("[app] Failed to save ign-var.json: %v", err)
-		rollback.rollback(genResult)
-		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
+		rollbackUpdateGeneration(rollback, genResult, transitions)
+		restoreUpdateArtifactSnapshots(rollback, ignConfigSnapshot, ignVarSnapshot, manifestSnapshot)
 		return NewCheckoutError("failed to save ign-var.json", err)
 	}
 
 	return nil
 }
 
+func rollbackUpdateGeneration(rollback *checkoutGenerationRollback, genResult *generator.GenerateResult, transitions *symlinkTransitionTransactions) {
+	if err := transitions.rollback(); err != nil {
+		debug.Debug("[app] Failed to restore managed symlink transition: %v", err)
+	}
+	rollback.rollback(genResult)
+}
+
 func saveCompleteUpdateConfigOnlyArtifacts(prep *PrepareUpdateResult, rawVars map[string]interface{}) error {
-	rollback := &checkoutGenerationRollback{}
+	rollback := &checkoutGenerationRollback{outputDir: filepath.Dir(prep.IgnConfigPath)}
 	defer rollback.cleanup()
 
 	ignConfigSnapshot, err := rollback.snapshotPath(prep.IgnConfigPath)
@@ -504,14 +578,17 @@ func saveCompleteUpdateConfigOnlyArtifacts(prep *PrepareUpdateResult, rawVars ma
 	}
 
 	applyCompleteUpdateConfig(prep)
-	if err := config.SaveIgnConfig(prep.IgnConfigPath, prep.IgnConfig); err != nil {
-		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot)
+	configWrite, err := saveIgnConfigWithResult(prep.IgnConfigPath, prep.IgnConfig)
+	bindCheckoutArtifactWrite(rollback, &ignConfigSnapshot, configWrite)
+	if err != nil {
+		restoreUpdateArtifactSnapshots(rollback, ignConfigSnapshot, ignVarSnapshot)
 		return NewCheckoutError("failed to save ign.json", err)
 	}
-
 	ignVarJson := &model.IgnVarJson{Variables: rawVars}
-	if err := config.SaveIgnVarJson(prep.IgnVarPath, ignVarJson); err != nil {
-		restoreUpdateArtifactSnapshots(ignConfigSnapshot, ignVarSnapshot)
+	varWrite, err := saveIgnVarJsonWithResult(prep.IgnVarPath, ignVarJson)
+	bindCheckoutArtifactWrite(rollback, &ignVarSnapshot, varWrite)
+	if err != nil {
+		restoreUpdateArtifactSnapshots(rollback, ignConfigSnapshot, ignVarSnapshot)
 		return NewCheckoutError("failed to save ign-var.json", err)
 	}
 
@@ -532,9 +609,12 @@ func applyCompleteUpdateConfig(prep *PrepareUpdateResult) {
 	}
 }
 
-func restoreUpdateArtifactSnapshots(entries ...checkoutRollbackEntry) {
+func restoreUpdateArtifactSnapshots(rollback *checkoutGenerationRollback, entries ...checkoutRollbackEntry) {
 	for i := len(entries) - 1; i >= 0; i-- {
-		if err := restoreCheckoutRollbackEntry(entries[i]); err != nil {
+		if entries[i].expectedInfo == nil && entries[i].expectedFingerprint == "" {
+			continue
+		}
+		if err := rollback.restoreCheckoutRollbackEntry(entries[i]); err != nil {
 			debug.Debug("[app] Failed to restore update artifact %s: %v", entries[i].path, err)
 		}
 	}

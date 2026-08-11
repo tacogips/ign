@@ -60,6 +60,37 @@ type GenerateOptions struct {
 
 	// SkipUnchanged avoids writing existing files when generated output is identical.
 	SkipUnchanged bool
+
+	// SymlinkTransitions authorizes directory-to-symlink replacements that the
+	// update layer has already validated against its manifest. Keys are absolute
+	// output paths. Callers that do not supply a transition retain the historical
+	// symlink behavior.
+	SymlinkTransitions map[string]SymlinkTransition
+}
+
+// SymlinkTransitionDisposition describes how an existing directory at a
+// template symlink path must be handled during an overwrite update.
+type SymlinkTransitionDisposition string
+
+const (
+	SymlinkTransitionEligible  SymlinkTransitionDisposition = "eligible"
+	SymlinkTransitionPreserved SymlinkTransitionDisposition = "preserved"
+)
+
+// SymlinkTransition is an update-layer ownership decision. RetiredManagedPaths
+// are consumed by update cleanup after an eligible replacement succeeds.
+type SymlinkTransition struct {
+	Disposition         SymlinkTransitionDisposition
+	RetiredManagedPaths []string
+	// SourceFingerprint binds an eligible directory replacement to the exact
+	// no-follow tree inspected during update planning. It is intentionally
+	// opaque to the generator; the update transaction validates it after the
+	// directory has been renamed to its recoverable backup.
+	SourceFingerprint string
+	// Target is the template symlink target captured during transition planning.
+	// It lets the update layer create the replacement before generation while
+	// retaining the old directory until tracking artifacts are committed.
+	Target string
 }
 
 // DryRunFile contains information about a file that would be created in dry-run mode.
@@ -74,6 +105,8 @@ type DryRunFile struct {
 	WouldOverwrite bool
 	// WouldSkip indicates if the file would be skipped (Exists && !Overwrite option).
 	WouldSkip bool
+	// SymlinkTarget is populated for a template symlink entry.
+	SymlinkTarget string
 }
 
 // GenerateResult contains generation statistics.
@@ -173,7 +206,10 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 
 	// Create processor and writer based on template settings
 	processor := NewFileProcessor(g.parser, settings.BinaryExtensions)
-	writer := NewFileWriter(preserveExecutable)
+	writer := g.writer
+	if writer == nil {
+		writer = NewFileWriter(preserveExecutable)
+	}
 
 	// Create output directory if it doesn't exist (unless dry run)
 	if !dryRun && !writer.Exists(opts.OutputDir) {
@@ -235,6 +271,33 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 			_, lstatErr := os.Lstat(outputPath)
 			fileExists := lstatErr == nil
 
+			transition, hasTransition := symlinkTransitionForPath(opts.SymlinkTransitions, outputPath)
+			if hasTransition && transition.Disposition == SymlinkTransitionPreserved {
+				result.FilesSkipped++
+				if dryRun {
+					result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+						Path: outputPath, Exists: fileExists, WouldSkip: true, SymlinkTarget: file.SymlinkTarget,
+					})
+				}
+				continue
+			}
+			// The update layer creates eligible replacements as a recoverable
+			// transaction before generation. Treat that already-created link as a
+			// write (rather than an unchanged skip) so dry-run reporting and
+			// manifest persistence remain equivalent to a direct generation write.
+			if hasTransition && transition.Disposition == SymlinkTransitionEligible && fileExists && symlinkTargetMatchesExisting(outputPath, file.SymlinkTarget) {
+				if dryRun {
+					result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+						Path: outputPath, Content: []byte(file.SymlinkTarget), Exists: true,
+						WouldOverwrite: true, SymlinkTarget: file.SymlinkTarget,
+					})
+				} else {
+					result.WrittenFiles = append(result.WrittenFiles, outputPath)
+				}
+				result.FilesOverwritten++
+				continue
+			}
+
 			if fileExists && !shouldOverwritePath(processedFilePath, overwriteMode, overwriteIgnorePatterns) {
 				debug.Debug("[generator] Skipping existing symlink: %s", outputPath)
 				result.FilesSkipped++
@@ -243,20 +306,34 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 						Path:      outputPath,
 						Content:   nil,
 						Exists:    true,
-						WouldSkip: true,
+						WouldSkip: true, SymlinkTarget: file.SymlinkTarget,
 					})
 				}
 				continue
 			}
 			if opts.SkipUnchanged && fileExists && symlinkTargetMatchesExisting(outputPath, file.SymlinkTarget) {
 				debug.Debug("[generator] Skipping unchanged symlink: %s", outputPath)
+				if dryRun {
+					result.DryRunFiles = append(result.DryRunFiles, DryRunFile{
+						Path: outputPath, Exists: true, WouldSkip: true, SymlinkTarget: file.SymlinkTarget,
+					})
+				}
 				continue
 			}
 
 			if !dryRun {
-				if err := writer.WriteSymlink(outputPath, file.SymlinkTarget); err != nil {
+				var writeErr error
+				if hasTransition && transition.Disposition == SymlinkTransitionEligible {
+					writeErr = writer.ReplaceDirectoryWithSymlink(outputPath, file.SymlinkTarget)
+				} else {
+					writeErr = writer.WriteSymlink(outputPath, file.SymlinkTarget)
+				}
+				if writeErr != nil {
+					if hasTransition && transition.Disposition == SymlinkTransitionEligible {
+						return result, fmt.Errorf("replace managed directory with symlink %s -> %s: %w", file.Path, file.SymlinkTarget, writeErr)
+					}
 					result.Errors = append(result.Errors, fmt.Errorf("failed to create symlink %s -> %s: %w",
-						file.Path, file.SymlinkTarget, err))
+						file.Path, file.SymlinkTarget, writeErr))
 					continue
 				}
 			} else {
@@ -267,6 +344,7 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 					Exists:         fileExists,
 					WouldOverwrite: fileExists,
 					WouldSkip:      false,
+					SymlinkTarget:  file.SymlinkTarget,
 				})
 			}
 
@@ -370,6 +448,18 @@ func (g *DefaultGenerator) generate(ctx context.Context, opts GenerateOptions, d
 	}
 
 	return result, nil
+}
+
+func symlinkTransitionForPath(transitions map[string]SymlinkTransition, path string) (SymlinkTransition, bool) {
+	if transition, ok := transitions[filepath.Clean(path)]; ok {
+		return transition, true
+	}
+	canonical, err := filepath.Abs(path)
+	if err != nil {
+		return SymlinkTransition{}, false
+	}
+	transition, ok := transitions[filepath.Clean(canonical)]
+	return transition, ok
 }
 
 func normalizeOverwriteMode(opts GenerateOptions) OverwriteMode {

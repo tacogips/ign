@@ -1,12 +1,78 @@
 package cli
 
 import (
+	"context"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/tacogips/ign/internal/app"
 	"github.com/tacogips/ign/internal/template/generator"
+	"github.com/tacogips/ign/internal/template/model"
 )
+
+func TestRunUpdate_ConfirmationPreviewReusesSymlinkTransitionPlan(t *testing.T) {
+	resetUpdateCommandDependencies(t)
+	updateOverwrite = true
+
+	previewPlan := &app.UpdateExecutionPlan{}
+	prepareUpdate = func(context.Context, app.UpdateOptions) (*app.PrepareUpdateResult, error) {
+		return &app.PrepareUpdateResult{
+			HashChanged: true,
+			IgnConfig:   &model.IgnConfig{Template: model.TemplateSource{URL: "https://github.com/test/template"}},
+		}, nil
+	}
+	var calls []app.CompleteUpdateOptions
+	completeUpdate = func(_ context.Context, opts app.CompleteUpdateOptions) (*app.UpdateResult, error) {
+		calls = append(calls, opts)
+		if opts.DryRun {
+			return &app.UpdateResult{ExecutionPlan: previewPlan}, nil
+		}
+		return &app.UpdateResult{}, nil
+	}
+	confirmUpdate = func() (bool, error) { return true, nil }
+
+	if err := runUpdate(&cobra.Command{}, nil); err != nil {
+		t.Fatalf("run update: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("CompleteUpdate calls = %d, want preview and mutation", len(calls))
+	}
+	if !calls[0].DryRun || calls[0].ExecutionPlan != nil {
+		t.Fatalf("preview options = %#v, want a plan-producing dry run", calls[0])
+	}
+	if calls[1].DryRun {
+		t.Fatal("confirmed update remained a dry run")
+	}
+	if calls[1].ExecutionPlan != previewPlan {
+		t.Fatal("confirmed update did not receive the exact preview execution plan")
+	}
+}
+
+func resetUpdateCommandDependencies(t *testing.T) {
+	t.Helper()
+	originalPrepare := prepareUpdate
+	originalComplete := completeUpdate
+	originalConfirm := confirmUpdate
+	originalForce := updateForce
+	originalOverwrite := updateOverwrite
+	originalOverwriteAll := updateOverwriteAll
+	originalDryRun := updateDryRun
+	originalVerbose := updateVerbose
+	originalYes := updateYes
+	originalRef := updateRef
+	t.Cleanup(func() {
+		prepareUpdate = originalPrepare
+		completeUpdate = originalComplete
+		confirmUpdate = originalConfirm
+		updateForce = originalForce
+		updateOverwrite = originalOverwrite
+		updateOverwriteAll = originalOverwriteAll
+		updateDryRun = originalDryRun
+		updateVerbose = originalVerbose
+		updateYes = originalYes
+		updateRef = originalRef
+	})
+}
 
 func TestUpdateCmd_FlagDefaults(t *testing.T) {
 	// Reset flags for testing

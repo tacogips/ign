@@ -18,6 +18,10 @@ type Writer interface {
 	// Creates parent directories if needed. Removes any existing entry at path.
 	WriteSymlink(path string, target string) error
 
+	// ReplaceDirectoryWithSymlink replaces an already-authorized directory with
+	// a symlink. Authorization and ownership validation belong to the app layer.
+	ReplaceDirectoryWithSymlink(path string, target string) error
+
 	// CreateDir creates a directory and any necessary parent directories.
 	CreateDir(path string) error
 
@@ -155,6 +159,16 @@ func (w *FileWriter) WriteSymlink(path string, target string) error {
 
 	debug.Debug("[generator] Symlink created successfully: %s -> %s", path, target)
 	return nil
+}
+
+// ReplaceDirectoryWithSymlink is retained for Writer compatibility. Directory
+// transitions must be prepared by the update layer, which has the output-root
+// descriptor needed to perform a no-follow, recoverable transaction.
+func (w *FileWriter) ReplaceDirectoryWithSymlink(path string, target string) error {
+	return newGeneratorError(GeneratorWriteFailed,
+		"managed directory-to-symlink transitions require update transaction preparation",
+		path,
+		nil)
 }
 
 // CreateDir creates a directory and any necessary parent directories.

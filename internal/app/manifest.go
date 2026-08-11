@@ -11,6 +11,8 @@ import (
 	"github.com/tacogips/ign/internal/template/model"
 )
 
+var saveIgnManifestWithResult = config.SaveIgnManifestWithResult
+
 func manifestPath() string {
 	return filepath.Join(model.IgnConfigDir, model.IgnManifestFile)
 }
@@ -41,17 +43,23 @@ func backupManifestIfExists() error {
 }
 
 func saveManifestFromGenerateResult(path string, result *generator.GenerateResult) error {
-	return saveManifestFromGenerateResultExcluding(path, result, nil)
+	_, err := saveManifestFromGenerateResultWithResult(path, result, nil)
+	return err
 }
 
 func saveManifestFromGenerateResultExcluding(path string, result *generator.GenerateResult, excludedCanonicalPaths map[string]struct{}) error {
+	_, err := saveManifestFromGenerateResultWithResult(path, result, excludedCanonicalPaths)
+	return err
+}
+
+func saveManifestFromGenerateResultWithResult(path string, result *generator.GenerateResult, excludedCanonicalPaths map[string]struct{}) (config.AtomicWriteResult, error) {
 	if result == nil {
-		return nil
+		return config.AtomicWriteResult{}, nil
 	}
 
 	manifest, err := loadManifestOrEmpty(path)
 	if err != nil {
-		return err
+		return config.AtomicWriteResult{}, err
 	}
 
 	files := make([]string, 0, len(manifest.Files)+len(result.WrittenFiles)+len(result.CreatedFiles))
@@ -87,7 +95,7 @@ func saveManifestFromGenerateResultExcluding(path string, result *generator.Gene
 
 	manifest.Files = files
 	sort.Strings(manifest.Files)
-	return config.SaveIgnManifest(path, manifest)
+	return saveIgnManifestWithResult(path, manifest)
 }
 
 func isExcludedManifestPath(path string, excludedCanonicalPaths map[string]struct{}) bool {

@@ -83,6 +83,132 @@ Dry-run and confirmation previews must expose the same stale cleanup decisions
 as the real update by reporting removed managed files with `D`. Preview output
 must not mutate files, remove directories, or rewrite `.ign/ign-files.json`.
 
+## Managed Directory-To-Symlink Transitions
+
+Issue [#45](https://github.com/tacogips/ign/issues/45) adds one overwrite type
+transition: a path generated as a directory by an older template revision may
+become a symlink in the current template. A representative transition is a
+non-empty `.claude/` directory becoming `.claude -> .agents`.
+
+### Eligibility And Ownership Boundary
+
+- The transition is considered only in `--overwrite`, `--overwrite-all`, or
+  `--force` mode. Without overwrite, the existing directory is skipped.
+- Selective overwrite must skip the transition when the symlink path or any
+  candidate descendant is protected by `.ign-overwrite-ignore`.
+- A non-empty directory may be replaced only when every non-directory entry
+  below it is represented by the prior `.ign/ign-files.json` manifest. The
+  transition root and directory ancestors of managed entries do not need
+  separate manifest records.
+- Every descendant directory must contain at least one manifest-managed
+  non-directory entry. An empty directory subtree or a directory subtree
+  unrelated to any managed entry lacks ownership proof and preserves the entire
+  transition root.
+- Ownership validation uses normalized, output-root-contained paths and must not
+  follow symlinks while inspecting or removing the existing tree.
+- If any non-directory entry is untracked, any directory subtree lacks ownership
+  proof, or any descendant is protected, unreadable, or escapes the output root,
+  preserve the directory and classify the new symlink as skipped. This is a
+  safety decision, not a generation error.
+- This exception does not broaden stale cleanup into general recursive directory
+  deletion. It applies only when the current template defines the same path as a
+  symlink and the complete existing tree passes the ownership checks above.
+- `--overwrite-all` and `--force` bypass overwrite-ignore matching, but they do
+  not bypass manifest ownership, containment, or no-symlink-following checks.
+
+### Planning, Mutation, And Rollback
+
+- Dry-run, confirmation preview, and real generation share one transition
+  classification so the preview cannot authorize a different mutation.
+- Classification produces either an eligible transition or a preserved
+  transition root. The same result, including its transition-retired manifest
+  entries, is consumed by generation, stale cleanup, rollback preparation and
+  execution, and manifest persistence; those phases must not independently
+  reclassify it.
+- For an eligible transition, every prior manifest entry below the transition
+  root is classified as transition-retired. Stale cleanup must treat those
+  entries as filesystem-deletion exclusions: it must not inspect, traverse, or
+  remove them after the replacement symlink exists. Their old on-disk instances
+  are removed only as part of the ownership-validated directory removal before
+  symlink creation.
+- This exclusion prevents a retired path such as `.claude/settings.json` from
+  resolving through the new `.claude -> .agents` symlink and deleting the
+  current `.agents/settings.json` target. Cleanup may prune transition-retired
+  entries from tracking only after the symlink transition and update commit
+  succeed.
+- An eligible transition is reported as one modification (`M`) at the symlink
+  path rather than separate deletions for every managed descendant.
+- Before mutation, rollback uses the shared eligible-transition classification
+  to capture the complete existing directory tree and the three tracking
+  artifacts. Preserved transitions do not enter the mutation or rollback set.
+- Recursive rollback capture records each nested symlink as a symlink node and
+  its link target, without traversing or copying the target tree. Restoration
+  reconstructs the prior directory contents and symlink nodes without following
+  their targets, leaving any data reachable only through those links untouched.
+- The managed directory is removed without following nested symlinks, then the
+  new symlink is created.
+- If removal, symlink creation, later generation, or tracking persistence fails,
+  update restores the prior directory and prior tracking artifacts where
+  rollback state is available.
+- A failure while executing an eligible directory-to-symlink transition is a
+  fatal `CompleteUpdate` error: update rolls back and does not persist new
+  `.ign` tracking artifacts. It must not be downgraded into the generator's
+  non-fatal `GenerateResult.Errors` collection.
+- Issue #45 does not change commit behavior for unrelated pre-existing kinds of
+  `GenerateResult.Errors`; broad generation-error policy remains outside this
+  narrowly scoped transition fix.
+
+### Tracking Metadata
+
+- After successful replacement, `.ign/ign-files.json` contains the symlink path
+  once and removes transition-retired descendant entries from the replaced
+  directory without performing separate stale-cleanup deletion through the new
+  symlink.
+- `.ign/ign.json` and `.ign/ign-var.json` advance only with the same successful
+  update commit.
+- For a preserved transition root, generation records the new symlink as
+  skipped rather than written. Stale cleanup must exempt every prior manifest
+  entry at or below that root from deletion and pruning, and manifest persistence
+  retains those entries without claiming that the new symlink was created.
+- A failed transition must not leave a manifest entry for an unwritten symlink
+  or advance template metadata past the on-disk project state.
+
+### Regression And Verification Contract
+
+Regression coverage belongs primarily in `internal/app/update_test.go` because
+manifest ownership, overwrite mode, rollback, and artifact persistence are
+app-layer responsibilities. Focused generator coverage may remain in
+`internal/template/generator/generator_test.go` for low-level symlink behavior.
+
+Required cases:
+
+- overwrite replaces a non-empty, fully manifest-managed directory with the
+  expected symlink and emits no generation error;
+- the successful manifest records the symlink and removes obsolete descendants;
+- stale cleanup does not delete a current target file by resolving a retired
+  descendant through the newly created symlink;
+- no-overwrite mode preserves and skips the directory;
+- selective overwrite preserves a protected transition;
+- an untracked descendant causes a clean skip with prior metadata retained;
+- an empty or unrelated directory subtree causes the same clean skip;
+- dry-run reports the same modification without changing files or metadata;
+- rollback of a transition tree containing a nested symlink restores the nested
+  symlink itself without reading, replacing, or removing its target tree;
+- an unexpected mutation failure does not persist a failed partial transition.
+
+Required verification commands:
+
+```bash
+go test ./internal/template/generator -run 'Symlink'
+go test ./internal/app -run 'TestCompleteUpdate_OverwriteSymlink'
+mise run test
+go build -o /dev/null ./...
+go vet ./...
+```
+
+The change must not modify `internal/build/VERSION`, publish a release, or alter
+unrelated pre-existing worktree changes.
+
 ## Review Follow-Up Scope
 
 The review for `v0.1.16..HEAD`, with focus on commit `1f8bba8`, keeps the
@@ -104,6 +230,8 @@ Review validation should cover these boundaries:
 - release packaging follow-up must stay independent from update cleanup unless
   a packaging defect directly affects the release artifact or generated formula.
 
-Later implementation review must preserve user-created files, refuse directory
-removal, avoid unrelated refactors, and verify the Go surface with `go test
-./...`, `go build ./cmd/ign`, and `go vet ./...`.
+Later implementation review must preserve user-created files and continue to
+refuse ordinary stale-cleanup directory removal. The only directory-removal
+exception is the ownership-validated directory-to-symlink transition defined
+above. Review must also avoid unrelated refactors and verify the Go surface with
+`go test ./...`, `go build ./cmd/ign`, and `go vet ./...`.

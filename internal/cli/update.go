@@ -60,6 +60,9 @@ var (
 	updateVerbose      bool
 	updateYes          bool
 	updateRef          string
+	prepareUpdate      = app.PrepareUpdate
+	completeUpdate     = app.CompleteUpdate
+	confirmUpdate      = confirmUpdateOverwrite
 )
 
 func init() {
@@ -97,7 +100,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	shouldOverwrite := overwriteMode != generator.OverwriteNone
 
 	// Prepare update - fetch template and check for changes
-	prepResult, err := app.PrepareUpdate(cmd.Context(), app.UpdateOptions{
+	prepResult, err := prepareUpdate(cmd.Context(), app.UpdateOptions{
 		OutputDir:     outputPath,
 		Overwrite:     shouldOverwrite,
 		OverwriteMode: overwriteMode,
@@ -184,8 +187,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	var executionPlan *app.UpdateExecutionPlan
 	if shouldOverwrite && !updateDryRun && !updateYes {
-		preview, err := app.CompleteUpdate(cmd.Context(), app.CompleteUpdateOptions{
+		preview, err := completeUpdate(cmd.Context(), app.CompleteUpdateOptions{
 			PrepareResult: prepResult,
 			NewVariables:  newVarValues,
 			OutputDir:     outputPath,
@@ -197,8 +201,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		executionPlan = preview.ExecutionPlan
 		printUpdateWritePreview(preview)
-		confirmed, err := confirmUpdateOverwrite()
+		confirmed, err := confirmUpdate()
 		if err != nil {
 			return err
 		}
@@ -216,7 +221,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		printInfo("Regenerating project from template...")
 	}
 
-	result, err := app.CompleteUpdate(cmd.Context(), app.CompleteUpdateOptions{
+	result, err := completeUpdate(cmd.Context(), app.CompleteUpdateOptions{
 		PrepareResult: prepResult,
 		NewVariables:  newVarValues,
 		OutputDir:     outputPath,
@@ -224,6 +229,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		OverwriteMode: overwriteMode,
 		DryRun:        updateDryRun,
 		Verbose:       updateVerbose,
+		ExecutionPlan: executionPlan,
 	})
 
 	if err != nil {
