@@ -21,6 +21,8 @@ go = "1.25.4"
 golangci-lint = "latest"
 "go:golang.org/x/tools/gopls" = "latest"
 "go:golang.org/x/tools/cmd/goimports" = "0.48.0"
+gitleaks = "latest"
+pre-commit = "latest"
 
 [tasks."default"]
 description = "Show available tasks"
@@ -107,4 +109,23 @@ if [ "$#" -eq 0 ]; then
 fi
 scripts/render-homebrew-formula.sh "$@" ../homebrew-tap/Formula/ign.rb
 
+'''
+
+[tasks.install-git-hooks]
+description = "Install mise tools and the repository pre-commit hook"
+run = '''
+mise install
+
+hooks_path=$(git config --local --get core.hooksPath || true)
+if [ "$hooks_path" = ".git/hooks" ]; then
+  git config --local --unset-all core.hooksPath
+  hooks_path=""
+fi
+
+if [ -z "$hooks_path" ]; then
+  mise exec -- pre-commit install
+else
+  mise exec -- pre-commit validate-config .pre-commit-config.yaml
+  echo "Using existing custom Git hooks path: $hooks_path"
+fi
 '''
