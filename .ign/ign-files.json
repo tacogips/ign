@@ -44,7 +44,6 @@
     ".agents/skills/supply-chain-secure-install/agents/openai.yaml",
     ".agents/skills/supply-chain-secure-publish/SKILL.md",
     ".agents/skills/supply-chain-secure-publish/agents/openai.yaml",
-    ".pre-commit-config.yaml",
     "design-docs/specs/notes.md",
     "design-docs/user-qa/pending-example.md",
     "design-docs/user-qa/qa-example.md",

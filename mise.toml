@@ -19,8 +19,6 @@ fi
 [tools]
 go = "1.25.4"
 golangci-lint = "latest"
-gitleaks = "latest"
-pre-commit = "latest"
 "go:golang.org/x/tools/gopls" = "latest"
 "go:golang.org/x/tools/cmd/goimports" = "0.48.0"
 
