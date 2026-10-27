@@ -1,10 +1,11 @@
 module github.com/tacogips/ign
 
-go 1.25.4
+go 1.27.3
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.7
 	github.com/spf13/cobra v1.10.2
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211
 )
 
@@ -15,6 +16,5 @@ require (
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
-	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f
 	golang.org/x/text v0.4.0 // indirect
 )
