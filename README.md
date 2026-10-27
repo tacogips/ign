@@ -432,6 +432,9 @@ go install github.com/tacogips/ign@latest
 The Homebrew formula is maintained in `tacogips/homebrew-tap` and installs the
 latest published GitHub Release artifact for the current platform.
 
+Source builds require Go 1.27.3 or newer, including the eMudhra certificate
+verification mitigation. Development and CI select the patched 1.27.3 release.
+
 ## License
 
 MIT
