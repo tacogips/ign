@@ -1,0 +1,30 @@
+{
+  "name": "conditional-template",
+  "version": "1.0.0",
+  "description": "Template with conditional directives",
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "description": "Project name",
+      "required": true
+    },
+    "use_docker": {
+      "type": "bool",
+      "description": "Include Docker configuration",
+      "required": false,
+      "default": false
+    },
+    "has_license": {
+      "type": "bool",
+      "description": "Include license section",
+      "required": false,
+      "default": false
+    },
+    "license": {
+      "type": "string",
+      "description": "License type",
+      "required": false,
+      "default": "MIT"
+    }
+  }
+}
