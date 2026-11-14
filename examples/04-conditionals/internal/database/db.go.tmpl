@@ -1,0 +1,39 @@
+// Database package - only generated when enable_database is true
+package database
+
+import (
+	"context"
+	"os"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+type DB struct {
+	pool *pgxpool.Pool
+}
+
+func Connect() (*DB, error) {
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "postgres://localhost:5432/@ign-var:service_name@?sslmode=disable"
+	}
+
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := pool.Ping(context.Background()); err != nil {
+		return nil, err
+	}
+
+	return &DB{pool: pool}, nil
+}
+
+func (d *DB) Close() {
+	d.pool.Close()
+}
+
+func (d *DB) Pool() *pgxpool.Pool {
+	return d.pool
+}
