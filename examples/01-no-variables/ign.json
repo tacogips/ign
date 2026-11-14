@@ -1,0 +1,7 @@
+{
+  "name": "simple-static",
+  "version": "1.0.0",
+  "description": "A simple static template with no variables - demonstrates basic file generation",
+  "author": "ign-examples",
+  "repository": "https://github.com/example/ign-templates"
+}
