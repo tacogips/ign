@@ -1,0 +1,8 @@
+{
+  "variables": {
+    "project_name": "my-api-server",
+    "module_path": "github.com/myuser/my-api-server",
+    "port": 3000,
+    "version": "1.0.0"
+  }
+}

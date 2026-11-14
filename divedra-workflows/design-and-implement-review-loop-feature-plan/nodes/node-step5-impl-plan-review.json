@@ -1,0 +1,11 @@
+{
+  "id": "step5-impl-plan-review",
+  "description": "Review the feature-local implementation plan against the accepted branch design.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplate": "You are the feature-local Step 5 implementation-plan review branch. Review the Step 4 feature plan against the accepted branch design, runtimeVariables.fanout.item, and repository planning conventions. Classify findings as high, mid, or low. Set when.needs_design_revision true only when the branch design must change. Set when.needs_revision true only when the branch implementation plan must change. Do not set both revision flags true. Return adapter JSON with payload.workflowMode, payload.issueReference, payload.featureId, payload.reviewDecision, payload.needs_design_revision, payload.needs_revision, payload.accepted, payload.findings, payload.feedback, and payload.risks.",
+  "variables": {},
+  "output": {
+    "description": "Return adapter JSON with feature-local plan review routing and findings."
+  }
+}
