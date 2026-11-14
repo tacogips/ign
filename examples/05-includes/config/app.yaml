@@ -1,0 +1,14 @@
+# Application Configuration
+# @ign-include:/_includes/generated-warning.txt@
+
+app:
+  name: "@ign-var:project_name@"
+  version: "1.0.0"
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+logging:
+  level: "info"
+  format: "json"
