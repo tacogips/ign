@@ -1,0 +1,57 @@
+version: '3'
+
+tasks:
+  init:
+    desc: Initialize Go module (run once)
+    cmds:
+      - go mod init github.com/tacogips/ign
+    status:
+      - test -f go.mod
+
+  fmt:
+    desc: Format Go code and fix imports
+    preconditions:
+      - sh: test -f go.mod
+        msg: "go.mod not found. Run 'task init' first"
+    cmds:
+      - goimports -w .
+      - go fmt ./... || true
+
+  imports:
+    desc: Fix imports only (add missing, remove unused)
+    preconditions:
+      - sh: test -f go.mod
+        msg: "go.mod not found. Run 'task init' first"
+    cmds:
+      - goimports -w .
+
+  tidy:
+    desc: Tidy go.mod dependencies
+    cmds:
+      - go mod tidy
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run
+
+  check:
+    desc: Format, fix imports, and run linter
+    cmds:
+      - task: fmt
+      - task: lint
+
+  build:
+    desc: Build the project
+    cmds:
+      - go build -v ./...
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./...
+
+  clean:
+    desc: Clean build artifacts and cache
+    cmds:
+      - go clean -cache -testcache -modcache
