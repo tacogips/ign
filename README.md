@@ -1,0 +1,339 @@
+# ign
+
+A simple project scaffolding tool. Download templates from GitHub and generate projects with variable substitution.
+
+## Why ign?
+
+- **Simple workflow**: Initialize, configure, generate
+- **GitHub-first**: Templates live in GitHub repos
+- **No escaping headaches**: `@ign-var:NAME@` syntax avoids conflicts with any programming language
+- **One-shot generation**: Files are generated once and fully owned by you
+
+## Quick Start
+
+```bash
+# 1. Initialize from a template
+ign init github.com/owner/templates/go-basic
+
+# 2. Edit variables
+vim .ign/ign-var.json
+
+# 3. Generate project
+ign checkout .              # Current directory
+ign checkout ./my-project   # Specific directory
+ign rewind                  # Remove ign-managed files
+ign switch ./another-template
+```
+
+## Commands
+
+### Global Flags
+
+These flags apply to all commands:
+
+| Flag | Description |
+|------|-------------|
+| `--no-color` | Disable colored output |
+| `--quiet`, `-q` | Suppress non-error output |
+| `--debug` | Enable debug output |
+
+### `ign init <url-or-path>`
+
+Initialize configuration from a template source.
+
+```bash
+# From GitHub
+ign init github.com/owner/repo
+ign init github.com/owner/repo/path/to/template
+ign init github.com/owner/repo --ref v1.0.0
+ign init github.com/owner/repo --var app_name=my-app --var port=8080
+
+# From local path
+ign init ./my-local-template
+ign init /absolute/path/to/template
+```
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--ref` | `-r` | Git branch, tag, or commit SHA (default: main) |
+| `--force` | `-f` | Backup existing config and reinitialize |
+| `--var` | `-V` | Set a template variable as `key=value` (repeatable) |
+
+**Behavior:**
+
+| Condition | Action |
+|-----------|--------|
+| `.ign/` does not exist | Create `.ign/ign-var.json` |
+| `.ign/` exists | Do nothing (skip) |
+| `.ign/` exists + `--force` | Backup existing config, then reinitialize |
+
+**Backup naming:** When `--force` is used, existing `ign-var.json` is backed up as `ign-var.json.bk1`, `ign-var.json.bk2`, etc.
+
+Variables supplied with `--var` are written to `.ign/ign-var.json`. Missing
+variables are still prompted interactively.
+
+```bash
+# Force reinitialize with backup
+ign init github.com/owner/repo --force
+
+# Result:
+# .ign/
+#   ign-var.json       <- New config
+#   ign-var.json.bk1   <- Previous config
+```
+
+### `ign checkout <url-or-path> [output-path]`
+
+Initialize configuration and generate project files from a template in one step.
+
+```bash
+ign checkout github.com/owner/repo              # Generate to current directory
+ign checkout github.com/owner/repo ./my-project # Generate to specific directory
+ign checkout ./my-local-template ./my-project   # Generate from local template
+ign checkout github.com/owner/repo --dry-run    # Preview without writing files
+ign checkout github.com/owner/repo --verbose    # Show detailed processing info
+ign checkout github.com/owner/repo --var app_name=my-app --var port=8080
+```
+
+If `.ign/` already exists, checkout does nothing unless `--force` is used.
+Variables supplied with `--var` are used for generation and saved to
+`.ign/ign-var.json`. Missing variables are still prompted interactively.
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Overwrite existing files |
+| `--dry-run` | `-d` | Show what would be generated without writing |
+| `--verbose` | `-v` | Show detailed processing information |
+| `--var` | `-V` | Set a template variable as `key=value` (repeatable, one-shot checkout) |
+
+**File handling:**
+
+| Condition | Action |
+|-----------|--------|
+| File does not exist | Create |
+| File exists | Skip (do not overwrite) |
+| File exists + `--force` | Overwrite |
+
+After a successful checkout, ign stores the created file list in `.ign/ign-files.json`.
+
+### `ign update [output-path]`
+
+Fetch the checked-out template again and regenerate project files when the template hash has changed.
+
+```bash
+ign update
+ign update ./my-project
+ign update --dry-run
+ign update --overwrite
+ign update --overwrite --yes
+ign update --overwrite-all
+```
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--overwrite` | `-o` | Overwrite existing files except paths matched by the remote template's `.ign-overwrite-ignore` |
+| `--overwrite-all` | | Overwrite all existing files |
+| `--force` | `-f` | Regenerate even if the hash is unchanged and overwrite all existing files |
+| `--yes` | `-y` | Skip the overwrite confirmation prompt |
+| `--dry-run` | `-d` | Preview what would be generated without writing |
+| `--verbose` | `-v` | Show detailed processing information |
+
+When `--overwrite` or `--overwrite-all` is used, `ign update` also removes project files recorded in `.ign/ign-files.json` when the current template no longer generates them. The manifest is pruned after removal, and stale manifest entries for files that are already missing are pruned without reporting a deletion. Selective overwrite does not remove paths matched by `.ign-overwrite-ignore`.
+
+When `--overwrite` or `--overwrite-all` is used without `--yes`, `ign update` displays files that will change before prompting:
+
+```text
+A new-file.txt
+M existing-file.txt
+D obsolete-file.txt
+```
+
+Existing files whose generated content and permissions are unchanged are omitted from the confirmation list.
+
+Template authors can add `.ign-overwrite-ignore` to the template root to protect user-owned files during selective overwrite. The file uses gitignore-style patterns and is included in the template hash.
+
+```gitignore
+config/
+.env
+*.local
+!config/default.yaml
+```
+
+### `ign rewind [output-path]`
+
+Remove files previously created by ign and delete `.ign/`.
+
+```bash
+ign rewind
+ign rewind ./my-project
+```
+
+If `.ign/ign-files.json` exists, ign uses it directly. Otherwise it falls back to the
+currently checked-out template and variables to infer the managed files.
+
+### `ign switch <url-or-path> [output-path]`
+
+Replace the current checked-out template with a new one.
+
+```bash
+ign switch github.com/owner/new-template
+ign switch ./new-local-template ./my-project
+```
+
+`ign switch` is equivalent to `ign rewind` followed by `ign checkout`.
+
+### `ign template check [PATH]`
+
+Validate template files for syntax errors.
+
+```bash
+ign template check              # Check current directory
+ign template check ./templates  # Check specific directory
+ign template check -r           # Recursive check
+ign template check -r -v        # Recursive with verbose output
+```
+
+**Flags:**
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--recursive` | `-r` | Recursively check subdirectories |
+| `--verbose` | `-v` | Show detailed validation info |
+
+### `ign version`
+
+Show version information.
+
+```bash
+ign version          # Full version info
+ign version --short  # Version number only
+ign version --json   # JSON format output
+```
+
+## Configuration Directory
+
+`.ign/` contains:
+
+```
+.ign/
+  ign.json             # Template reference and content hash
+  ign-files.json       # Files created by ign
+  ign-var.json         # User variable values
+  license-header.txt   # Optional files for @file: references
+```
+
+### ign.json (Template Reference)
+
+```json
+{
+  "template": {
+    "url": "github.com/owner/templates/go-basic",
+    "ref": "main"
+  },
+  "hash": "sha256:e3b0c44298fc1c149..."
+}
+```
+
+### ign-var.json (User Variables)
+
+```json
+{
+  "variables": {
+    "app_name": "my-app",
+    "port": 8080,
+    "debug": false
+  }
+}
+```
+
+## Template Syntax
+
+```go
+package main
+
+const AppName = "@ign-var:app_name@"
+const Port = @ign-var:port:int=8080@       // optional, default 8080
+const Debug = @ign-var:debug:bool=false@   // optional, default false
+
+func main() {
+    @ign-if:enable_logging@
+    log.Println("Starting...")
+    @ign-endif@
+}
+```
+
+### Variable Syntax
+
+| Syntax | Required | Description |
+|--------|----------|-------------|
+| `@ign-var:NAME@` | Yes | Basic variable |
+| `@ign-var:NAME:TYPE@` | Yes | With type validation |
+| `@ign-var:NAME=DEFAULT@` | No | With default value |
+| `@ign-var:NAME:TYPE=DEFAULT@` | No | With type and default |
+
+**Types:** `string`, `int`, `bool`
+
+String default values support `{current_dir}` as a placeholder for the output directory name.
+
+```json
+{
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "default": "{current_dir}"
+    },
+    "module_path": {
+      "type": "string",
+      "default": "github.com/acme/{current_dir}"
+    }
+  }
+}
+```
+
+### Other Directives
+
+| Directive | Usage |
+|-----------|-------|
+| `@ign-if:VAR@...@ign-endif@` | Conditional block (bool) |
+| `@ign-include:PATH@` | Include another file |
+| `@ign-raw:CONTENT@` | Output literally (escape) |
+| `@ign-comment:TEXT@` | Template-only comment (removed) |
+
+## Private Repos
+
+```bash
+# Using gh CLI (recommended)
+gh auth login
+ign init github.com/private/repo
+
+# Or via environment variable
+export GITHUB_TOKEN=ghp_xxx
+```
+
+## Installation
+
+```bash
+# Using Homebrew
+brew tap tacogips/tap
+brew install ign
+ign version
+
+# Using Nix
+nix run github:tacogips/ign
+
+# From source
+go install github.com/tacogips/ign@latest
+```
+
+The Homebrew formula is maintained in `tacogips/homebrew-tap` and installs the
+latest published GitHub Release artifact for the current platform.
+
+## License
+
+MIT

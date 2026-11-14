@@ -1,0 +1,19 @@
+{
+  "id": "step2-design-doc-update",
+  "description": "Create or revise feature-local design documentation for one fanout branch.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "sessionPolicy": {
+    "mode": "reuse"
+  },
+  "promptTemplate": "You are the feature-local Step 2 design-doc update branch. Use runtimeVariables.fanout.item as the feature contract and runtimeVariables.workflowCall.input as the branch input. Update only the feature's declared designDocPath unless review feedback requires a scoped revision. Keep design documentation under design-docs/. Return JSON with workflowMode, issueReference, featureId, featureTitle, designDocPaths, codexAgentReferences, designSummary, decisions, openQuestions, addressedFeedback, and risks.",
+  "promptVariants": {
+    "self-review": {
+      "promptTemplate": "You are the feature-local Step 2 self-review branch. Review the latest Step 2 branch output and current repository diff before independent design review. Confirm the feature-local design directly addresses the assigned fanout item, records open questions intentionally, and is specific enough for feature-local implementation-plan creation. Return concise JSON only with needs_revision, findings, feedback, accepted, reviewedDesignDocPaths, and residualRisks. Set needs_revision to true when any high or mid finding remains."
+    }
+  },
+  "variables": {},
+  "output": {
+    "description": "Return JSON with feature-local design document paths, feature id, design summary, decisions, addressed feedback, and risks."
+  }
+}
