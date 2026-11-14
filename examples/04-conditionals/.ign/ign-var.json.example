@@ -1,0 +1,10 @@
+{
+  "variables": {
+    "service_name": "my-api-service",
+    "module_path": "github.com/myorg/my-api-service",
+    "port": 3000,
+    "enable_database": true,
+    "enable_metrics": true,
+    "enable_auth": false
+  }
+}

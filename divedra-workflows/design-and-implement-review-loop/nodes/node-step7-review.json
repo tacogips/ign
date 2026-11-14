@@ -1,0 +1,11 @@
+{
+  "id": "step7-review",
+  "description": "Review the implementation against the repository diff and route back when any high or mid finding exists.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/step7-review.md",
+  "variables": {},
+  "output": {
+    "description": "Return adapter JSON with when.needs_revision true only when high or mid findings exist, plus findings and actionable feedback."
+  }
+}

@@ -1,0 +1,3 @@
+// Copyright (c) @ign-var:year@ @ign-var:author_name@
+// Licensed under the MIT License.
+// See LICENSE file in the project root for full license information.
