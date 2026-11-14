@@ -1,0 +1,42 @@
+## nix/git
+.pre-commit-config.yaml
+**/.direnv
+**/.env
+**/.envrc.private*
+**/*.private*
+
+## large files
+**/*.zip
+
+## ide's /meta infos
+**/.vscode
+**/.idea
+**/.~lock*
+**/.DS_Store
+
+## ts/js
+**/node_modules
+
+## zig
+**/zig-out
+**/.zig-cache
+
+## pythons
+**/.venv/
+**/venv/
+**/*.pkl
+**/*.pyc
+**/*.pyo
+**/*.ipynb
+**/__pycache__/
+**/.pytest_cache/
+**/.ipynb_checkpoints/
+**/.python-version
+**/.mypy_cache/
+**/notebook/
+**/.tox/
+**/.pytest_cache/
+
+## tmps
+result
+**/tmp
