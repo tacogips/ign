@@ -1,0 +1,14 @@
+{
+  "template": {
+    "provider": "github",
+    "owner": "example",
+    "repo": "ign-templates",
+    "path": "05-includes",
+    "ref": "main"
+  },
+  "variables": {
+    "project_name": "my-awesome-project",
+    "author_name": "John Doe",
+    "year": 2024
+  }
+}
