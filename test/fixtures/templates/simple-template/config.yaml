@@ -1,0 +1,4 @@
+name: @ign-var:project_name@
+port: @ign-var:port@
+features:
+  experimental: @ign-var:enable_feature@
