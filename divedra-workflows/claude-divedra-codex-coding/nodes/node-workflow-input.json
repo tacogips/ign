@@ -1,0 +1,10 @@
+{
+  "id": "workflow-input",
+  "executionBackend": "claude-code-agent",
+  "model": "claude-haiku-4-5",
+  "promptTemplateFile": "prompts/workflow-input.md",
+  "variables": {},
+  "output": {
+    "description": "Return the normalized request, constraints, and acceptance checks that the implementation brief should use."
+  }
+}

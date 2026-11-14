@@ -1,0 +1,8 @@
+{
+  "id": "intake-or-plan",
+  "description": "Plan non-interactive variable support for ign commands.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/intake-or-plan.md",
+  "variables": {}
+}
