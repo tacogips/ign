@@ -1,0 +1,11 @@
+{
+  "id": "step8-docs-refresh",
+  "description": "Refresh user-facing repository documentation after implementation review acceptance and before commit generation.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/step8-docs-refresh.md",
+  "variables": {},
+  "output": {
+    "description": "Return JSON with the refreshed documentation files, the user-facing surfaces covered, a short documentation summary, and any residual risks."
+  }
+}
