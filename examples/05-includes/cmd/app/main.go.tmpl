@@ -1,0 +1,24 @@
+// Copyright (c) @ign-var:year@ @ign-var:author_name@
+// Licensed under the MIT License.
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+)
+
+func main() {
+	ctx := context.Background()
+	log.Printf("Starting %s...", "@ign-var:project_name@")
+
+	if err := run(ctx); err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+}
+
+func run(ctx context.Context) error {
+	fmt.Println("Hello from @ign-var:project_name@!")
+	return nil
+}
