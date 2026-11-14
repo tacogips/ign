@@ -1,0 +1,3 @@
+interface:
+  display_name: "test-refactor"
+  short_description: "Use when refactoring tests for better maintainability. Provides guidelines for removing duplicates, DRYing fixtures/assertions, restructuring test organization, renaming, and splitting oversized files."

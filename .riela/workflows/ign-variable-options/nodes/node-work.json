@@ -1,0 +1,8 @@
+{
+  "id": "work",
+  "description": "Implement non-interactive variable support for ign commands.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/work.md",
+  "variables": {}
+}
