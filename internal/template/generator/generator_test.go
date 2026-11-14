@@ -1,0 +1,1051 @@
+package generator
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/tacogips/ign/internal/template/model"
+	"github.com/tacogips/ign/internal/template/parser"
+)
+
+// TestIsSpecialFile tests special file detection.
+func TestIsSpecialFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		expected bool
+	}{
+		{"ign-template.json root", model.IgnTemplateConfigFile, true},
+		{"ign-template.json in subdir", "subdir/" + model.IgnTemplateConfigFile, true},
+		{".ign-overwrite-ignore root", model.IgnOverwriteIgnoreFile, true},
+		{".ign-overwrite-ignore in subdir", "subdir/" + model.IgnOverwriteIgnoreFile, false},
+		{".ign exact", ".ign", true},
+		{".ign with slash", ".ign/", true},
+		{".ign subpath", ".ign/ign-var.json", true},
+		{"regular file", "main.go", false},
+		{"regular subdir file", "src/main.go", false},
+		{"similar name", "ign-template.json.bak", false},
+		{"similar prefix", "ign-build-backup", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsSpecialFile(tt.path)
+			if result != tt.expected {
+				t.Errorf("IsSpecialFile(%q) = %v, want %v", tt.path, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGeneratorResolvesRelativeIncludeFromTemplateFileDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	template := &model.Template{
+		RootPath: tempDir,
+		Config: model.IgnJson{
+			Name:      "include-template",
+			Version:   "1.0.0",
+			Variables: map[string]model.VarDef{},
+		},
+		Files: []model.TemplateFile{
+			{Path: "_includes/header.txt", Content: []byte("included\n")},
+			{Path: "cmd/main.txt", Content: []byte("@ign-include:../_includes/header.txt@body\n")},
+		},
+	}
+	if err := os.MkdirAll(filepath.Join(tempDir, "_includes"), 0755); err != nil {
+		t.Fatalf("failed to create template include dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tempDir, "_includes", "header.txt"), []byte("included\n"), 0644); err != nil {
+		t.Fatalf("failed to write include file: %v", err)
+	}
+
+	gen := NewGenerator()
+	result, err := gen.DryRun(context.Background(), GenerateOptions{
+		Template:  template,
+		Variables: parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir: filepath.Join(tempDir, "out"),
+	})
+	if err != nil {
+		t.Fatalf("DryRun failed: %v", err)
+	}
+
+	for _, file := range result.DryRunFiles {
+		if filepath.Base(file.Path) == "main.txt" {
+			if string(file.Content) != "included\nbody\n" {
+				t.Fatalf("main content = %q, want included content", file.Content)
+			}
+			return
+		}
+	}
+	t.Fatal("main.txt dry-run output not found")
+}
+
+// TestMatchesPattern tests glob pattern matching.
+func TestMatchesPattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		pattern  string
+		expected bool
+	}{
+		{"exact match", "test.txt", "test.txt", true},
+		{"wildcard extension", "file.txt", "*.txt", true},
+		{"wildcard all", "anything", "*", true},
+		{"subdir wildcard", "dir/file.txt", "*.txt", true},
+		{"pattern with slash", "dir/file.txt", "dir/*.txt", true},
+		{"no match", "file.go", "*.txt", false},
+		{"case sensitive", "FILE.txt", "file.txt", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := MatchesPattern(tt.path, tt.pattern)
+			if result != tt.expected {
+				t.Errorf("MatchesPattern(%q, %q) = %v, want %v", tt.path, tt.pattern, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestShouldIgnoreFile tests file filtering logic.
+func TestShouldIgnoreFile(t *testing.T) {
+	tests := []struct {
+		name           string
+		path           string
+		ignorePatterns []string
+		expected       bool
+	}{
+		{"special file ign-template.json", model.IgnTemplateConfigFile, []string{}, true},
+		{"special file .ign", ".ign/ign-var.json", []string{}, true},
+		{"ignored by pattern", "test.log", []string{"*.log"}, true},
+		{"not ignored", "main.go", []string{"*.txt"}, false},
+		{"multiple patterns match", "temp.tmp", []string{"*.log", "*.tmp"}, true},
+		{"multiple patterns no match", "main.go", []string{"*.log", "*.tmp"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ShouldIgnoreFile(tt.path, tt.ignorePatterns)
+			if result != tt.expected {
+				t.Errorf("ShouldIgnoreFile(%q, %v) = %v, want %v", tt.path, tt.ignorePatterns, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestMatchesGitIgnorePattern(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		patterns []string
+		want     bool
+	}{
+		{name: "basename anywhere", path: "cmd/app/config.yaml", patterns: []string{"config.yaml"}, want: true},
+		{name: "anchored path", path: "config/app.yaml", patterns: []string{"/config/app.yaml"}, want: true},
+		{name: "directory path", path: "internal/service/service.go", patterns: []string{"internal/"}, want: true},
+		{name: "glob path", path: "docs/spec.md", patterns: []string{"docs/*.md"}, want: true},
+		{name: "double-star directory", path: "docs/nested/spec.md", patterns: []string{"docs/**"}, want: true},
+		{name: "double-star basename at root", path: "app.local", patterns: []string{"**/*.local"}, want: true},
+		{name: "double-star basename nested", path: "cmd/app/app.local", patterns: []string{"**/*.local"}, want: true},
+		{name: "negation after double-star re-includes", path: "docs/keep.md", patterns: []string{"docs/**", "!docs/keep.md"}, want: false},
+		{name: "later double-star overrides negation", path: "docs/keep.md", patterns: []string{"!docs/keep.md", "docs/**"}, want: true},
+		{name: "negation re-includes", path: "config/keep.yaml", patterns: []string{"config/", "!config/keep.yaml"}, want: false},
+		{name: "no match", path: "README.md", patterns: []string{"config/"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MatchesGitIgnorePattern(tt.path, tt.patterns)
+			if got != tt.want {
+				t.Fatalf("MatchesGitIgnorePattern(%q, %v) = %v, want %v", tt.path, tt.patterns, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFileProcessor_ShouldProcess tests binary file detection.
+func TestFileProcessor_ShouldProcess(t *testing.T) {
+	p := NewFileProcessor(parser.NewParser(), []string{".bin", ".exe"})
+
+	tests := []struct {
+		name     string
+		file     model.TemplateFile
+		expected bool
+	}{
+		{
+			name: "text file",
+			file: model.TemplateFile{
+				Path:     "main.go",
+				Content:  []byte("package main"),
+				IsBinary: false,
+			},
+			expected: true,
+		},
+		{
+			name: "binary marked",
+			file: model.TemplateFile{
+				Path:     "data",
+				Content:  []byte("data"),
+				IsBinary: true,
+			},
+			expected: false,
+		},
+		{
+			name: "binary extension",
+			file: model.TemplateFile{
+				Path:     "prog.exe",
+				Content:  []byte("text"),
+				IsBinary: false,
+			},
+			expected: false,
+		},
+		{
+			name: "binary content with null",
+			file: model.TemplateFile{
+				Path:     "file",
+				Content:  []byte{0x00, 0x01, 0x02},
+				IsBinary: false,
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := p.ShouldProcess(tt.file)
+			if result != tt.expected {
+				t.Errorf("ShouldProcess(%s) = %v, want %v", tt.name, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestFileProcessor_Process tests file processing.
+func TestFileProcessor_Process(t *testing.T) {
+	p := NewFileProcessor(parser.NewParser(), []string{".bin"})
+	ctx := context.Background()
+	vars := parser.NewMapVariables(map[string]interface{}{
+		"name": "test",
+		"port": 8080,
+	})
+
+	tests := []struct {
+		name     string
+		file     model.TemplateFile
+		expected string
+	}{
+		{
+			name: "simple variable substitution",
+			file: model.TemplateFile{
+				Path:     "config.txt",
+				Content:  []byte("name: @ign-var:name@"),
+				IsBinary: false,
+			},
+			expected: "name: test",
+		},
+		{
+			name: "binary file unchanged",
+			file: model.TemplateFile{
+				Path:     "data.bin",
+				Content:  []byte{0x00, 0x01, 0x02},
+				IsBinary: true,
+			},
+			expected: string([]byte{0x00, 0x01, 0x02}),
+		},
+		{
+			name: "multiple variables",
+			file: model.TemplateFile{
+				Path:     "config.txt",
+				Content:  []byte("@ign-var:name@ on port @ign-var:port@"),
+				IsBinary: false,
+			},
+			expected: "test on port 8080",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := p.Process(ctx, tt.file, vars, "/tmp/template")
+			if err != nil {
+				t.Fatalf("Process() error = %v", err)
+			}
+			if string(result) != tt.expected {
+				t.Errorf("Process() = %q, want %q", string(result), tt.expected)
+			}
+		})
+	}
+}
+
+// TestFileWriter tests file writing operations.
+func TestFileWriter(t *testing.T) {
+	tmpDir := t.TempDir()
+	writer := NewFileWriter(false)
+
+	t.Run("WriteFile creates file", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "test.txt")
+		content := []byte("test content")
+
+		err := writer.WriteFile(path, content, 0644)
+		if err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+
+		// Verify file exists
+		if !writer.Exists(path) {
+			t.Error("File was not created")
+		}
+
+		// Verify content
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("Failed to read file: %v", err)
+		}
+		if string(data) != string(content) {
+			t.Errorf("File content = %q, want %q", string(data), string(content))
+		}
+	})
+
+	t.Run("WriteFile creates parent dirs", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "subdir", "nested", "file.txt")
+		content := []byte("nested content")
+
+		err := writer.WriteFile(path, content, 0644)
+		if err != nil {
+			t.Fatalf("WriteFile() error = %v", err)
+		}
+
+		if !writer.Exists(path) {
+			t.Error("File was not created in nested directory")
+		}
+	})
+
+	t.Run("CreateDir creates directory", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "newdir", "nested")
+
+		err := writer.CreateDir(path)
+		if err != nil {
+			t.Fatalf("CreateDir() error = %v", err)
+		}
+
+		if !writer.Exists(path) {
+			t.Error("Directory was not created")
+		}
+	})
+
+	t.Run("Exists returns false for non-existent", func(t *testing.T) {
+		path := filepath.Join(tmpDir, "does-not-exist")
+		if writer.Exists(path) {
+			t.Error("Exists() returned true for non-existent path")
+		}
+	})
+}
+
+// TestGenerator_Generate tests basic generation.
+func TestGenerator_Generate(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	// Create test template
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:     "main.go",
+				Content:  []byte("package @ign-var:pkg@"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "README.md",
+				Content:  []byte("# @ign-var:title@"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{
+		"pkg":   "main",
+		"title": "Test Project",
+	})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+		Verbose:   false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Check result statistics
+	if result.FilesCreated != 2 {
+		t.Errorf("FilesCreated = %d, want 2", result.FilesCreated)
+	}
+	if result.FilesSkipped != 0 {
+		t.Errorf("FilesSkipped = %d, want 0", result.FilesSkipped)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("Errors = %v, want none", result.Errors)
+	}
+
+	// Verify file content
+	mainGo, err := os.ReadFile(filepath.Join(tmpDir, "main.go"))
+	if err != nil {
+		t.Fatalf("Failed to read main.go: %v", err)
+	}
+	if string(mainGo) != "package main" {
+		t.Errorf("main.go content = %q, want %q", string(mainGo), "package main")
+	}
+
+	readme, err := os.ReadFile(filepath.Join(tmpDir, "README.md"))
+	if err != nil {
+		t.Fatalf("Failed to read README.md: %v", err)
+	}
+	if string(readme) != "# Test Project" {
+		t.Errorf("README.md content = %q, want %q", string(readme), "# Test Project")
+	}
+}
+
+// TestGenerator_GenerateWithOverwrite tests overwrite behavior.
+func TestGenerator_GenerateWithOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	// Create existing file
+	existingPath := filepath.Join(tmpDir, "existing.txt")
+	_ = os.WriteFile(existingPath, []byte("old content"), 0644)
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:     "existing.txt",
+				Content:  []byte("new content"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{})
+
+	// First try without overwrite
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesSkipped != 1 {
+		t.Errorf("FilesSkipped = %d, want 1", result.FilesSkipped)
+	}
+
+	// Verify content unchanged
+	content, _ := os.ReadFile(existingPath)
+	if string(content) != "old content" {
+		t.Errorf("File was modified without overwrite flag")
+	}
+
+	// Now try with overwrite
+	opts.Overwrite = true
+	result, err = gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesOverwritten != 1 {
+		t.Errorf("FilesOverwritten = %d, want 1", result.FilesOverwritten)
+	}
+
+	// Verify content changed
+	content, _ = os.ReadFile(existingPath)
+	if string(content) != "new content" {
+		t.Errorf("File content = %q, want %q", string(content), "new content")
+	}
+}
+
+func TestGenerator_OverwriteSkipsUnchangedFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	existingPath := filepath.Join(tmpDir, "existing.txt")
+	if err := os.WriteFile(existingPath, []byte("same content"), 0644); err != nil {
+		t.Fatalf("failed to write existing file: %v", err)
+	}
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "existing.txt",
+				Content: []byte("same content"),
+				Mode:    0644,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	opts := GenerateOptions{
+		Template:      template,
+		Variables:     parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir:     tmpDir,
+		Overwrite:     true,
+		SkipUnchanged: true,
+	}
+
+	dryRunResult, err := gen.DryRun(ctx, opts)
+	if err != nil {
+		t.Fatalf("DryRun() error = %v", err)
+	}
+	if dryRunResult.FilesOverwritten != 0 {
+		t.Fatalf("DryRun FilesOverwritten = %d, want 0", dryRunResult.FilesOverwritten)
+	}
+	if len(dryRunResult.DryRunFiles) != 0 {
+		t.Fatalf("DryRunFiles length = %d, want 0", len(dryRunResult.DryRunFiles))
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if result.FilesOverwritten != 0 {
+		t.Fatalf("FilesOverwritten = %d, want 0", result.FilesOverwritten)
+	}
+	if len(result.WrittenFiles) != 0 {
+		t.Fatalf("WrittenFiles length = %d, want 0", len(result.WrittenFiles))
+	}
+}
+
+func TestGenerator_WriteFileSetsExpectedMode(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name: "test",
+			Settings: &model.TemplateSettings{
+				PreserveExecutable: model.NewPreserveExecutable(true),
+			},
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:    "script.sh",
+				Content: []byte("#!/bin/sh\n"),
+				Mode:    0755,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir: tmpDir,
+	}
+
+	if _, err := gen.Generate(ctx, opts); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(tmpDir, "script.sh"))
+	if err != nil {
+		t.Fatalf("failed to stat generated file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0755 {
+		t.Fatalf("generated file mode = %o, want 0755", got)
+	}
+}
+
+// TestGenerator_ExecutableModeFollowsPreserveExecutableSetting verifies that a
+// settings block that does not mention preserve_executable keeps the executable
+// bit, and that an explicit false still drops it.
+func TestGenerator_ExecutableModeFollowsPreserveExecutableSetting(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings *model.TemplateSettings
+		wantPerm os.FileMode
+	}{
+		{
+			name:     "no settings block",
+			settings: nil,
+			wantPerm: 0755,
+		},
+		{
+			name:     "settings block without preserve_executable",
+			settings: &model.TemplateSettings{IgnorePatterns: []string{".git"}},
+			wantPerm: 0755,
+		},
+		{
+			name:     "preserve_executable explicitly true",
+			settings: &model.TemplateSettings{PreserveExecutable: model.NewPreserveExecutable(true)},
+			wantPerm: 0755,
+		},
+		{
+			name:     "preserve_executable explicitly false",
+			settings: &model.TemplateSettings{PreserveExecutable: model.NewPreserveExecutable(false)},
+			wantPerm: 0644,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			gen := NewGenerator()
+			ctx := context.Background()
+
+			template := &model.Template{
+				Ref: model.TemplateRef{},
+				Config: model.IgnJson{
+					Name:     "test",
+					Version:  "1.0.0",
+					Settings: tt.settings,
+				},
+				Files: []model.TemplateFile{
+					{
+						Path:    "scripts/build.py",
+						Content: []byte("#!/usr/bin/env python3\n"),
+						Mode:    0755,
+					},
+				},
+				RootPath: tmpDir,
+			}
+
+			opts := GenerateOptions{
+				Template:  template,
+				Variables: parser.NewMapVariables(map[string]interface{}{}),
+				OutputDir: tmpDir,
+			}
+
+			if _, err := gen.Generate(ctx, opts); err != nil {
+				t.Fatalf("Generate() error = %v", err)
+			}
+
+			info, err := os.Stat(filepath.Join(tmpDir, "scripts", "build.py"))
+			if err != nil {
+				t.Fatalf("failed to stat generated file: %v", err)
+			}
+			if got := info.Mode().Perm(); got != tt.wantPerm {
+				t.Fatalf("generated file mode = %o, want %o", got, tt.wantPerm)
+			}
+		})
+	}
+}
+
+func TestGenerator_GenerateWithSelectiveOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	if err := os.MkdirAll(filepath.Join(tmpDir, "config"), 0755); err != nil {
+		t.Fatalf("failed to create config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("old readme"), 0644); err != nil {
+		t.Fatalf("failed to create README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "config", "local.yaml"), []byte("old local"), 0644); err != nil {
+		t.Fatalf("failed to create local config: %v", err)
+	}
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:     model.IgnOverwriteIgnoreFile,
+				Content:  []byte("config/\n"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "nested/" + model.IgnOverwriteIgnoreFile,
+				Content:  []byte("nested metadata-like file"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "README.md",
+				Content:  []byte("new readme"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "config/local.yaml",
+				Content:  []byte("new local"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "config/default.yaml",
+				Content:  []byte("new default"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	result, err := gen.Generate(ctx, GenerateOptions{
+		Template:      template,
+		Variables:     parser.NewMapVariables(map[string]interface{}{}),
+		OutputDir:     tmpDir,
+		OverwriteMode: OverwriteSelective,
+	})
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesOverwritten != 1 {
+		t.Fatalf("FilesOverwritten = %d, want 1", result.FilesOverwritten)
+	}
+	if result.FilesSkipped != 1 {
+		t.Fatalf("FilesSkipped = %d, want 1", result.FilesSkipped)
+	}
+	if result.FilesCreated != 2 {
+		t.Fatalf("FilesCreated = %d, want 2", result.FilesCreated)
+	}
+
+	readme, err := os.ReadFile(filepath.Join(tmpDir, "README.md"))
+	if err != nil {
+		t.Fatalf("failed to read README: %v", err)
+	}
+	if string(readme) != "new readme" {
+		t.Fatalf("README.md = %q, want new readme", string(readme))
+	}
+
+	localConfig, err := os.ReadFile(filepath.Join(tmpDir, "config", "local.yaml"))
+	if err != nil {
+		t.Fatalf("failed to read local config: %v", err)
+	}
+	if string(localConfig) != "old local" {
+		t.Fatalf("config/local.yaml = %q, want old local", string(localConfig))
+	}
+
+	nestedOverwriteIgnore, err := os.ReadFile(filepath.Join(tmpDir, "nested", model.IgnOverwriteIgnoreFile))
+	if err != nil {
+		t.Fatalf("failed to read nested %s: %v", model.IgnOverwriteIgnoreFile, err)
+	}
+	if string(nestedOverwriteIgnore) != "nested metadata-like file" {
+		t.Fatalf("nested %s = %q, want nested metadata-like file", model.IgnOverwriteIgnoreFile, string(nestedOverwriteIgnore))
+	}
+
+	if _, err := os.Stat(filepath.Join(tmpDir, model.IgnOverwriteIgnoreFile)); !os.IsNotExist(err) {
+		t.Fatalf("%s should not be generated", model.IgnOverwriteIgnoreFile)
+	}
+}
+
+// TestGenerator_DryRun tests dry run mode.
+func TestGenerator_DryRun(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:     "file.txt",
+				Content:  []byte("content"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+	}
+
+	result, err := gen.DryRun(ctx, opts)
+	if err != nil {
+		t.Fatalf("DryRun() error = %v", err)
+	}
+
+	// Check that it would create the file
+	if result.FilesCreated != 1 {
+		t.Errorf("DryRun FilesCreated = %d, want 1", result.FilesCreated)
+	}
+
+	// Verify file was NOT actually created
+	filePath := filepath.Join(tmpDir, "file.txt")
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		t.Error("DryRun created file when it shouldn't")
+	}
+}
+
+// TestGenerator_FilterSpecialFiles tests that special files are filtered.
+func TestGenerator_FilterSpecialFiles(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				Path:     model.IgnTemplateConfigFile,
+				Content:  []byte("{}"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     ".ign/ign-var.json",
+				Content:  []byte("{}"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				Path:     "main.go",
+				Content:  []byte("package main"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	// Should only create main.go (not ign-template.json or .ign/ign-var.json)
+	if result.FilesCreated != 1 {
+		t.Errorf("FilesCreated = %d, want 1 (only main.go)", result.FilesCreated)
+	}
+
+	// Verify special files were not created
+	if _, err := os.Stat(filepath.Join(tmpDir, model.IgnTemplateConfigFile)); !os.IsNotExist(err) {
+		t.Errorf("%s was created when it should be filtered", model.IgnTemplateConfigFile)
+	}
+	if _, err := os.Stat(filepath.Join(tmpDir, ".ign/ign-var.json")); !os.IsNotExist(err) {
+		t.Error(".ign/ign-var.json was created when it should be filtered")
+	}
+}
+
+// TestGenerator_GenerateWithFileSymlink verifies that the generator creates
+// a symbolic link when the TemplateFile has SymlinkTarget set (file symlink).
+func TestGenerator_GenerateWithFileSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				// Regular file: the symlink target.
+				Path:     "AGENTS.md",
+				Content:  []byte("# Agents"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				// Symlink entry: CLAUDE.md -> AGENTS.md
+				Path:          "CLAUDE.md",
+				Mode:          0777 | os.ModeSymlink,
+				SymlinkTarget: "AGENTS.md",
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+		Verbose:   false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesCreated != 2 {
+		t.Errorf("FilesCreated = %d, want 2", result.FilesCreated)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("Errors = %v, want none", result.Errors)
+	}
+
+	// Verify AGENTS.md is a regular file.
+	agentsPath := filepath.Join(tmpDir, "AGENTS.md")
+	agentsInfo, err := os.Lstat(agentsPath)
+	if err != nil {
+		t.Fatalf("failed to stat AGENTS.md: %v", err)
+	}
+	if !agentsInfo.Mode().IsRegular() {
+		t.Errorf("AGENTS.md mode = %v, expected regular file", agentsInfo.Mode())
+	}
+
+	// Verify CLAUDE.md is a symlink pointing to AGENTS.md.
+	claudePath := filepath.Join(tmpDir, "CLAUDE.md")
+	claudeInfo, err := os.Lstat(claudePath)
+	if err != nil {
+		t.Fatalf("failed to lstat CLAUDE.md: %v", err)
+	}
+	if claudeInfo.Mode()&os.ModeSymlink == 0 {
+		t.Error("CLAUDE.md should be a symlink")
+	}
+
+	linkTarget, err := os.Readlink(claudePath)
+	if err != nil {
+		t.Fatalf("failed to readlink CLAUDE.md: %v", err)
+	}
+	if linkTarget != "AGENTS.md" {
+		t.Errorf("CLAUDE.md symlink target = %q, want %q", linkTarget, "AGENTS.md")
+	}
+}
+
+// TestGenerator_GenerateWithDirectorySymlink verifies that the generator creates
+// a symbolic link for directory symlink entries.
+func TestGenerator_GenerateWithDirectorySymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	gen := NewGenerator()
+	ctx := context.Background()
+
+	template := &model.Template{
+		Ref: model.TemplateRef{},
+		Config: model.IgnJson{
+			Name:    "test",
+			Version: "1.0.0",
+		},
+		Files: []model.TemplateFile{
+			{
+				// Regular file inside the real directory.
+				Path:     ".agents/settings.json",
+				Content:  []byte("{}"),
+				Mode:     0644,
+				IsBinary: false,
+			},
+			{
+				// Directory symlink: .claude -> .agents
+				Path:          ".claude",
+				Mode:          0777 | os.ModeSymlink,
+				SymlinkTarget: ".agents",
+			},
+		},
+		RootPath: tmpDir,
+	}
+
+	vars := parser.NewMapVariables(map[string]interface{}{})
+
+	opts := GenerateOptions{
+		Template:  template,
+		Variables: vars,
+		OutputDir: tmpDir,
+		Overwrite: false,
+		Verbose:   false,
+	}
+
+	result, err := gen.Generate(ctx, opts)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+
+	if result.FilesCreated != 2 {
+		t.Errorf("FilesCreated = %d, want 2", result.FilesCreated)
+	}
+	if len(result.Errors) != 0 {
+		t.Errorf("Errors = %v, want none", result.Errors)
+	}
+
+	// Verify .agents/settings.json is a regular file.
+	settingsPath := filepath.Join(tmpDir, ".agents", "settings.json")
+	if _, err := os.Lstat(settingsPath); err != nil {
+		t.Fatalf("failed to stat .agents/settings.json: %v", err)
+	}
+
+	// Verify .claude is a symlink pointing to .agents.
+	claudePath := filepath.Join(tmpDir, ".claude")
+	claudeInfo, err := os.Lstat(claudePath)
+	if err != nil {
+		t.Fatalf("failed to lstat .claude: %v", err)
+	}
+	if claudeInfo.Mode()&os.ModeSymlink == 0 {
+		t.Error(".claude should be a symlink")
+	}
+
+	linkTarget, err := os.Readlink(claudePath)
+	if err != nil {
+		t.Fatalf("failed to readlink .claude: %v", err)
+	}
+	if linkTarget != ".agents" {
+		t.Errorf(".claude symlink target = %q, want %q", linkTarget, ".agents")
+	}
+
+	// Verify we can access files through the symlink.
+	symlinkSettingsPath := filepath.Join(tmpDir, ".claude", "settings.json")
+	content, err := os.ReadFile(symlinkSettingsPath)
+	if err != nil {
+		t.Fatalf("failed to read file through directory symlink: %v", err)
+	}
+	if string(content) != "{}" {
+		t.Errorf("settings.json content through symlink = %q, want %q", string(content), "{}")
+	}
+}

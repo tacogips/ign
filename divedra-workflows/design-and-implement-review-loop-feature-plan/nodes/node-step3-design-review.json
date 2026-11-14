@@ -1,0 +1,11 @@
+{
+  "id": "step3-design-review",
+  "description": "Review the feature-local design update and route back to Step 2 when high or mid findings exist.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplate": "You are the feature-local Step 3 design review branch. Review the Step 2 feature design against runtimeVariables.fanout.item and the accepted issue scope. Classify findings as high, mid, or low. Set when.needs_revision true only when any high or mid finding exists. Return adapter JSON with payload.workflowMode, payload.issueReference, payload.featureId, payload.reviewDecision, payload.needs_revision, payload.accepted, payload.findings, payload.feedback, and payload.risks.",
+  "variables": {},
+  "output": {
+    "description": "Return adapter JSON with when.needs_revision and feature-local design review findings."
+  }
+}
