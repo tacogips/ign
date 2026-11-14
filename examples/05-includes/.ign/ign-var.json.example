@@ -1,0 +1,7 @@
+{
+  "variables": {
+    "project_name": "my-awesome-project",
+    "author_name": "John Doe",
+    "year": 2024
+  }
+}
