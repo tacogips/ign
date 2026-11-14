@@ -1,0 +1,148 @@
+{
+  "workflowId": "design-and-implement-review-loop-feature-plan",
+  "description": "Feature-local design and implementation-plan branch workflow used by the bounded fanout path of design-and-implement-review-loop.",
+  "defaults": {
+    "fanoutConcurrency": 20,
+    "maxLoopIterations": 3,
+    "nodeTimeoutMs": 3600000
+  },
+  "prompts": {
+    "workerSystemPromptTemplate": "Return concise business JSON only. Keep workflow mode, issue references, codex-agent references, fanout feature ids, file paths, findings, review decisions, and verification commands explicit."
+  },
+  "entryStepId": "step2-design-doc-update",
+  "nodes": [
+    {
+      "id": "step2-design-doc-update",
+      "nodeFile": "nodes/node-step2-design-doc-update.json"
+    },
+    {
+      "id": "step3-design-review",
+      "nodeFile": "nodes/node-step3-design-review.json"
+    },
+    {
+      "id": "step4-impl-plan-create",
+      "nodeFile": "nodes/node-step4-impl-plan-create.json"
+    },
+    {
+      "id": "step5-impl-plan-review",
+      "nodeFile": "nodes/node-step5-impl-plan-review.json"
+    },
+    {
+      "id": "workflow-output",
+      "kind": "output",
+      "nodeFile": "nodes/node-workflow-output.json"
+    }
+  ],
+  "steps": [
+    {
+      "id": "step2-design-doc-update",
+      "nodeId": "step2-design-doc-update",
+      "description": "Create or revise one feature-local design document.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-self-review"
+        }
+      ]
+    },
+    {
+      "id": "step2-design-self-review",
+      "nodeId": "step2-design-doc-update",
+      "description": "Self-review one feature-local design document before independent design review.",
+      "role": "worker",
+      "promptVariant": "self-review",
+      "sessionPolicy": {
+        "mode": "reuse",
+        "inheritFromStepId": "step2-design-doc-update"
+      },
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step3-design-review",
+          "label": "!(needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step3-design-review",
+      "nodeId": "step3-design-review",
+      "description": "Review one feature-local design document.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step4-impl-plan-create",
+          "label": "!(needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step4-impl-plan-create",
+      "nodeId": "step4-impl-plan-create",
+      "description": "Create or revise one feature-local implementation plan.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step4-impl-plan-self-review"
+        }
+      ]
+    },
+    {
+      "id": "step4-impl-plan-self-review",
+      "nodeId": "step4-impl-plan-create",
+      "description": "Self-review one feature-local implementation plan before independent implementation-plan review.",
+      "role": "worker",
+      "promptVariant": "self-review",
+      "sessionPolicy": {
+        "mode": "reuse",
+        "inheritFromStepId": "step4-impl-plan-create"
+      },
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_design_revision"
+        },
+        {
+          "toStepId": "step4-impl-plan-create",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "step5-impl-plan-review",
+          "label": "!(needs_design_revision || needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "step5-impl-plan-review",
+      "nodeId": "step5-impl-plan-review",
+      "description": "Review one feature-local implementation plan.",
+      "role": "worker",
+      "transitions": [
+        {
+          "toStepId": "step2-design-doc-update",
+          "label": "needs_design_revision"
+        },
+        {
+          "toStepId": "step4-impl-plan-create",
+          "label": "needs_revision"
+        },
+        {
+          "toStepId": "workflow-output",
+          "label": "!(needs_design_revision || needs_revision)"
+        }
+      ]
+    },
+    {
+      "id": "workflow-output",
+      "nodeId": "workflow-output",
+      "description": "Publish the accepted feature-local branch handoff.",
+      "role": "worker"
+    }
+  ]
+}
