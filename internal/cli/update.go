@@ -1,0 +1,489 @@
+package cli
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/spf13/cobra"
+	"github.com/tacogips/ign/internal/app"
+	templatedefaults "github.com/tacogips/ign/internal/template/defaults"
+	"github.com/tacogips/ign/internal/template/generator"
+	"github.com/tacogips/ign/internal/template/model"
+)
+
+// updateCmd represents the update command
+var updateCmd = &cobra.Command{
+	Use:   "update [output-path]",
+	Short: "Update project from template changes",
+	Long: `Update project files when the template has changed.
+
+This command is for PROJECT USERS who have generated a project using 'ign checkout'
+and want to pull in updates from the template source.
+
+Note: This is different from 'ign template update', which is for TEMPLATE AUTHORS
+to update the ign.json file within a template repository.
+
+This command checks if the template has been updated since the last checkout:
+1. Fetches the template from the stored URL in .ign/ign.json
+2. Compares the template hash to detect changes
+3. If new variables are added, prompts for their values
+4. Regenerates project files with the updated template
+
+Requirements:
+  - .ign/ign.json must exist (created by 'ign checkout')
+  - .ign/ign-var.json must exist (stores variable values)
+  - For private GitHub repositories, set GITHUB_TOKEN environment variable
+
+If the template has not changed (same hash), no action is taken unless
+--overwrite, --overwrite-all, or --force is specified.
+
+Examples:
+  ign update                     # Update if template changed, skip existing files
+  ign update ./my-project        # Update to specific directory
+  ign update --dry-run           # Preview changes without writing
+  ign update --overwrite         # Selectively overwrite existing files, respecting .ign-overwrite-ignore
+  ign update --overwrite --yes   # Selectively overwrite without confirmation
+  ign update --overwrite-all     # Overwrite all existing files
+  ign update --ref v2.0.0        # Retarget the tracked template ref non-destructively
+  ign update --force             # Regenerate even if unchanged and overwrite all existing files`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runUpdate,
+}
+
+// Update command flags
+var (
+	updateForce        bool
+	updateOverwrite    bool
+	updateOverwriteAll bool
+	updateDryRun       bool
+	updateVerbose      bool
+	updateYes          bool
+	updateRef          string
+	prepareUpdate      = app.PrepareUpdate
+	completeUpdate     = app.CompleteUpdate
+	confirmUpdate      = confirmUpdateOverwrite
+)
+
+func init() {
+	// Flags for update
+	// Note: These flags control project file generation behavior, which differs from
+	// 'ign template update' flags that control template metadata updates
+	updateCmd.Flags().BoolVarP(&updateForce, "force", "f", false, "Regenerate even if template unchanged (implies --overwrite-all)")
+	updateCmd.Flags().BoolVarP(&updateOverwrite, "overwrite", "o", false, "Overwrite existing files except paths matched by the template's .ign-overwrite-ignore")
+	updateCmd.Flags().BoolVar(&updateOverwriteAll, "overwrite-all", false, "Overwrite all existing files, ignoring .ign-overwrite-ignore")
+	updateCmd.Flags().BoolVarP(&updateDryRun, "dry-run", "d", false, "Preview what files would be generated without writing them")
+	updateCmd.Flags().BoolVarP(&updateVerbose, "verbose", "v", false, "Show detailed processing information during project generation")
+	updateCmd.Flags().BoolVarP(&updateYes, "yes", "y", false, "Skip overwrite confirmation prompt")
+	updateCmd.Flags().StringVarP(&updateRef, "ref", "r", "", "Retarget the tracked template branch, tag, or commit SHA")
+}
+
+func runUpdate(cmd *cobra.Command, args []string) error {
+	// Output path defaults to current directory
+	outputPath := "."
+	if len(args) > 0 {
+		outputPath = args[0]
+	}
+
+	// Get GitHub token from environment
+	githubToken := getGitHubToken("")
+
+	if updateRef != "" {
+		if err := ValidateGitRef(updateRef); err != nil {
+			return fmt.Errorf("invalid update ref: %w", err)
+		}
+	}
+
+	printInfo("Checking for template updates...")
+
+	overwriteMode := updateOverwriteMode(updateOverwrite, updateOverwriteAll, updateForce)
+	shouldOverwrite := overwriteMode != generator.OverwriteNone
+
+	// Prepare update - fetch template and check for changes
+	prepResult, err := prepareUpdate(cmd.Context(), app.UpdateOptions{
+		OutputDir:     outputPath,
+		Overwrite:     shouldOverwrite,
+		OverwriteMode: overwriteMode,
+		DryRun:        updateDryRun,
+		Verbose:       updateVerbose,
+		GitHubToken:   githubToken,
+		TargetRef:     updateRef,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Show template info
+	printInfo(fmt.Sprintf("Template: %s", prepResult.IgnConfig.Template.URL))
+	if prepResult.RefOverrideRequested {
+		printInfo(fmt.Sprintf("Reference: %s", prepResult.RequestedRef))
+	} else if prepResult.IgnConfig.Template.Ref != "" && prepResult.IgnConfig.Template.Ref != "main" {
+		printInfo(fmt.Sprintf("Reference: %s", prepResult.IgnConfig.Template.Ref))
+	}
+	printSeparator()
+
+	// Decide whether to regenerate files.
+	// By default, unchanged template exits early. --overwrite or --force bypasses this.
+	if !shouldCompleteUpdate(prepResult, updateForce, shouldOverwrite) {
+		printSuccess("Template is up to date (no changes detected)")
+		return nil
+	}
+
+	// Check if hash changed
+	if !prepResult.HashChanged {
+		if prepResult.RefChanged {
+			printInfo("Template content is identical; updating tracked reference...")
+		} else if updateForce {
+			printInfo("Template unchanged, but --force specified - regenerating files...")
+		} else {
+			printInfo("Template unchanged, but --overwrite specified - regenerating files...")
+		}
+	} else {
+		printInfo("Template has been updated")
+		printInfo(fmt.Sprintf("  Previous hash: %s", truncateHash(prepResult.CurrentHash)))
+		printInfo(fmt.Sprintf("  New hash:      %s", truncateHash(prepResult.NewHash)))
+	}
+
+	// Show variable changes
+	if len(prepResult.RemovedVars) > 0 {
+		printSeparator()
+		printWarning("The following variables have been removed from the template:")
+		for _, name := range prepResult.RemovedVars {
+			printInfo(fmt.Sprintf("  - %s", name))
+		}
+	}
+
+	// Prompt for new variables if any
+	var newVarValues map[string]interface{}
+	if len(prepResult.NewVars) > 0 {
+		printSeparator()
+		printInfo("New variables have been added to the template:")
+
+		// Get variable definitions for new variables
+		newVarDefs := templatedefaults.ResolveVarDefs(app.GetNewVariableDefinitions(prepResult), outputPath)
+
+		// Separate variables into those needing prompt and those with defaults
+		varsNeedingPrompt := app.FilterVariablesForPrompt(newVarDefs)
+
+		// Show variables with defaults
+		for name, varDef := range newVarDefs {
+			if _, needsPrompt := varsNeedingPrompt[name]; !needsPrompt {
+				printInfo(fmt.Sprintf("  + %s (default: %v)", name, varDef.Default))
+			}
+		}
+
+		// Prompt for variables that need input
+		if len(varsNeedingPrompt) > 0 {
+			printInfo("")
+			printInfo("Please provide values for the following new variables:")
+			promptedVars, err := PromptForNewVariables(varsNeedingPrompt)
+			if err != nil {
+				return err
+			}
+			newVarValues = app.ApplyDefaults(newVarDefs, promptedVars)
+		} else {
+			// All new variables have defaults
+			newVarValues = app.ApplyDefaults(newVarDefs, nil)
+		}
+	}
+
+	var executionPlan *app.UpdateExecutionPlan
+	if shouldOverwrite && !updateDryRun && !updateYes {
+		preview, err := completeUpdate(cmd.Context(), app.CompleteUpdateOptions{
+			PrepareResult: prepResult,
+			NewVariables:  newVarValues,
+			OutputDir:     outputPath,
+			Overwrite:     shouldOverwrite,
+			OverwriteMode: overwriteMode,
+			DryRun:        true,
+			Verbose:       updateVerbose,
+		})
+		if err != nil {
+			return err
+		}
+		executionPlan = preview.ExecutionPlan
+		printUpdateWritePreview(preview)
+		confirmed, err := confirmUpdate()
+		if err != nil {
+			return err
+		}
+		if !confirmed {
+			printInfo("Update cancelled")
+			return nil
+		}
+	}
+
+	// Complete update
+	printSeparator()
+	if updateDryRun {
+		printInfo("[DRY RUN] Would regenerate project from template")
+	} else {
+		printInfo("Regenerating project from template...")
+	}
+
+	result, err := completeUpdate(cmd.Context(), app.CompleteUpdateOptions{
+		PrepareResult: prepResult,
+		NewVariables:  newVarValues,
+		OutputDir:     outputPath,
+		Overwrite:     shouldOverwrite,
+		OverwriteMode: overwriteMode,
+		DryRun:        updateDryRun,
+		Verbose:       updateVerbose,
+		ExecutionPlan: executionPlan,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Print results
+	if updateDryRun {
+		printUpdateDryRunPatch(result)
+	} else {
+		printSuccess("Project updated successfully")
+		printInfo("")
+		printInfo("Summary:")
+		printInfo(fmt.Sprintf("  Created: %d files", result.FilesCreated))
+		if result.FilesSkipped > 0 {
+			printInfo(fmt.Sprintf("  Skipped: %d files (already exist)", result.FilesSkipped))
+		}
+		if result.FilesOverwritten > 0 {
+			printInfo(fmt.Sprintf("  Overwritten: %d files", result.FilesOverwritten))
+		}
+		if result.FilesDeleted > 0 {
+			printInfo(fmt.Sprintf("  Deleted: %d files", result.FilesDeleted))
+		}
+
+		// Print any non-fatal errors
+		if len(result.Errors) > 0 {
+			printWarning(fmt.Sprintf("%d errors occurred during generation:", len(result.Errors)))
+			for _, e := range result.Errors {
+				printWarning(fmt.Sprintf("  - %v", e))
+			}
+		}
+
+		printInfo("")
+		printInfo("Configuration updated: .ign/ign.json, .ign/ign-var.json, .ign/ign-files.json")
+		printInfo(fmt.Sprintf("Project ready at: %s", outputPath))
+	}
+
+	return unresolvedTransitionError(result)
+}
+
+// unresolvedTransitionError fails the command when a managed directory was
+// preserved because its symlink transition could not be proven safe. Every
+// other template change has already been applied; the non-zero exit exists so
+// the unresolved directory is not silently carried forward.
+func unresolvedTransitionError(result *app.UpdateResult) error {
+	if result == nil || len(result.UnresolvedTransitionPaths) == 0 {
+		return nil
+	}
+	printSeparator()
+	printWarning(fmt.Sprintf("%d managed directory transition(s) could not be completed:", len(result.UnresolvedTransitionPaths)))
+	for _, path := range result.UnresolvedTransitionPaths {
+		printWarning(fmt.Sprintf("  ! %s (preserved)", path))
+	}
+	return fmt.Errorf("update completed with %d unresolved managed directory-to-symlink transition(s); see the recovery steps above", len(result.UnresolvedTransitionPaths))
+}
+
+// truncateHash truncates a hash for display purposes.
+func truncateHash(hash string) string {
+	if len(hash) <= 16 {
+		return hash
+	}
+	return hash[:8] + "..." + hash[len(hash)-8:]
+}
+
+func shouldRegenerate(hashChanged, force, overwrite bool) bool {
+	if hashChanged {
+		return true
+	}
+	return force || overwrite
+}
+
+func shouldCompleteUpdate(prep *app.PrepareUpdateResult, force, overwrite bool) bool {
+	if prep == nil {
+		return false
+	}
+	return shouldRegenerate(prep.HashChanged, force, overwrite) || prep.RefChanged
+}
+
+func updateOverwriteMode(overwrite, overwriteAll, force bool) generator.OverwriteMode {
+	if force || overwriteAll {
+		return generator.OverwriteAll
+	}
+	if overwrite {
+		return generator.OverwriteSelective
+	}
+	return generator.OverwriteNone
+}
+
+func printUpdateWritePreview(result *app.UpdateResult) {
+	printSeparator()
+	printInfo("Files to change:")
+	if result == nil || (len(result.DryRunFiles) == 0 && len(result.DeletedFiles) == 0) {
+		printInfo("  (none)")
+		return
+	}
+
+	changed := 0
+	for _, file := range result.DryRunFiles {
+		if file.WouldSkip {
+			continue
+		}
+		status := "A"
+		if file.WouldOverwrite {
+			status = "M"
+		}
+		printInfo(fmt.Sprintf("  %s %s", status, file.Path))
+		changed++
+	}
+	for _, path := range result.DeletedFiles {
+		printInfo(fmt.Sprintf("  D %s", path))
+		changed++
+	}
+	if changed == 0 {
+		printInfo("  (none)")
+	}
+}
+
+func confirmUpdateOverwrite() (bool, error) {
+	var confirmed bool
+	prompt := &survey.Confirm{
+		Message: "Proceed with update?",
+		Default: false,
+	}
+	if err := survey.AskOne(prompt, &confirmed); err != nil {
+		return false, err
+	}
+	return confirmed, nil
+}
+
+// PromptForNewVariables prompts for values of new variables.
+func PromptForNewVariables(varDefs map[string]model.VarDef) (map[string]interface{}, error) {
+	vars := make(map[string]interface{})
+
+	if len(varDefs) == 0 {
+		return vars, nil
+	}
+
+	// Sort variable names for consistent ordering
+	varNames := make([]string, 0, len(varDefs))
+	for name := range varDefs {
+		varNames = append(varNames, name)
+	}
+	sort.Strings(varNames)
+
+	fmt.Println()
+
+	for _, name := range varNames {
+		varDef := varDefs[name]
+
+		value, err := promptForVariable(name, varDef)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prompt for variable %q: %w", name, err)
+		}
+
+		vars[name] = value
+	}
+
+	return vars, nil
+}
+
+// unresolvedTransitionDiagnostics maps each preserved managed directory to the
+// explanation of why its symlink transition was refused. Errors carries one
+// diagnostic per unresolved path, appended in the same order.
+func unresolvedTransitionDiagnostics(result *app.UpdateResult) map[string]string {
+	diagnostics := make(map[string]string, len(result.UnresolvedTransitionPaths))
+	offset := len(result.Errors) - len(result.UnresolvedTransitionPaths)
+	for i, path := range result.UnresolvedTransitionPaths {
+		if index := offset + i; index >= 0 && index < len(result.Errors) {
+			diagnostics[path] = result.Errors[index].Error()
+			continue
+		}
+		diagnostics[path] = "managed directory-to-symlink transition could not be proven safe"
+	}
+	return diagnostics
+}
+
+// printUpdateDryRunPatch outputs dry-run results in unified diff format.
+func printUpdateDryRunPatch(result *app.UpdateResult) {
+	if result == nil {
+		return
+	}
+
+	// Print summary header
+	fmt.Println("# DRY RUN - No files will be written")
+	fmt.Println("#")
+
+	// Print variable changes
+	if len(result.NewVariables) > 0 || len(result.RemovedVariables) > 0 {
+		fmt.Println("# Variable changes:")
+		for _, name := range result.NewVariables {
+			fmt.Printf("#   + %s (new)\n", name)
+		}
+		for _, name := range result.RemovedVariables {
+			fmt.Printf("#   - %s (removed)\n", name)
+		}
+		fmt.Println("#")
+	}
+
+	// Print directories that would be created
+	if len(result.Directories) > 0 {
+		fmt.Println("# Directories to create:")
+		for _, dir := range result.Directories {
+			fmt.Printf("#   mkdir -p %s\n", dir)
+		}
+		fmt.Println("#")
+	}
+
+	// Print summary statistics
+	fmt.Printf("# Summary: %d files to create", result.FilesCreated)
+	if result.FilesOverwritten > 0 {
+		fmt.Printf(", %d to overwrite", result.FilesOverwritten)
+	}
+	if result.FilesDeleted > 0 {
+		fmt.Printf(", %d to delete", result.FilesDeleted)
+	}
+	if result.FilesSkipped > 0 {
+		fmt.Printf(", %d to skip (already exist)", result.FilesSkipped)
+	}
+	fmt.Println()
+	fmt.Println()
+
+	unresolved := unresolvedTransitionDiagnostics(result)
+
+	// Print each file in patch format
+	for _, file := range result.DryRunFiles {
+		if file.WouldSkip {
+			// A preserved directory-to-symlink transition is not an ordinary
+			// "already exists" skip. Report why it was refused and how to
+			// recover instead of suggesting flags that cannot resolve it.
+			if diagnostic, blocked := unresolved[file.Path]; blocked {
+				fmt.Printf("# BLOCKED: %s\n#   %s\n\n", file.Path, diagnostic)
+				continue
+			}
+			fmt.Printf("# SKIP: %s (file exists, use --overwrite or --force to overwrite)\n\n", file.Path)
+			continue
+		}
+
+		if file.WouldOverwrite {
+			fmt.Printf("# OVERWRITE: %s\n", file.Path)
+		}
+		fmt.Printf("--- /dev/null\n")
+		fmt.Printf("+++ %s\n", file.Path)
+
+		lines := countLines(file.Content)
+		if lines == 0 {
+			fmt.Println("@@ -0,0 +0,0 @@")
+		} else {
+			fmt.Printf("@@ -0,0 +1,%d @@\n", lines)
+		}
+
+		printPatchContent(file.Content)
+		fmt.Println()
+	}
+	for _, path := range result.DeletedFiles {
+		fmt.Printf("# DELETE: %s\n", path)
+	}
+}

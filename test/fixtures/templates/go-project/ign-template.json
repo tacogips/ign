@@ -1,0 +1,18 @@
+{
+  "name": "go-project",
+  "version": "1.0.0",
+  "description": "Go project template",
+  "variables": {
+    "author": {
+      "type": "string",
+      "description": "Variable author",
+      "required": true
+    },
+    "module_name": {
+      "type": "string",
+      "description": "Variable module_name",
+      "required": true
+    }
+  },
+  "hash": "79efea14734d3054ca8601e2b6676cb43c331232708ba5d457658cd230828458"
+}

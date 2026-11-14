@@ -1,0 +1,14 @@
+{
+  "template": {
+    "url": "github.com/example/ign-templates",
+    "path": "02-with-variables",
+    "ref": "main"
+  },
+  "hash": "a1b2c3d4e5f6...",
+  "metadata": {
+    "generated_at": "2024-01-01T00:00:00Z",
+    "generated_by": "ign checkout",
+    "template_name": "02-with-variables",
+    "template_version": "1.0.0"
+  }
+}
