@@ -1,0 +1,23 @@
+{
+  "name": "simple-template",
+  "version": "1.0.0",
+  "description": "A simple test template",
+  "variables": {
+    "enable_feature": {
+      "type": "string",
+      "description": "Variable enable_feature",
+      "required": true
+    },
+    "port": {
+      "type": "string",
+      "description": "Variable port",
+      "required": true
+    },
+    "project_name": {
+      "type": "string",
+      "description": "Variable project_name",
+      "required": true
+    }
+  },
+  "hash": "a9e214d0aa9831c3a09b72b408ae629f131253ca8e9a9e9ed000fec03437733e"
+}

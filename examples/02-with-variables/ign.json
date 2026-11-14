@@ -1,0 +1,29 @@
+{
+  "name": "go-web-server",
+  "version": "1.0.0",
+  "description": "Go web server template with configurable variables",
+  "author": "ign-examples",
+  "repository": "https://github.com/example/ign-templates",
+  "variables": {
+    "project_name": {
+      "type": "string",
+      "description": "Name of the project (used in go.mod and package names)",
+      "required": true
+    },
+    "module_path": {
+      "type": "string",
+      "description": "Go module path (e.g., github.com/user/project)",
+      "required": true
+    },
+    "port": {
+      "type": "int",
+      "description": "HTTP server port",
+      "default": 8080
+    },
+    "version": {
+      "type": "string",
+      "description": "Initial version",
+      "default": "0.1.0"
+    }
+  }
+}
