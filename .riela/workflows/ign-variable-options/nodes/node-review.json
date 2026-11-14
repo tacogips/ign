@@ -1,0 +1,8 @@
+{
+  "id": "review",
+  "description": "Review non-interactive variable support changes.",
+  "executionBackend": "codex-agent",
+  "model": "gpt-5.5",
+  "promptTemplateFile": "prompts/review.md",
+  "variables": {}
+}
